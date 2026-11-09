@@ -576,13 +576,27 @@ FOLLOW-UP TILED TIER 0 - GTX 950M - 10/11/2026
   Riepilogo e trace completo in `evidence\GTX_950M`; non e' stato
   pubblicato alcun minidump.
 
+ANALISI TRACE TIER 0 - SHADER PIXEL MANCANTI
+--------------------------------------------
+- Verificato il trace completo: entrambi i VS corretti sono stati caricati
+  (`20e0826b236597a1` e `4ce363172cfd70be`, `SHADER READY`); non risultano
+  `INPUT_LAYOUT_FAILED` ne' `PSO GRAPHICS FAILED`. L'ipotesi che mancassero
+  gli override VS non e' confermata.
+- Tutti i 1.801 record `DRAW_SKIPPED` hanno `missing-vs=0` e
+  `missing-shader=1`, coerenti con `skip-other=1801`: 1.024 usano il PS
+  `44b0a992c2304254`, 484 `d77600bde0076c33`, 293 `4c1bc8bf7e457acd`.
+  Tutti e tre i PS sono registrati come placeholder e non `SHADER READY`.
+- Prossimo test mirato: installare temporaneamente i tre candidati PS
+  esistenti insieme ai VS corretti e verificare `draw(ok)`/`bb`; la
+  correttezza semantica dei candidati non e' ancora dimostrata.
+
 PROSSIMI PASSI
 --------------
-1. Analizzare il trace Tier 0 per il primo motivo di skip (`skip-other`) e
-   il punto in cui termina il processo; non attribuire l'access violation
-   al Tier 0 senza stack o dump diagnostico.
-2. Identificare e convertire solo gli shader realmente associati ai PSO
-   mancanti; gli override correnti non hanno prodotto draw riusciti.
+1. Provare gli override PS associati ai draw saltati sul GTX 950M e
+   verificare se aumentano i draw riusciti o quelli sul backbuffer; non
+   presumere che i candidati siano semanticamente corretti.
+2. Indagare l'access violation solo con evidenza di fault/module/stack;
+   non attribuirla al Tier 0 in assenza di tale evidenza.
 3. Sulla GTX 1050 Ti, diagnosticare perche' i run precedenti avevano
    `swap=0` e `present=0`, oltre agli errori placed-resource overlap.
 4. Verificare firma semantica, binding e output sul render target dei VS

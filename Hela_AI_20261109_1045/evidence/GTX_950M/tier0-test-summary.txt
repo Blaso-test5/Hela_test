@@ -28,10 +28,24 @@ Result
 Interpretation
 Tier 0 allowed Hela to continue past the 2 GiB reserved-buffer request and
 reach PSO creation and swapchain Present. It did not produce a verified
-rendered frame. The trace contains many placeholder PSOs because the
-corresponding SM5 overrides are absent; zero successful draws and the
-skip-other count need separate investigation. Do not treat this as proof
-that Tier 0 itself caused the access violation.
+rendered frame. Follow-up trace analysis disproved the hypothesis that the
+two corrected VS overrides were missing: hashes 20e0826b236597a1 and
+4ce363172cfd70be both logged SHADER READY, with INPUT_LAYOUT_FAILED=0 and
+PSO GRAPHICS FAILED=0. All 1,801 DRAW_SKIPPED records have missing-vs=0 and
+missing-shader=1, and account for the skip-other=1801 heartbeat:
+
+- 1,024 draws used VS 20e0826b236597a1 with missing PS
+  44b0a992c2304254.
+- 484 draws used VS 20e0826b236597a1 with missing PS
+  d77600bde0076c33.
+- 293 draws used VS 4ce363172cfd70be with missing PS
+  4c1bc8bf7e457acd.
+
+Each of these PS hashes was logged as a placeholder, not SHADER READY. The
+next targeted test should stage these three existing PS candidates alongside
+the corrected VS overrides, then check whether successful/backbuffer draws
+increase. Their semantic correctness is not yet established. Do not treat
+this as proof that Tier 0 caused the access violation.
 
 The original game DLLs, INI, binding map, and overrides were restored after
 the test. The complete proxy trace is `d3d12on11-tier0-test.log`. No

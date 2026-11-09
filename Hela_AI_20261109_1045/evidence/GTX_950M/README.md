@@ -35,6 +35,16 @@ GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
   Unreal crash context identified the fault. The window and Presents were
   observed, but no backbuffer draw was recorded, so black-screen pixels
   were not independently confirmed.
+- Trace review confirms both corrected VS overrides (`20e0826b236597a1`,
+  `4ce363172cfd70be`) loaded successfully; `INPUT_LAYOUT_FAILED=0` and
+  `PSO GRAPHICS FAILED=0`. The missing-VS hypothesis is false.
+- All 1,801 skipped draws have `missing-vs=0`, `missing-shader=1` and
+  account for `skip-other=1801`. Their missing PS hashes were
+  `44b0a992c2304254` (1,024 draws), `d77600bde0076c33` (484), and
+  `4c1bc8bf7e457acd` (293); each was logged as a placeholder, not ready.
+- The next focused test is to stage those three existing PS candidates
+  alongside the corrected VS overrides and check draw/backbuffer counters.
+  Their semantic correctness remains unverified.
 - Original DLLs, INI, binding map, and overrides were restored. Details and
   the full trace are in `tier0-test-summary.txt` and
   `d3d12on11-tier0-test.log`.
