@@ -1,0 +1,67 @@
+INSTRUMENTED HELA FOLLOW-UP TEST - 2026-11-09
+
+PURPOSE
+Identify which missing VS hashes caused skipped draws and determine
+whether the texture-upload E_INVALIDARG came from the proxy's depth check
+or from D3D11 CreateTexture2D.
+
+BUILD AND TEST
+- Temporary diagnostic d3d12.dll SHA-256:
+  39232868028BCDFD3B56786B7C0D1A282FAA4831A4E894E840D6B5833B835066
+- Existing CTest suite: 4/4 passed.
+- Test ran on this PC's GTX 1050 Ti. The destination GTX 950M remains
+  untested.
+- The diagnostic run loaded the existing VS a7f30e5d1d5fc6fb and PS
+  f79b80f0f2f58f68 overrides. Graphics PSO #1 was ready.
+- Final heartbeat: present=2462, draw(ok)=0, skip-vs=3185, skip-cs=40.
+  No correct visible frame was verified.
+
+DRAW SKIPS
+- The instrumented trace records the pipeline instance and VS shader hash
+  for every skipped DrawInstanced, DrawIndexedInstanced, and indirect draw.
+- 2,913 skips used VS 20e0826b236597a1 (DXIL size 4,128 bytes), across
+  two PipelineState instances.
+- 272 skips used VS 4ce363172cfd70be (DXIL size 1,928 bytes).
+- Both VS overrides were missing. The two dumped DXIL inputs are included
+  under shaders/original-dxil.
+- Initial PSO #2 binds VS 20e0826b236597a1 and PS d77600bde0076c33
+  (3,740 bytes). The two runtime pipeline instances sharing the VS hash
+  were not yet associated with their respective PS hashes; do not assume
+  they use the same pixel shader.
+- Initial PSO #3 binds VS 4ce363172cfd70be and PS 4c1bc8bf7e457acd
+  (3,360 bytes). The original DXIL for both initial PS inputs is included
+  under shaders/original-dxil. The second PS used with VS 20e still needs
+  to be identified by recording the pixel-shader hash in the draw trace.
+
+TEXTURE STAGING
+- 1,264 staging creation failures were traced to D3D11
+  CreateTexture2D; the proxy's 2D depth validation was not the failure.
+- All logged failures used CPUAccessFlags=WRITE and a BC format:
+  BC1_TYPELESS (70), BC3_TYPELESS (76), BC4_UNORM (80), BC5_UNORM (83),
+  BC6H_UF16 (95), or BC7_TYPELESS (97).
+- A separate native D3D11 hardware-device probe on this PC reproduced
+  E_INVALIDARG for 2x2 staging textures in the tested BC typed/typeless
+  formats with both CPU READ and CPU WRITE. The same formats succeeded
+  at 4x4 with both access modes. R8G8B8A8_UNORM succeeded at 2x2 and 4x4.
+- This isolates the failure to sub-block BC dimensions in the staging
+  descriptor, not to the CPU access mode alone. The correct way to stage
+  and copy 1x1/2x2 BC mip tails still needs a block-aligned copy test;
+  blindly padding the staging texture is not yet validated.
+
+INTERPRETATION
+The previously ready PSO #1 is not sufficient to render the observed
+scene draws. Most skipped draws use a different missing VS. Separately,
+small BC mip uploads fail before the copy/map path. Fix and test these
+two blockers independently; do not treat successful Present as proof of
+visible output.
+
+SOURCE / LOG
+- Instrumentation changes are in proxy-source/src/commands.cpp and
+  proxy-source/src/types.h.
+- The package includes original DXIL for the two initial VS/PS pairs, but
+  not the unidentified second PSO sharing VS 20e0826b236597a1.
+- The complete raw log was intentionally not added to this compact
+  package. It remains at:
+  D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\pre-instrumentation-test-20261109\d3d12on11-instrumented-run.log
+- Hela was closed after the test. The installation was restored to V7
+  d3d12.dll / dxgi.dll and the conservative INI; shader overrides remain.

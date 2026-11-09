@@ -275,6 +275,52 @@ TEST RENDER-TRACE CON VS + PS - 09/11/2026
   configurazione e log selezionato:
   C:\Users\Blasonati\Desktop\Hela AI\Hela_AI_20261109_1045
 
+TEST DIAGNOSTICO PSO E TEXTURE STAGING - 09/11/2026
+---------------------------------------------------
+- Aggiunta temporaneamente solo strumentazione: log dei draw saltati con
+  identita' della PipelineState e hash FNV-1a del VS; log del punto/API e
+  del descrittore per ogni rifiuto CreateStagingTexture.
+- Build diagnostica d3d12.dll SHA-256:
+  39232868028BCDFD3B56786B7C0D1A282FAA4831A4E894E840D6B5833B835066
+  (321.024 byte). I 4 test CTest esistenti sono passati.
+- Hela e' stato avviato sulla GTX 1050 Ti. Variabili diagnostiche limitate
+  a questo processo; trace callers disattivato. La GTX 950M non e' stata
+  provata.
+- Gli override VS a7f30e5d1d5fc6fb e PS f79b80f0f2f58f68 sono stati
+  nuovamente caricati; PSO graphics #1 risulta ready.
+- Al termine: 2.462 Present riuscite, zero Present fallite, draw(ok)=0,
+  skip-vs=3.185 e skip-cs=40. Non e' stato confermato un frame visibile.
+- Il nuovo log associa gli skip VS a soli due hash di shader:
+    VS 20e0826b236597a1, DXIL 4.128 byte: 2.913 skip registrati su due
+      identita' di pipeline.
+    VS 4ce363172cfd70be, DXIL 1.928 byte: 272 skip registrati.
+  Entrambi sono stati dumpati dal gioco e segnalati come override SM5
+  mancanti. L'hash identifica il VS, mentre il puntatore pipeline identifica
+  l'istanza solo per la durata di quel processo.
+- Il PSO #2 iniziale usa VS 20e0826b236597a1 e PS
+  d77600bde0076c33 (3.740 byte). Il trace del draw non registra ancora
+  l'hash PS per ciascuna istanza; il VS 20e appare su due pipeline, quindi
+  occorre associare anche l'hash PS prima di convertire tutte le coppie.
+- Il trace staging ha registrato 1.264 rifiuti, tutti in
+  ID3D11Device::CreateTexture2D (nessun rifiuto nel controllo Depth),
+  con CPUAccessFlags=0x10000 (WRITE), dimensioni piccole e formati BC:
+  DXGI_FORMAT_BC1_TYPELESS (70), BC3_TYPELESS (76), BC4_UNORM (80),
+  BC5_UNORM (83), BC6H_UF16 (95) e BC7_TYPELESS (97).
+- Verifica isolata su dispositivo D3D11 hardware della stessa macchina:
+  per tutti i formati BC provati, descrittori STAGING 2x2 restituiscono
+  E_INVALIDARG sia con CPU READ sia WRITE; descrittori 4x4 riescono con
+  entrambi. R8G8B8A8_UNORM riesce a entrambe le dimensioni. Questo
+  dimostra che le allocazioni staging BC sub-block 1x1/2x2 causano il
+  rifiuto osservato; non dimostra ancora quale estensione della copia
+  staging preservi correttamente la semantica dei mip BC D3D12.
+- Il run non ha riprodotto GetClockCalibration 0x887a0005. Il processo
+  Hela e' terminato; DLL V7 e INI conservativa sono state ripristinate e
+  verificate con hash. Gli override shader restano installati.
+- Log completo:
+  D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\pre-instrumentation-test-20261109\d3d12on11-instrumented-run.log
+- I sorgenti strumentati sono commands.cpp e types.h nel progetto
+  sm6-to-sm5-mcp; non sono stati pushati.
+
 Log archiviato e backup
 -----------------------
 Log della prova V7 con override:
@@ -339,20 +385,21 @@ ma la compatibilita' con la GTX 950M resta da dimostrare.
 
 PROSSIMI PASSI CONSIGLIATI
 --------------------------
-1. Tracciare l'hash del PSO effettivamente legato a ogni draw saltata e
-   convertire il vertex shader mancante di un percorso grafico prioritario.
-   Il PSO #1 e' ready, ma il run render-trace non ha eseguito draw riuscite.
-2. Diagnosticare CreateStagingTexture e i 1.087 errori E_INVALIDARG
-   (0x80070057); registrare dimensione, formato, footprint e parametri
-   passati a CreateTexture1D/2D/3D prima di cambiare il comportamento.
-3. Verificare che un draw reale abbia esito positivo e arrivi a Present con
-   contenuto visibile. Present riuscite da sole non certificano la grafica.
-4. Conservare il V7 riproducibile e usare il build render-trace solo per
-   misure diagnostiche temporanee. La precedente anomalia
-   GetClockCalibration 0x887a0005 non si e' ripetuta nel nuovo run.
-5. Indagare i tre overlap placement osservati nei run precedenti senza
-   rimuovere i controlli o fingere aliasing heap D3D12.
-6. Non dichiarare compatibilita' Hela o GTX 950M finche' non e' verificato
-   un frame corretto sulla macchina destinataria.
+1. Convertire in modo mirato VS 20e0826b236597a1 e VS 4ce363172cfd70be;
+   associare e convertire anche i pixel shader dei PSO che generano gli
+   skip. Migliorare il trace per includere VS hash e PS hash per pipeline.
+2. Correggere il percorso di staging per mip BC sotto 4x4, ma prima
+   progettare e testare copie con dimensioni/regioni allineate ai blocchi.
+   Non limitarsi a creare texture 4x4 senza verificare Map e
+   CopySubresourceRegion ai bordi dei mip 1x1 e 2x2.
+3. Eseguire uno smoke test D3D11 dedicato per le copie BC edge-mip, quindi
+   ripetere Hela e verificare che E_INVALIDARG scompaia e draw(ok) aumenti.
+4. Verificare un frame con grafica visibile; 2.462 Present riuscite non
+   certificano pixel corretti.
+5. Conservare il V7 riproducibile e usare la build render-trace solo per
+   misure diagnostiche temporanee. Non dichiarare compatibilita' GTX 950M
+   finche' il test non viene ripetuto sulla macchina destinataria.
+6. Indagare gli overlap placement dei run precedenti senza rimuovere i
+   controlli o fingere aliasing heap D3D12.
 
 FINE DEL RICORDO

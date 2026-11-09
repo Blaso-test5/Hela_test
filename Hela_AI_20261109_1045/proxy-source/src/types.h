@@ -222,6 +222,8 @@ struct ExecState {
     bool hasComputePipeline = false;
     bool graphicsPlaceholderVs = false;
     bool computePlaceholderCs = false;
+    uintptr_t graphicsPipelineIdentity = 0;
+    uint64_t graphicsShaderHash = 0;
     bool hasVertexBuffer = false;
     bool hasIndexBuffer = false;
     bool rtvBackbuffer = false;

@@ -54,7 +54,11 @@ INTERPRETATION / REVIEW QUESTIONS
 3. Check whether the ready PSO #1 is ever selected for a draw, whether its
    root-signature/resource bindings are valid, and whether a successful
    draw reaches the back buffer before Present.
-4. Do not equate PSO creation or successful Present with correct rendering.
+4. The follow-up trace identifies missing VS hashes
+   20e0826b236597a1 and 4ce363172cfd70be. Their initial PS pairs are
+   d77600bde0076c33 and 4c1bc8bf7e457acd, respectively; a second pipeline
+   using VS 20e still needs its own PS hash identified.
+5. Do not equate PSO creation or successful Present with correct rendering.
    Do not infer GTX 950M compatibility from this GTX 1050 Ti test.
 
 CONTENTS
@@ -62,11 +66,14 @@ CONTENTS
   smoke-test sources needed to inspect the implementation.
 - runtime\bin: exact diagnostic d3d12.dll and dxgi.dll used in the run.
 - runtime\config: diagnostic INI and binding map used in the run.
-- shaders\original-dxil: original dumped DXIL inputs for the tested VS and
-  PS.
+- shaders\original-dxil: original dumped DXIL inputs for the first two
+  missing VS/PS pairs and for the previously tested VS/PS pair.
 - shaders\hlsl: converted HLSL candidates.
 - shaders\overrides: compiled SM5 DXBC files.
 - evidence\render-trace-extract.txt: concise, relevant records and counts.
+- evidence\instrumented-followup-test.txt: follow-up run identifying the
+  missing VS hashes and reproducing the BC staging-size failure directly
+  against D3D11.
 - evidence\progress-history.txt: chronological project/test record,
   updated with this run.
 - evidence\build-provenance.txt and evidence\SHA256SUMS.txt: build details
@@ -75,6 +82,9 @@ CONTENTS
 The verbose 18.6 MB raw run log was intentionally left out to avoid noise.
 The complete original log remains on the test PC under:
 D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\pre-render-trace-override-test-20261109-1045\d3d12on11-render-trace.log
+
+A second, instrumented follow-up log is also retained locally under:
+D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\pre-instrumentation-test-20261109\d3d12on11-instrumented-run.log
 
 The tested diagnostic DLLs are not the DLLs left installed after the run.
 The Hela installation was restored to its prior V7 DLL and conservative INI;

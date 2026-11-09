@@ -67,6 +67,17 @@ void RecordDrawExecution(ExecState& state, bool indexed) {
     if (indexed && !state.hasIndexBuffer) stats.drawMissingIb.fetch_add(1, std::memory_order_relaxed);
 }
 
+void LogSkippedDraw(const ExecState& state, const char* operation,
+    UINT arg0, UINT arg1) {
+    if (!Cfg().diagnosticRenderTrace) return;
+    Log("[RENDER_TRACE] [DRAW_SKIPPED] api=%s pipeline=%p vs-hash=%016llx "
+        "missing-vs=%u missing-shader=%u arg0=%u arg1=%u rtvs=%u backbuffer=%u",
+        operation, reinterpret_cast<void*>(state.graphicsPipelineIdentity),
+        static_cast<unsigned long long>(state.graphicsShaderHash),
+        state.graphicsPlaceholderVs ? 1u : 0u, state.skipDraws ? 1u : 0u,
+        arg0, arg1, state.numRtv, state.rtvBackbuffer ? 1u : 0u);
+}
+
 void RecordDispatchExecution() {
     if (Cfg().diagnosticRenderTrace)
         TraceStats().dispatchExec.fetch_add(1, std::memory_order_relaxed);
@@ -167,6 +178,16 @@ bool ValidateFootprint(Resource* buffer, const D3D12_PLACED_SUBRESOURCE_FOOTPRIN
 
 HRESULT CreateStagingTexture(Device* device, D3D12_RESOURCE_DIMENSION dimension,
     const D3D12_SUBRESOURCE_FOOTPRINT& footprint, UINT cpuAccess, Ptr<ID3D11Resource>& out) {
+    auto logFailure = [&](const char* api, HRESULT result) {
+        if (Cfg().diagnosticRenderTrace) {
+            Log("[RENDER_TRACE] [STAGING_CREATE_FAIL] api=%s dimension=%u format=%u "
+                "width=%u height=%u depth=%u row-pitch=%u cpu-access=0x%x hr=0x%08lx",
+                api, static_cast<UINT>(dimension), static_cast<UINT>(footprint.Format),
+                footprint.Width, footprint.Height, footprint.Depth, footprint.RowPitch,
+                cpuAccess, result);
+        }
+        return result;
+    };
     if (dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D) {
         D3D11_TEXTURE1D_DESC desc{};
         desc.Width = footprint.Width;
@@ -177,6 +198,7 @@ HRESULT CreateStagingTexture(Device* device, D3D12_RESOURCE_DIMENSION dimension,
         desc.CPUAccessFlags = cpuAccess;
         Ptr<ID3D11Texture1D> texture;
         const HRESULT result = device->d11->CreateTexture1D(&desc, nullptr, texture.Put());
+        if (FAILED(result)) return logFailure("CreateTexture1D", result);
         if (SUCCEEDED(result)) {
             ID3D11Resource* base = texture.Get();
             base->AddRef();
@@ -185,7 +207,7 @@ HRESULT CreateStagingTexture(Device* device, D3D12_RESOURCE_DIMENSION dimension,
         return result;
     }
     if (dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D) {
-        if (footprint.Depth != 1) return E_INVALIDARG;
+        if (footprint.Depth != 1) return logFailure("validation-depth-2D", E_INVALIDARG);
         D3D11_TEXTURE2D_DESC desc{};
         desc.Width = footprint.Width;
         desc.Height = footprint.Height;
@@ -197,6 +219,7 @@ HRESULT CreateStagingTexture(Device* device, D3D12_RESOURCE_DIMENSION dimension,
         desc.CPUAccessFlags = cpuAccess;
         Ptr<ID3D11Texture2D> texture;
         const HRESULT result = device->d11->CreateTexture2D(&desc, nullptr, texture.Put());
+        if (FAILED(result)) return logFailure("CreateTexture2D", result);
         if (SUCCEEDED(result)) {
             ID3D11Resource* base = texture.Get();
             base->AddRef();
@@ -215,6 +238,7 @@ HRESULT CreateStagingTexture(Device* device, D3D12_RESOURCE_DIMENSION dimension,
         desc.CPUAccessFlags = cpuAccess;
         Ptr<ID3D11Texture3D> texture;
         const HRESULT result = device->d11->CreateTexture3D(&desc, nullptr, texture.Put());
+        if (FAILED(result)) return logFailure("CreateTexture3D", result);
         if (SUCCEEDED(result)) {
             ID3D11Resource* base = texture.Get();
             base->AddRef();
@@ -222,7 +246,7 @@ HRESULT CreateStagingTexture(Device* device, D3D12_RESOURCE_DIMENSION dimension,
         }
         return result;
     }
-    return E_INVALIDARG;
+    return logFailure("validation-dimension", E_INVALIDARG);
 }
 
 HRESULT MapBufferForRead(ExecState& state, Resource* resource, Ptr<ID3D11Buffer>& staging,
@@ -446,6 +470,8 @@ void ApplyPipeline(ExecState& state, PipelineState* pipeline) {
         state.hasComputePipeline = false;
         state.graphicsPlaceholderVs = false;
         state.computePlaceholderCs = false;
+        state.graphicsPipelineIdentity = 0;
+        state.graphicsShaderHash = 0;
         return;
     }
     state.skipDraws = !pipeline->compute && pipeline->missingShader;
@@ -454,6 +480,9 @@ void ApplyPipeline(ExecState& state, PipelineState* pipeline) {
     state.hasComputePipeline = pipeline->compute;
     state.graphicsPlaceholderVs = !pipeline->compute && pipeline->missingVs;
     state.computePlaceholderCs = pipeline->compute && pipeline->missingCs;
+    state.graphicsPipelineIdentity = pipeline->compute
+        ? 0 : reinterpret_cast<uintptr_t>(pipeline);
+    state.graphicsShaderHash = pipeline->compute ? 0 : pipeline->shaderHash;
     if (pipeline->missingShader)
         Log("Skipped execution for PSO placeholder with missing SM5 shader override");
     state.c->VSSetShader(pipeline->vs.Get(), nullptr, 0);
@@ -627,6 +656,8 @@ void STDMETHODCALLTYPE CommandList::ClearState(ID3D12PipelineState* initialState
         state.hasComputePipeline = false;
         state.graphicsPlaceholderVs = false;
         state.computePlaceholderCs = false;
+        state.graphicsPipelineIdentity = 0;
+        state.graphicsShaderHash = 0;
         state.c->ClearState();
         if (keep) {
             auto* pipeline = dynamic_cast<PipelineState*>(keep.Get());
@@ -641,6 +672,7 @@ void STDMETHODCALLTYPE CommandList::DrawInstanced(UINT vertexCount, UINT instanc
     auto snapshot = Snap(gfx);
     Add([=](ExecState& state) {
         if (state.skipDraws) {
+            LogSkippedDraw(state, "DrawInstanced", vertexCount, instanceCount);
             if (Cfg().diagnosticRenderTrace) {
                 auto& stats = TraceStats();
                 if (state.graphicsPlaceholderVs)
@@ -663,6 +695,7 @@ void STDMETHODCALLTYPE CommandList::DrawIndexedInstanced(UINT indexCount, UINT i
     auto snapshot = Snap(gfx);
     Add([=](ExecState& state) {
         if (state.skipDraws) {
+            LogSkippedDraw(state, "DrawIndexedInstanced", indexCount, instanceCount);
             if (Cfg().diagnosticRenderTrace) {
                 auto& stats = TraceStats();
                 if (state.graphicsPlaceholderVs)
@@ -742,6 +775,8 @@ void STDMETHODCALLTYPE CommandList::ExecuteIndirect(ID3D12CommandSignature* sour
     const UINT byteStride = signature->byteStride;
     Add([=](ExecState& state) {
         if (compute ? state.skipDispatches : state.skipDraws) {
+            if (!compute)
+                LogSkippedDraw(state, "ExecuteIndirect", maxCommandCount, byteStride);
             if (Cfg().diagnosticRenderTrace) {
                 auto& stats = TraceStats();
                 if (compute && state.computePlaceholderCs)
