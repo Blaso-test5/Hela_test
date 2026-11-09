@@ -50,3 +50,44 @@ this as proof that Tier 0 caused the access violation.
 The original game DLLs, INI, binding map, and overrides were restored after
 the test. The complete proxy trace is `d3d12on11-tier0-test.log`. No
 minidump or user-specific crash identifiers are included.
+
+PIXEL-SHADER OVERRIDE FOLLOW-UP
+Date: 2026-11-10
+
+The first two attempts in this follow-up used the conservative
+`shader_model=5_0` setting. Both exited before PSO creation, without a game
+window or shader readiness records; these are setup failures, not rendering
+test results. The controlled rerun used the exact diagnostic proxy binary
+from `runtime/bin/d3d12.dll`, temporarily set `shader_model=6_7` to match
+the prior successful Tier 0 initialization, and staged the two corrected
+VS plus three target PS and two existing baseline SM5 overrides. Tier 0,
+diagnostic tracing, and NVIDIA vendor masking were temporary.
+
+All three target PS hashes loaded as SM5 overrides:
+- `44b0a992c2304254`
+- `d77600bde0076c33`
+- `4c1bc8bf7e457acd`
+
+Both corrected VS hashes (`20e0826b236597a1`, `4ce363172cfd70be`) also
+loaded. The full trace records no `DRAW_SKIPPED`, `INPUT_LAYOUT_FAILED`,
+`PSO GRAPHICS FAILED`, or `CreateReservedResource` events.
+
+The `Hela` window was observed for about 77 seconds. The process exited
+with `0xC0000005` after about 114 seconds total; the faulting module is
+unknown. Final heartbeat:
+- `present=1857`
+- `PSO(G=983,C=2158)`
+- `draw(ok)=2505`, `rtv=2505`, `bb=0`
+- `skip-other=0`, `dispatch(ok)=0`
+- `placed(ok)=179`, `overlap=0`
+
+Interpretation: supplying the missing PS overrides removed the recorded
+draw skips and allowed 2,505 draw calls to execute against render targets.
+The proxy classified none as targeting the backbuffer, so this does not
+verify a visible frame or confirm the displayed pixels. The semantic
+equivalence of the candidate shaders is also unverified. The access
+violation remains unexplained.
+
+The original DLL, INI, and three installed override files were restored.
+The full trace is `d3d12on11-tier0-ps-overrides-test.log`; the earlier
+failed setup attempts are retained locally but are not included as evidence.

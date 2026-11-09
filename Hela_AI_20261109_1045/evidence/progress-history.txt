@@ -590,18 +590,39 @@ ANALISI TRACE TIER 0 - SHADER PIXEL MANCANTI
   esistenti insieme ai VS corretti e verificare `draw(ok)`/`bb`; la
   correttezza semantica dei candidati non e' ancora dimostrata.
 
+TEST OVERRIDE PIXEL SHADER - GTX 950M - 10/11/2026
+--------------------------------------------------
+- Due avvii iniziali con `shader_model=5_0` sono usciti prima dei PSO e non
+  sono risultati validi del test di rendering. Il run controllato ha usato
+  la DLL diagnostica esatta e impostato temporaneamente `shader_model=6_7`,
+  come nel precedente run Tier 0; DLL, INI e override originali sono poi
+  stati ripristinati.
+- Caricati i tre PS mancanti (`44b0a992c2304254`,
+  `d77600bde0076c33`, `4c1bc8bf7e457acd`) e i due VS corretti. Nessun
+  `DRAW_SKIPPED`, `INPUT_LAYOUT_FAILED`, `PSO GRAPHICS FAILED` o
+  `CreateReservedResource` nel trace.
+- Finestra Hela osservata per circa 77 secondi; processo terminato con
+  `0xC0000005` dopo circa 114 secondi. Modulo faulting non determinato.
+  Heartbeat finale: `present=1857`, `PSO(G=983,C=2158)`,
+  `draw(ok)=2505`, `rtv=2505`, `bb=0`, `skip-other=0`,
+  `dispatch(ok)=0`, `placed(ok)=179`, `ovl=0`.
+- I draw vengono eseguiti e i precedenti skip spariscono, ma nessun draw e'
+  classificato sul backbuffer: frame visibile e pixel mostrati non
+  verificati. L'equivalenza semantica degli shader resta da dimostrare.
+- Riepilogo e trace completo in `evidence\GTX_950M`; nessun minidump
+  pubblicato.
+
 PROSSIMI PASSI
 --------------
-1. Provare gli override PS associati ai draw saltati sul GTX 950M e
-   verificare se aumentano i draw riusciti o quelli sul backbuffer; non
-   presumere che i candidati siano semanticamente corretti.
-2. Indagare l'access violation solo con evidenza di fault/module/stack;
-   non attribuirla al Tier 0 in assenza di tale evidenza.
-3. Sulla GTX 1050 Ti, diagnosticare perche' i run precedenti avevano
+1. Verificare perche' tutti i 2.505 draw riusciti sono su render target
+   non identificati come backbuffer; acquisire un'immagine o pixel readback
+   per stabilire se e' stato prodotto un frame visibile.
+2. Verificare firma semantica, binding e output dei candidati shader; il
+   caricamento e l'assenza di skip non provano equivalenza visiva.
+3. Indagare l'access violation solo con evidenza di fault/module/stack;
+   non attribuirla al Tier 0 o agli shader in assenza di tale evidenza.
+4. Sulla GTX 1050 Ti, diagnosticare perche' i run precedenti avevano
    `swap=0` e `present=0`, oltre agli errori placed-resource overlap.
-4. Verificare firma semantica, binding e output sul render target dei VS
-   corretti; la scomparsa degli errori di input-layout/PSO non prova
-   equivalenza semantica.
 5. Proseguire la verifica in-game del percorso staging BC con un run
    riproducibile e di durata sufficiente, registrando l'esito visivo.
 6. Non rimuovere i controlli di overlap o simulare l'aliasing D3D12 senza

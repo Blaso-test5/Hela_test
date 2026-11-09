@@ -42,12 +42,32 @@ GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
   account for `skip-other=1801`. Their missing PS hashes were
   `44b0a992c2304254` (1,024 draws), `d77600bde0076c33` (484), and
   `4c1bc8bf7e457acd` (293); each was logged as a placeholder, not ready.
-- The next focused test is to stage those three existing PS candidates
-  alongside the corrected VS overrides and check draw/backbuffer counters.
-  Their semantic correctness remains unverified.
+- This first Tier 0 run did not include those PS overrides; the follow-up
+  below records the targeted test and its result.
 - Original DLLs, INI, binding map, and overrides were restored. Details and
   the full trace are in `tier0-test-summary.txt` and
   `d3d12on11-tier0-test.log`.
+
+## Pixel-shader override follow-up
+
+- Two initial launches used the conservative `shader_model=5_0` setting and
+  exited before PSO creation; they are not valid rendering-test results.
+  The controlled rerun used the exact diagnostic proxy binary and
+  temporarily advertised Shader Model 6.7, matching the prior Tier 0 run.
+- All three missing PS candidates loaded as SM5 overrides, alongside both
+  corrected VS overrides. The trace recorded zero `DRAW_SKIPPED`,
+  `INPUT_LAYOUT_FAILED`, and `PSO GRAPHICS FAILED` records.
+- Final heartbeat: `present=1857`, `PSO(G=983,C=2158)`,
+  `draw(ok)=2505`, `rtv=2505`, `bb=0`, `skip-other=0`,
+  `dispatch(ok)=0`, `placed(ok)=179`, `overlap=0`. No
+  `CreateReservedResource` request was recorded.
+- The `Hela` window was observed for about 77 seconds; the process ended
+  with `0xC0000005` after about 114 seconds total. The faulting module is
+  unknown. Draws now execute, but none was classified as targeting the
+  backbuffer; a visible rendered frame is still unverified.
+- The original DLL, INI, and three installed overrides were restored.
+  Details and the full trace are in `pixel-shader-test-summary.txt` and
+  `d3d12on11-tier0-ps-overrides-test.log`.
 
 ## Files
 
@@ -56,3 +76,6 @@ GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
 - `crash-summary.txt`: sanitized Unreal assertion summary.
 - `d3d12on11-tier0-test.log`: complete trace from the forced Tier 0 run.
 - `tier0-test-summary.txt`: setup, results, and interpretation of the Tier 0 run.
+- `d3d12on11-tier0-ps-overrides-test.log`: full trace after staging the
+  three missing PS overrides.
+- `pixel-shader-test-summary.txt`: results and interpretation of the PS test.

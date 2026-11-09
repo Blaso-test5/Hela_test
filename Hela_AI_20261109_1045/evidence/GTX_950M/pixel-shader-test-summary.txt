@@ -1,0 +1,39 @@
+HELA GTX 950M PIXEL-SHADER OVERRIDE TEST
+Date: 2026-11-10
+
+Setup
+- GPU: NVIDIA GeForce GTX 950M, device 0x139A, driver 582.78.
+- The exact diagnostic proxy from runtime/bin/d3d12.dll was used.
+- The previous two launches used shader_model=5_0 and exited before PSO
+  creation; they are setup failures, not rendering-test results.
+- The controlled run temporarily set shader_model=6_7, matching the prior
+  Tier 0 test, and reported tiled resources tier 0. Diagnostic tracing and
+  NVIDIA vendor masking were enabled only for this run.
+- Seven temporary SM5 overrides were staged: two existing baseline
+  shaders, two corrected VS candidates, and the three PS candidates
+  associated with the previous skipped draws.
+
+Result
+- The three PS candidates loaded successfully:
+  44b0a992c2304254, d77600bde0076c33, and 4c1bc8bf7e457acd.
+- Both corrected VS candidates loaded: 20e0826b236597a1 and
+  4ce363172cfd70be.
+- No DRAW_SKIPPED, INPUT_LAYOUT_FAILED, PSO GRAPHICS FAILED, or
+  CreateReservedResource records were found.
+- The Hela window was observed for about 77 seconds. The process exited
+  with 0xC0000005 after about 114 seconds total; the faulting module is
+  unknown.
+- Final heartbeat: present=1857, PSO(G=983,C=2158), draw(ok)=2505,
+  rtv=2505, bb=0, skip-other=0, dispatch(ok)=0, placed(ok)=179,
+  overlap=0.
+
+Interpretation
+The PS overrides removed the prior missing-shader skips, and the proxy
+recorded 2,505 successful draw calls against render targets. None was
+classified as targeting the backbuffer. This proves neither a visible frame
+nor the displayed pixel values; the shader candidates' semantic equivalence
+is also unverified. The access violation remains unexplained.
+
+The original DLL, INI, and three installed override files were restored.
+The complete proxy trace is d3d12on11-tier0-ps-overrides-test.log.
+No minidump is included.
