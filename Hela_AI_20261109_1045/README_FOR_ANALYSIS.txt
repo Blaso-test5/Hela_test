@@ -11,8 +11,9 @@ TEST SETUP
 - The game ran on this PC's GTX 1050 Ti. The destination GTX 950M has not
   been tested.
 - The prior diagnostic run used the proxy DLLs in runtime\bin, diagnostic
-  INI in runtime\config, and two original SM5 overrides. Five additional
-  SM5 candidates are included but were not successfully exercised in Hela.
+  INI in runtime\config, and two original SM5 overrides. A later controlled
+  run loaded all five additional SM5 candidates, but Hela asserted during
+  graphics PSO creation; no successful draw was verified.
 - diagnostic_render_trace, caller tracing, and diagnostic capabilities
   were enabled for this run only. The diagnostic-capabilities option is
   explicitly marked unsafe by the proxy; do not treat this INI as a
@@ -95,13 +96,21 @@ CONTENTS
 - evidence\bc-mip-staging-test.txt: BC1/BC7 mip-tail upload/readback results.
 - evidence\steam-candidate-shader-run.log: short Steam-started attempt that
   exited before pipeline creation; included to document the limitation.
+- evidence\shader-candidate-test-20261109.log: complete diagnostic log from
+  the controlled run with all five candidate overrides installed.
+- evidence\shader-candidate-crash-20261109.xml: UE crash context for that
+  run's PipelineStateCache assertion.
+- evidence\shader-candidate-test-20261109.txt: test setup, measured results,
+  and limits of the conclusions.
 - evidence\progress-history.txt: chronological project/test record,
-  updated with this run.
+  updated with the candidate run.
 - evidence\build-provenance.txt and evidence\SHA256SUMS.txt: build details
   and hashes for package files.
 
-The verbose raw logs (including the 19.1 MB instrumented run) are intentionally
-left out to avoid noise.
+The older verbose raw logs (including the 19.1 MB instrumented run) are
+intentionally left out to avoid noise. The complete candidate-test log is
+included because it records the shader loads and PSO failures needed for the
+next diagnosis.
 The complete original log remains on the test PC under:
 D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\pre-render-trace-override-test-20261109-1045\d3d12on11-render-trace.log
 

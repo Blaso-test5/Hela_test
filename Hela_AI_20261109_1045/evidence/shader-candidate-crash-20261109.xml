@@ -1,0 +1,579 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FGenericCrashContext>
+<RuntimeProperties>
+<CrashVersion>3</CrashVersion>
+<ExecutionGuid>848FF72C43E2E570643DBD909B252518</ExecutionGuid>
+<CrashGUID>UECC-Windows-B15652914E7EB2BCBB32098DDC710CFC_0000</CrashGUID>
+<IsEnsure>false</IsEnsure>
+<IsStall>false</IsStall>
+<IsAssert>true</IsAssert>
+<CrashType>Assert</CrashType>
+<ErrorMessage>LowLevelFatalError [File:C:\j\workspace\Games\Hela\EnginePipe\src\Engine\Source\Runtime\RHI\Private\PipelineStateCache.cpp] [Line: 533] 
+Shader compilation failures are Fatal.
+
+
+</ErrorMessage>
+<CrashReporterMessage></CrashReporterMessage>
+<CrashReporterMessage>Attended</CrashReporterMessage>
+<ProcessId>19436</ProcessId>
+<SecondsSinceStart>0</SecondsSinceStart>
+<IsInternalBuild>false</IsInternalBuild>
+<IsPerforceBuild>false</IsPerforceBuild>
+<IsWithDebugInfo>true</IsWithDebugInfo>
+<IsSourceDistribution>false</IsSourceDistribution>
+<GameName>UE-Hela</GameName>
+<ExecutableName>Hela-Win64-Shipping</ExecutableName>
+<BuildConfiguration>Shipping</BuildConfiguration>
+<GameSessionID></GameSessionID>
+<PlatformName>Windows</PlatformName>
+<PlatformFullName>Windows</PlatformFullName>
+<PlatformNameIni>Windows</PlatformNameIni>
+<EngineMode>Game</EngineMode>
+<EngineModeEx>Unset</EngineModeEx>
+<DeploymentName></DeploymentName>
+<EngineVersion>5.6.1-0+Unknown</EngineVersion>
+<EngineCompatibleVersion>5.6.1-0+Unknown</EngineCompatibleVersion>
+<CommandLine></CommandLine>
+<LanguageLCID>16</LanguageLCID>
+<AppDefaultLocale>it-IT</AppDefaultLocale>
+<BuildVersion>Unknown-CL-0</BuildVersion>
+<Symbols>Unknown-CL-0-Win64-Shipping</Symbols>
+<IsUERelease>true</IsUERelease>
+<IsRequestingExit>false</IsRequestingExit>
+<UserName></UserName>
+<BaseDir>D:/SteamLibrary/steamapps/common/Hela Demo/Hela/Binaries/Win64/</BaseDir>
+<RootDir>D:/SteamLibrary/steamapps/common/Hela Demo/</RootDir>
+<MachineId>569703CD40216DFB56F856A89A66C3D7</MachineId>
+<LoginId>569703cd40216dfb56f856a89a66c3d7</LoginId>
+<EpicAccountId>cfed08f8c97940f09cbb629f1a25797e</EpicAccountId>
+<SourceContext></SourceContext>
+<UserDescription></UserDescription>
+<UserActivityHint></UserActivityHint>
+<CrashDumpMode>0</CrashDumpMode>
+<GameStateName></GameStateName>
+<Misc.NumberOfCores>4</Misc.NumberOfCores>
+<Misc.NumberOfCoresIncludingHyperthreads>4</Misc.NumberOfCoresIncludingHyperthreads>
+<Misc.Is64bitOperatingSystem>1</Misc.Is64bitOperatingSystem>
+<Misc.CPUVendor>GenuineIntel</Misc.CPUVendor>
+<Misc.CPUBrand>Intel(R) Core(TM) i5-7600K CPU @ 3.80GHz</Misc.CPUBrand>
+<Misc.PrimaryGPUBrand>NVIDIA GeForce GTX 1050 Ti</Misc.PrimaryGPUBrand>
+<Misc.OSVersionMajor>Windows 10 (22H2) [10.0.19045.5737]</Misc.OSVersionMajor>
+<Misc.OSVersionMinor></Misc.OSVersionMinor>
+<Misc.AnticheatProvider></Misc.AnticheatProvider>
+<MemoryStats.TotalPhysical>17136099328</MemoryStats.TotalPhysical>
+<MemoryStats.TotalVirtual>25000783872</MemoryStats.TotalVirtual>
+<MemoryStats.PageSize>4096</MemoryStats.PageSize>
+<MemoryStats.TotalPhysicalGB>16</MemoryStats.TotalPhysicalGB>
+<MemoryStats.AvailablePhysical>1414184960</MemoryStats.AvailablePhysical>
+<MemoryStats.AvailableVirtual>3461644288</MemoryStats.AvailableVirtual>
+<MemoryStats.UsedPhysical>682131456</MemoryStats.UsedPhysical>
+<MemoryStats.PeakUsedPhysical>682135552</MemoryStats.PeakUsedPhysical>
+<MemoryStats.UsedVirtual>867708928</MemoryStats.UsedVirtual>
+<MemoryStats.PeakUsedVirtual>867708928</MemoryStats.PeakUsedVirtual>
+<MemoryStats.bIsOOM>0</MemoryStats.bIsOOM>
+<MemoryStats.OOMAllocationSize>0</MemoryStats.OOMAllocationSize>
+<MemoryStats.OOMAllocationAlignment>0</MemoryStats.OOMAllocationAlignment>
+<NumMinidumpFramesToIgnore>4</NumMinidumpFramesToIgnore>
+<CallStack></CallStack>
+<PCallStack>
+
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 30f6be6         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 30e92c4         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 30ef8c5         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12de4c1         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12cf41f         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12d344e         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12e050b         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12cbd8a         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 1367224         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</PCallStack>
+<PCallStackHash>66E336FC1C59823CAFBCA1CF535796E5FC0CAF92</PCallStackHash>
+<Threads><Thread><CallStack>ntdll                0x00007ffcdb450000 + 54de0           
+ntdll                0x00007ffcdb450000 + 54733           
+ntdll                0x00007ffcdb450000 + 54549           
+ntdll                0x00007ffcdb450000 + 3288a           
+ntdll                0x00007ffcdb450000 + 17bc4           
+ntdll                0x00007ffcdb450000 + 14c14           
+ntdll                0x00007ffcdb450000 + 61243           
+ntdll                0x00007ffcdb450000 + 60f70           
+ntdll                0x00007ffcdb450000 + 6020f           
+ntdll                0x00007ffcdb450000 + 1fb53           
+ntdll                0x00007ffcdb450000 + 173e4           
+ntdll                0x00007ffcdb450000 + 16af4           
+KERNELBASE           0x00007ffcd8bf0000 + 32612           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14b949c         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14b05cb         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 7a690f9         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 1471fe4         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14feddd         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 150c8eb         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14fe8ea         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 467e038         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 4680264         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 467cbcc         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 467cdda         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 467dacd         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 4684d54         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 8bbd122         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>35044</ThreadID>
+<ThreadName>GameThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 136703e         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>33440</ThreadID>
+<ThreadName>BackgroundThreadPool #0</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 136703e         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>35468</ThreadID>
+<ThreadName>BackgroundThreadPool #1</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + a0f24           
+ntdll                0x00007ffcdb450000 + 64d6d           
+ntdll                0x00007ffcdb450000 + 64c22           
+ntdll                0x00007ffcdb450000 + 64933           
+KERNELBASE           0x00007ffcd8bf0000 + 6bb0f           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 13f9862         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12dfad4         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12df5eb         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14a9021         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14a93d6         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 30ef6a2         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 31011df         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 30ef062         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 1fe006e         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12de4c1         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12cf41f         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12d344e         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12e050b         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12cbd8a         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 1367224         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>32732</ThreadID>
+<ThreadName>Foreground Worker #0</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14bd97f         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 8c0c44e         
+VCRUNTIME140         0x00007ffcbee70000 + e7bf            
+ntdll                0x00007ffcdb450000 + a28bf           
+ntdll                0x00007ffcdb450000 + 52554           
+ntdll                0x00007ffcdb450000 + 522a7           
+KERNELBASE           0x00007ffcd8bf0000 + 3b699           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14bfb1a         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 144d343         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 13f586b         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 30f6be6         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 30e92c4         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 30ef8c5         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12de4c1         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12cf41f         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12d344e         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12e050b         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12cbd8a         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 1367224         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>15276</ThreadID>
+<ThreadName>Background Worker #0</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12dc5e6         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12cbd83         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 1367224         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>20740</ThreadID>
+<ThreadName>Foreground Worker (Standby #0)</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14bd97f         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 8c0c44e         
+VCRUNTIME140         0x00007ffcbee70000 + e7bf            
+ntdll                0x00007ffcdb450000 + a28bf           
+ntdll                0x00007ffcdb450000 + 52554           
+ntdll                0x00007ffcdb450000 + 522a7           
+KERNELBASE           0x00007ffcd8bf0000 + 3b699           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14bfb1a         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 144d343         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 13f586b         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 30f6be6         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 30e92c4         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 30ef8c5         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12de4c1         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12cf41f         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12d344e         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12e050b         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12cbd8a         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 1367224         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>true</IsCrashed>
+<Registers></Registers>
+<ThreadID>35140</ThreadID>
+<ThreadName>Background Worker #1</ThreadName>
+</Thread>
+<Thread><CallStack></CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>3768</ThreadID>
+<ThreadName>FHeartBeatThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 3875041         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>8360</ThreadID>
+<ThreadName>FMediaTicker</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9e044           
+KERNELBASE           0x00007ffcd8bf0000 + 5c250           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 86818c4         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 867f92d         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 1b7f1fa         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 1b7eb2b         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 1b7eb96         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>32624</ThreadID>
+<ThreadName>HttpManagerThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 4ed85b6         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>32852</ThreadID>
+<ThreadName>OnlineAsyncTaskThreadNull DefaultInstance(1)</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + a0f24           
+ntdll                0x00007ffcdb450000 + 64d6d           
+ntdll                0x00007ffcdb450000 + 64c22           
+ntdll                0x00007ffcdb450000 + 64933           
+KERNELBASE           0x00007ffcd8bf0000 + 6bb0f           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 13f976c         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12dfad4         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12df58c         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 1456d36         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 1367224         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>20944</ThreadID>
+<ThreadName>OutputDeviceRedirector</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 136703e         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>30596</ThreadID>
+<ThreadName>IOThreadPool #0</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 136703e         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>22776</ThreadID>
+<ThreadName>IOThreadPool #1</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 136703e         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>15580</ThreadID>
+<ThreadName>IOThreadPool #2</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 136703e         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>6864</ThreadID>
+<ThreadName>IOThreadPool #3</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 25a8651         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>35920</ThreadID>
+<ThreadName>IoService</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 13e2dd5         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>25540</ThreadID>
+<ThreadName>IoDispatcher</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 2fd9ec5         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>26392</ThreadID>
+<ThreadName>RHIInterruptThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 2fd9ec5         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>19528</ThreadID>
+<ThreadName>RHISubmissionThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12d8bff         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 319532a         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>31768</ThreadID>
+<ThreadName>RHIThread</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12d8bff         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12df87d         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12dfd6e         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 310472d         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 31005aa         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 30f6d63         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 38ccae7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 317d196         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 317cf41         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12d316b         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12de4c1         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 12d8c11         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 3195291         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 3195387         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>18328</ThreadID>
+<ThreadName>RenderThread 0</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9db74           
+KERNELBASE           0x00007ffcd8bf0000 + 4ddae           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c10fc         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 3195477         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>17700</ThreadID>
+<ThreadName>RTHeartBeat 0</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 136703e         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>29504</ThreadID>
+<ThreadName>PSOPrecompilePool #0</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 136703e         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>33312</ThreadID>
+<ThreadName>PSOPrecompilePool #1</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 136703e         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>19464</ThreadID>
+<ThreadName>PSOPrecompilePool #2</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9d574           
+KERNELBASE           0x00007ffcd8bf0000 + 2920e           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c24f7         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 77ae6d9         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 77a5edc         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 77b7a83         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>31852</ThreadID>
+<ThreadName>Electra::ExecAsync</ThreadName>
+</Thread>
+<Thread><CallStack>ntdll                0x00007ffcdb450000 + 9db74           
+KERNELBASE           0x00007ffcd8bf0000 + 4ddae           
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c10fc         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 38cc888         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 38cb971         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c3117         
+Hela-Win64-Shipping  0x00007ff6ba1c0000 + 14c2ee9         
+KERNEL32             0x00007ffcdaed0000 + 17374           
+</CallStack>
+<IsCrashed>false</IsCrashed>
+<Registers></Registers>
+<ThreadID>11260</ThreadID>
+<ThreadName>SlateLoadingThread1</ThreadName>
+</Thread>
+</Threads>
+</RuntimeProperties>
+<PlatformProperties>
+<PlatformIsRunningWindows>1</PlatformIsRunningWindows>
+<PlatformIsRunningWine>false</PlatformIsRunningWine>
+<PlatformSupportsWindows11>false</PlatformSupportsWindows11>
+<IsRunningOnBattery>false</IsRunningOnBattery>
+<IsUsingBatterySaver>false</IsUsingBatterySaver>
+<PlatformCallbackResult>0</PlatformCallbackResult>
+<CrashTrigger>0</CrashTrigger>
+</PlatformProperties>
+<EngineData>
+<MatchingDPStatus>WindowsNo errors</MatchingDPStatus>
+<RHI.IntegratedGPU>false</RHI.IntegratedGPU>
+<RHI.DriverDenylisted>false</RHI.DriverDenylisted>
+<RHI.D3DDebug>false</RHI.D3DDebug>
+<RHI.DRED>false</RHI.DRED>
+<RHI.DREDMarkersOnly>false</RHI.DREDMarkersOnly>
+<RHI.DREDContext>false</RHI.DREDContext>
+<RHI.RHIName>D3D12</RHI.RHIName>
+<RHI.AdapterName>NVIDIA GeForce GTX 1050 Ti</RHI.AdapterName>
+<RHI.UserDriverVersion>582.78</RHI.UserDriverVersion>
+<RHI.InternalDriverVersion>32.0.15.8278</RHI.InternalDriverVersion>
+<RHI.DriverDate>6-25-2026</RHI.DriverDate>
+<RHI.FeatureLevel>SM6</RHI.FeatureLevel>
+<RHI.GPUVendor>Unknown</RHI.GPUVendor>
+<RHI.DeviceId>1C82</RHI.DeviceId>
+<DeviceProfile.Name>Windows</DeviceProfile.Name>
+</EngineData>
+<GameData>
+</GameData>
+</FGenericCrashContext>

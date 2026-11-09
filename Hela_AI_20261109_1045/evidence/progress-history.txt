@@ -414,18 +414,46 @@ FOLLOW-UP SHADER E MIP BC - 09/11/2026
 - I test hardware sono stati eseguiti sulla GTX 1050 Ti. La GTX 950M resta
   da provare.
 
+TEST OVERRIDE CANDIDATI - 09/11/2026
+-----------------------------------
+- Eseguito un test PowerShell con la DLL diagnostica 13646DD1 e la DXGI
+  diagnostica 48DB1738. Sono stati installati temporaneamente cinque
+  override compilati: VS 20e0826b236597a1 e 4ce363172cfd70be; PS
+  44b0a992c2304254, d77600bde0076c33 e 4c1bc8bf7e457acd. Il trace del
+  run precedente aveva osservato VS 20e con entrambi i PS 44b0 e d77600,
+  e VS 4ce3 con PS 4c1b.
+- Tutti e cinque i candidati sono stati caricati dal proxy come override
+  SM5. Il processo e' terminato con exit code 3 dopo circa 11 secondi;
+  il heartbeat finale riportava present=1 e draw(ok)=0.
+- Il log conta 35 errori INPUT_LAYOUT_FAILED e 35 PSO GRAPHICS FAILED
+  (HRESULT 0x80070057). Il report UE classifica la terminazione come
+  Assert in PipelineStateCache.cpp:533; non OOM. Il log non registra
+  STAGING_CREATE_FAIL ne' overlap in questo run.
+- La coincidenza tra installazione degli override e i rifiuti PSO non
+  dimostra da sola quale elemento (shader, input layout o altra parte
+  della descrizione PSO) sia incompatibile. Nessun disegno riuscito o
+  frame visibile e' stato verificato. Non e' stato applicato alcun
+  workaround per aliasing.
+- Evidenze: shader-candidate-test-20261109.log e
+  shader-candidate-crash-20261109.xml; riepilogo in
+  shader-candidate-test-20261109.txt.
+- Dopo il test sono state ripristinate le DLL V7 e l'INI conservativa;
+  rimangono i cinque override originali. I candidati aggiunti sono stati
+  rimossi dalla cartella di installazione, senza modificare gli originali.
+
 PROSSIMI PASSI
 --------------
-1. Risolvere perche' Hela termina subito dopo l'enumerazione dei device
-   quando avviato tramite Steam in questo test, quindi ripetere il run con
-   la build diagnostica. Usare il nuovo PS-hash nei draw per confermare le
-   coppie di shader e verificare che gli override vengano caricati.
-2. Nel run in-game verificare che i rifiuti staging BC sub-block spariscano
-   e che le draw arrivino al contesto D3D11. Confermare la grafica osservando
-   un frame, non solo il contatore Present.
-3. Eseguire successivamente i test sulla GTX 950M; la compatibilita' resta
+1. Analizzare INPUT_LAYOUT_FAILED nei 35 PSO rifiutati, usando la
+   descrizione PSO, i VS effettivamente legati e i candidati convertiti;
+   non attribuire il problema a uno shader specifico senza conferma.
+2. Ripetere test controllati piu' brevi con un solo set di override alla
+   volta. Verificare che PSO venga creato e che draw(ok) aumenti; la sola
+   presenza di SHADER READY non prova l'equivalenza dello shader.
+3. Nel run in-game verificare le copie staging BC nel percorso reale e
+   confermare la grafica osservando un frame, non solo il contatore Present.
+4. Eseguire successivamente i test sulla GTX 950M; la compatibilita' resta
    non verificata.
-4. Indagare gli overlap placement dei run precedenti senza rimuovere i
+5. Indagare gli overlap placement dei run precedenti senza rimuovere i
    controlli o fingere aliasing heap D3D12.
 
 FINE DEL RICORDO

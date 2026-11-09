@@ -1,0 +1,41 @@
+HELA CANDIDATE SHADER TEST
+Date: 2026-11-09 18:37 local
+
+Setup
+- Started Hela directly from Hela-Win64-Shipping.exe on the GTX 1050 Ti.
+- Temporarily installed five candidate overrides:
+  VS 20e0826b236597a1 and 4ce363172cfd70be;
+  PS 44b0a992c2304254, d77600bde0076c33, and 4c1bc8bf7e457acd.
+- Diagnostic d3d12.dll SHA-256:
+  13646DD1A826E1DF864B175AD0E4205EEF31DEAEDF8E01772E4B99F8085FCA7B
+- Diagnostic dxgi.dll SHA-256:
+  48DB1738E59A0176295999717FDF683A6D4513F377F1F35E5DFA6F928101EAA9
+
+Observed result
+- All five candidates were loaded as SM5 overrides (SHADER READY).
+- Process exit code: 3 (0x00000003); runtime approximately 11 seconds.
+- Final heartbeat: present=1, draw(ok)=0.
+- Log counts: 35 INPUT_LAYOUT_FAILED, 35 PSO GRAPHICS FAILED,
+  STAGING_CREATE_FAIL=0, CreatePlacedResource OVERLAP=0.
+- UE CrashType is Assert, ErrorMessage identifies
+  PipelineStateCache.cpp line 533. The report does not indicate OOM.
+- No successful draw or visible frame was verified.
+
+Interpretation limits
+The PSO input-layout failures were observed in the run with these
+overrides, but the log alone does not establish which shader or PSO
+descriptor field is responsible. Shader compilation/loading does not
+establish semantic equivalence. No aliasing workaround was applied.
+The absence of staging failures in this short run is not sufficient to
+validate the BC staging path in normal gameplay.
+
+Restoration
+The game DLLs were restored to V7:
+d3d12.dll SHA-256 8C92E594CBF963DE94FE2957FE6162A0D1F3E1CD718B545D3B1808AAF1FF9CC2
+dxgi.dll SHA-256 285FC3B7349BD96C07877944DF2F9F3F65AFE3D4053C6E536F5419E34F04CEBB
+The conservative INI was restored, the five original overrides remain,
+and the five temporary candidate overrides were removed from the game.
+
+Files
+- shader-candidate-test-20261109.log: full proxy log.
+- shader-candidate-crash-20261109.xml: UE crash context.
