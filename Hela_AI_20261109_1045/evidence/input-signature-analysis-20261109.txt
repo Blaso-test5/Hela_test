@@ -1,0 +1,91 @@
+VERTEX INPUT SIGNATURE DIAGNOSIS
+Date: 2026-11-09
+
+Question
+Identify the first VS associated with INPUT_LAYOUT_FAILED in the
+2026-11-09 18:37 Hela candidate run, compare the original DXIL input
+signature with the SM5 candidate, and verify the corrected candidates.
+
+First failure in the candidate run
+The first INPUT_LAYOUT_FAILED is at 18:37:43.371, log line 2326:
+
+  SHADER BEGIN stage=VS hash=4ce363172cfd70be ...
+  SHADER READY stage=VS hash=4ce363172cfd70be ... bytes=596 model=5_0
+  SHADER BEGIN stage=PS hash=4c1bc8bf7e457acd ...
+  SHADER READY stage=PS hash=4c1bc8bf7e457acd ... bytes=1996 model=5_0
+  INPUT_LAYOUT_FAILED elements=2 result=0x80070057
+  PSO GRAPHICS FAILED result=0x80070057
+
+Thus the first failed layout is associated with VS 4ce363172cfd70be. Its
+original DXIL input signature, extracted with DXC
+(`dxc -dumpbin <shader.dxil>`), is:
+
+  Semantic   Index   Mask   Format
+  ATTRIBUTE  0       xyzw   float
+  ATTRIBUTE  1       xy     float
+
+The initial HLSL candidate in the pre-fix Git snapshot instead declared:
+
+  float4 ATTRIBUTE   : TEXCOORD0;
+  float2 ATTRIBUTE_1 : TEXCOORD1;
+
+Compiling that pre-fix HLSL with FXC 10.1 (`vs_5_0`, entry `main`) produced
+an input signature of TEXCOORD indices 0 (xyzw float) and 1 (xy float).
+The semantic names therefore did not match the DXIL/UE input semantics.
+
+The initial candidate for VS 20e0826b236597a1 likewise declared
+TEXCOORD0..TEXCOORD5. Its original DXIL signature is:
+
+  Semantic   Index   Mask   Format
+  ATTRIBUTE  0       xyzw   float
+  ATTRIBUTE  1       xy     float
+  ATTRIBUTE  2       xy     float
+  ATTRIBUTE  3       xyzw   float
+  ATTRIBUTE  4       xyzw   float
+  ATTRIBUTE  5       xy     uint
+
+The first log explicitly identifies 4ce as the first failing VS. It records
+34 further failures with six input elements. Their element count is
+consistent with VS 20e, but that run did not print the bound VS hash on each
+PSO input-layout failure, so those 34 events cannot be attributed to 20e
+solely from that log.
+
+Corrected candidates
+The HLSL candidates now use ATTRIBUTE0..ATTRIBUTE1 and
+ATTRIBUTE0..ATTRIBUTE5, respectively. FXC 10.1 `/dumpbin` of the current
+CSOs confirms:
+
+  4ce363172cfd70be.cso:
+    ATTRIBUTE 0 xyzw float
+    ATTRIBUTE 1 xy   float
+
+  20e0826b236597a1.cso:
+    ATTRIBUTE 0 xyzw float
+    ATTRIBUTE 1 xy   float
+    ATTRIBUTE 2 xy   float
+    ATTRIBUTE 3 xyzw float
+    ATTRIBUTE 4 xyzw float
+    ATTRIBUTE 5 xy   uint
+
+These match their respective original DXIL input signatures. In the
+subsequent corrected-entry-point Hela run, both VS overrides loaded and the
+trace recorded INPUT_LAYOUT_FAILED=0 and PSO GRAPHICS FAILED=0.
+
+Conclusion and limits
+The original semantic mismatch for the first failing VS is reproduced and
+corrected; no D3D11 CreateInputLayout bypass was used. This confirms the
+input-signature diagnosis for the first failure and the corrected signatures
+for both candidates. It does not prove shader semantic equivalence or visible
+rendering. The corrected run still recorded bb=0 and the user saw a black
+screen. The cause of the later 0xC0000005 remains undiagnosed.
+
+Artifacts
+- shader-candidate-test-20261109.log: original run with 35 layout failures.
+- vertex-wrapper-fix-test-20261109.log: corrected run with zero layout
+  failures; 2,667 forwarded draws and bb=0.
+- shaders/original-dxil/4ce363172cfd70be.dxil and
+  shaders/original-dxil/20e0826b236597a1.dxil: original shader containers.
+- shaders/hlsl/4ce363172cfd70be.converted.hlsl and
+  shaders/hlsl/20e0826b236597a1.converted.hlsl: corrected HLSL inputs.
+- shaders/overrides/4ce363172cfd70be.cso and
+  shaders/overrides/20e0826b236597a1.cso: corrected SM5 bytecode.

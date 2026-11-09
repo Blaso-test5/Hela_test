@@ -474,6 +474,28 @@ FIX ENTRY POINT VS E NUOVO TEST - 09/11/2026
   `evidence\converter-source` con shader, log e risultati del test.
 - Ripristinati DLL V7, INI conservativa e override originari del gioco.
 
+DIAGNOSI FIRME INPUT VS - 09/11/2026
+------------------------------------
+- Individuata la prima `INPUT_LAYOUT_FAILED` nel run delle 18:37:
+  VS 4ce363172cfd70be, subito prima del rifiuto del PSO con due elementi
+  di input. Il DXIL originale dichiara ATTRIBUTE0 float4 e ATTRIBUTE1
+  float2; il candidato HLSL/SM5 iniziale dichiarava invece TEXCOORD0/1.
+- DXC 10.1 `-dumpbin` ha estratto la firma dal container DXIL; FXC 10.1
+  ha confermato che l'HLSL pre-fix generava realmente TEXCOORD0/1.
+  Stesso disallineamento nel candidato iniziale VS
+  20e0826b236597a1: TEXCOORD0..5 contro ATTRIBUTE0..5 nel DXIL.
+- FXC `/dumpbin` dei CSO corretti conferma le firme originali ATTRIBUTE
+  per entrambi i VS. Nel successivo run corretto:
+  INPUT_LAYOUT_FAILED=0 e PSO GRAPHICS FAILED=0.
+- Nel primo log vi sono 34 ulteriori fallimenti con sei elementi. Il
+  conteggio e' coerente con VS 20e, ma il trace non registra l'hash VS
+  legato a ciascun errore: l'associazione puntuale non e' dimostrabile
+  con quel log. La prova e il confronto sono in
+  `evidence\input-signature-analysis-20261109.txt`.
+- Aggiunto README.md alla root del repository con comandi espliciti per
+  clonare/aggiornare Hela_test, sincronizzare il progetto nativo
+  `d3d12on11` e aggiornare i due file sorgente del converter Shader Lab.
+
 PROSSIMI PASSI
 --------------
 1. Raccogliere un dump/stack per l'access violation 0xC0000005; il log

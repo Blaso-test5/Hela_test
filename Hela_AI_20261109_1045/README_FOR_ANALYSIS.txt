@@ -24,6 +24,11 @@ PROJECTS AND REPRODUCTION
   `evidence\build-provenance.txt` records the tested build and DLL hashes.
 
 LATEST FOLLOW-UP - 2026-11-09
+- Signature investigation identified the first rejected candidate as VS
+  4ce363172cfd70be: its original DXIL inputs are ATTRIBUTE0/1, while the
+  initial SM5 candidate declared TEXCOORD0/1. Both corrected VS candidates
+  now match their original input signatures; the next run recorded zero
+  input-layout failures. See evidence\input-signature-analysis-20261109.txt.
 - Fixed the converter entry-point selection so HLSL with a SPIRV-Cross
   wrapper is compiled through `main`, not its internal `vert_main` helper.
   The helper-only bytecode had empty input/output signatures.
@@ -141,6 +146,11 @@ CONTENTS
 - evidence\vertex-wrapper-fix-test-20261109.log and
   evidence\vertex-wrapper-fix-test-20261109.txt: full trace and results
   from the corrected VS wrapper-entry-point test.
+- evidence\input-signature-analysis-20261109.txt: signature extraction and
+  comparison for the first rejected VS and both corrected candidates.
+- evidence\input-signature-analysis-20261109.txt: original DXIL and
+  pre-/post-fix SM5 input signature comparison, including the first failed
+  VS and the association limit for the remaining six-element failures.
 - evidence\converter-source: snapshots of the converter post-processor and
   regression tests used for the corrected candidates. The editable source
   remains in the local sm6-to-sm5-mcp project.
