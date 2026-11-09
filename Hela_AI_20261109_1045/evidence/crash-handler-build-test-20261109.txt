@@ -1,0 +1,56 @@
+OPTIONAL CRASH-HANDLER BUILD AND TEST - 2026-11-09
+
+Purpose
+-------
+Provide an opt-in diagnostic for the 0xC0000005 exit seen in the latest
+Hela run. The handler is installed after normal proxy configuration, not
+from DllMain, and only registers when explicitly enabled. It captures the
+first-chance exception record and thread context, writes a text report and
+minidump on a worker thread, then returns EXCEPTION_CONTINUE_SEARCH.
+
+Build
+-----
+Source: Hela_AI_20261109_1045\proxy-source
+Configuration: Release, x64, Visual Studio 17 2022
+Windows SDK: 10.0.26100.0
+CMake option: D3D12ON11_DIAGNOSTIC_SYMBOLS=ON
+Validation: CTest passed 6/6, including
+d3d12on11_crash_handler_smoke.
+
+Build artifacts
+---------------
+runtime\crash-diagnostics\d3d12.dll
+  size=560640
+  SHA-256=DBA93C1789FE999A8CD9C695B404F4476DC2052D70C2796C35A604DFC14A1DBE
+
+runtime\crash-diagnostics\d3d12.pdb
+  size=6975488
+  SHA-256=DEDE55DBE8D6688D5CF734FE66BC1A9C1D8C05707931D90EBCF29B5A4302044E
+
+This is a new native diagnostic build, not the binary used in the documented
+Hela run. The latter remains in runtime\bin. The new DLL has not yet been
+launched in Hela.
+
+Synthetic test result
+---------------------
+The smoke test raised a controlled write access violation at address
+0x1234. It passed and verified a text report, captured stack frames, and a
+minidump. The report identified the exception as first-chance and recorded
+the fault module and offset. This confirms the diagnostic path works for
+the synthetic test only; it does not establish that the game's exception
+is unhandled or identify its cause.
+
+Controlled Hela run
+-------------------
+Use the diagnostic d3d12.dll in the Hela binary directory and keep the
+matching d3d12.pdb available for offline analysis with WinDbg. Set this
+environment variable before starting the game:
+
+  D3D12ON11_CRASH_DIAGNOSTICS=1
+
+The handler defaults to off. It writes the report and dump beside d3d12.dll
+when the module location is resolvable, otherwise it uses the process temp
+directory. A first-chance report may correspond to a handled exception;
+compare its timestamp and thread/address with the process exit, UE log, and
+Windows crash details before treating it as the fatal fault. Preserve the
+matching PDB when opening the dump to resolve proxy module offsets.

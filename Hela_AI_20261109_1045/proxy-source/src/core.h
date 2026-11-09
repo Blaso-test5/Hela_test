@@ -61,6 +61,7 @@ struct Config {
     bool diagnosticCapabilities = false;
     bool traceCallers = false;
     bool diagnosticRenderTrace = false;
+    bool crashDiagnostics = false;
     UINT shaderModel = 0x51;    // D3D_SHADER_MODEL riportato al gioco
     bool dumpShaders = true;
 };

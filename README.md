@@ -33,6 +33,9 @@ cmake --build $Build --config Release
 ctest --test-dir $Build -C Release --output-on-failure
 ```
 
+For a diagnostic build with proxy PDB symbols available to crash reports,
+add `-DD3D12ON11_DIAGNOSTIC_SYMBOLS=ON` to the CMake configure command.
+
 To refresh an existing local `d3d12on11` source folder instead, copy the
 versioned project files over it (this does not delete local files):
 
@@ -73,3 +76,21 @@ The game-run reports, full logs, shader inputs/overrides, and package
 checksums are in `Hela_AI_20261109_1045`.
 The original-versus-candidate VS signature diagnosis is in
 `Hela_AI_20261109_1045\evidence\input-signature-analysis-20261109.txt`.
+
+### Capture a proxy crash report
+
+The optional vectored handler is installed after normal proxy
+initialization, not from `DllMain`. Enable it only for a diagnostic run:
+
+```powershell
+$env:D3D12ON11_CRASH_DIAGNOSTICS = '1'
+```
+
+It records first-chance access violations, writes a `.txt` report and a
+minidump beside `d3d12.dll` (or to the process temp directory if that
+location cannot be resolved), then continues normal exception dispatch.
+An access violation may be handled by the process, so a report alone does
+not prove the game crashed; correlate it with the process exit and UE log.
+Use a diagnostic build and make its matching `d3d12.pdb` available to WinDbg
+to resolve proxy frames to function names. The handler itself records module
+offsets. The handler is off by default.

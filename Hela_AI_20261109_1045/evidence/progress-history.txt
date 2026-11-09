@@ -496,10 +496,31 @@ DIAGNOSI FIRME INPUT VS - 09/11/2026
   clonare/aggiornare Hela_test, sincronizzare il progetto nativo
   `d3d12on11` e aggiornare i due file sorgente del converter Shader Lab.
 
+DIAGNOSTICA FIRST-CHANCE ACCESS VIOLATION - 09/11/2026
+------------------------------------------------------
+- Aggiunto un handler vectored opzionale per access violation. Viene
+  installato dopo il caricamento della configurazione, non da DllMain;
+  salva contesto e record originali, genera report testuale e minidump su
+  un worker, quindi lascia proseguire la normale gestione dell'eccezione.
+- Attivazione temporanea tramite `D3D12ON11_CRASH_DIAGNOSTICS=1` oppure
+  `crash_diagnostics=1` nell'INI. Default disattivato. Il report registra
+  gli offset dei moduli; il PDB diagnostico serve per risolvere i frame
+  offline con WinDbg. Un report first-chance non prova da solo un crash:
+  correlare con exit code e log UE.
+- Build Release x64 con
+  `D3D12ON11_DIAGNOSTIC_SYMBOLS=ON`; CTest superato 6/6. Il test sintetico
+  verifica creazione del report/minidump e la presenza di stack frames.
+  DLL e PDB sono in `runtime\crash-diagnostics`; hash e dettagli in
+  `evidence\crash-handler-build-test-20261109.txt`.
+- Questo build non e' ancora stato testato in Hela e non sostituisce le DLL
+  usate nel run documentato, conservate in `runtime\bin`.
+
 PROSSIMI PASSI
 --------------
-1. Raccogliere un dump/stack per l'access violation 0xC0000005; il log
-   disponibile non identifica il modulo o il call stack responsabile.
+1. Eseguire un run controllato di Hela con `runtime\crash-diagnostics`,
+   `D3D12ON11_CRASH_DIAGNOSTICS=1` e PDB corrispondente; raccogliere report,
+   dump, exit code e log. Correlare la prima-chance con la terminazione
+   effettiva del processo.
 2. Diagnosticare perche' le 2667 draw inoltrate hanno rtv=2667 ma bb=0;
    nessun frame visibile e' stato verificato.
 3. Verificare firma semantica, binding e output sul render target dei VS

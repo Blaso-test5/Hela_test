@@ -51,3 +51,19 @@ shaders\hlsl\f79b80f0f2f58f68.hlsl size=1032 sha256=4CD239B3B8D1AF40FC3A6826A511
 shaders\overrides\f79b80f0f2f58f68.cso size=796 sha256=BF56DD5F681DD2FA8F483F5E1FA308DD432B39E78AF032ACE10634255FC15711
 
 Persistent Hela setup after test: V7 d3d12.dll size=306176 SHA256=8C92E594CBF963DE94FE2957FE6162A0D1F3E1CD718B545D3B1808AAF1FF9CC2; dxgi.dll size=36864 SHA256=285FC3B7349BD96C07877944DF2F9F3F65AFE3D4053C6E536F5419E34F04CEBB; conservative INI size=212 SHA256=214FA7579B4000DDD2EFC036EA4F072768E4B982F206D302CE924B10257E45BF.
+
+Optional crash-handler diagnostic build, created 2026-11-09:
+The Release build was configured from the versioned `proxy-source` with
+`-DD3D12ON11_DIAGNOSTIC_SYMBOLS=ON` using Visual Studio 17 2022, x64, and
+Windows SDK 10.0.26100.0. Its `d3d12.dll` and matching `d3d12.pdb` are stored
+separately in `runtime\crash-diagnostics`; they do not replace the exact
+Hela-tested binaries in `runtime\bin`.
+  d3d12.dll size=560640 sha256=DBA93C1789FE999A8CD9C695B404F4476DC2052D70C2796C35A604DFC14A1DBE
+  d3d12.pdb size=6975488 sha256=DEDE55DBE8D6688D5CF734FE66BC1A9C1D8C05707931D90EBCF29B5A4302044E
+  dxgi.dll size=37888 sha256=39E47251B9BD28B6B38459F1FDC8D59C3A610344707804E2460EF73965DF69C0
+Release CTest passed 6/6, including a synthetic first-chance AV that
+verified report contents, captured stack frames, and minidump creation.
+This diagnostic build has not been run in Hela. The handler is disabled by
+default; set `D3D12ON11_CRASH_DIAGNOSTICS=1` for the controlled run. Full
+details and limitations are in
+`evidence\crash-handler-build-test-20261109.txt`.

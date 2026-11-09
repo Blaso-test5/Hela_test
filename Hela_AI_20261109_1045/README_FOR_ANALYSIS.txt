@@ -22,6 +22,10 @@ PROJECTS AND REPRODUCTION
 - `runtime\bin` contains the exact diagnostic DLL artifacts used by the
   documented Hela test. The CMake source snapshot is the build input;
   `evidence\build-provenance.txt` records the tested build and DLL hashes.
+- `runtime\crash-diagnostics` contains a separate diagnostic build with
+  optional first-chance access-violation reporting and its matching PDB. It
+  passed native tests but has not yet been run in Hela; it does not replace
+  the exact tested binaries in `runtime\bin`.
 
 LATEST FOLLOW-UP - 2026-11-09
 - Signature investigation identified the first rejected candidate as VS
@@ -47,6 +51,11 @@ LATEST FOLLOW-UP - 2026-11-09
   installed in the game.
 - Full trace and measured results: evidence\vertex-wrapper-fix-test-20261109.log
   and evidence\vertex-wrapper-fix-test-20261109.txt.
+- Added an optional first-chance access-violation handler to the proxy.
+  Release CTest passed 6/6, including a synthetic exception test that
+  verified the report, captured stack, and minidump. This is a local native
+  test only; the new build has not yet been run in Hela. See
+  evidence\crash-handler-build-test-20261109.txt.
 
 TEST SETUP
 - The game ran on this PC's GTX 1050 Ti. The destination GTX 950M has not
@@ -151,6 +160,15 @@ CONTENTS
 - evidence\input-signature-analysis-20261109.txt: original DXIL and
   pre-/post-fix SM5 input signature comparison, including the first failed
   VS and the association limit for the remaining six-element failures.
+- proxy-source\src\crash_handler.cpp and
+  proxy-source\tests\crash_handler_smoke.cpp: optional first-chance AV
+  report/minidump diagnostic, disabled by default and tested with CTest.
+- runtime\crash-diagnostics\d3d12.dll and d3d12.pdb: fresh Release
+  diagnostic build and matching symbols for the next controlled test.
+  Keep the PDB available to WinDbg; this build is not the binary used for
+  the documented Hela run.
+- evidence\crash-handler-build-test-20261109.txt: build hashes, native
+  smoke-test result, and limitations of the new handler.
 - evidence\converter-source: snapshots of the converter post-processor and
   regression tests used for the corrected candidates. The editable source
   remains in the local sm6-to-sm5-mcp project.

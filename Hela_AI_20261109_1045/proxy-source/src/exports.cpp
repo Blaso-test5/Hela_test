@@ -4,6 +4,7 @@
 #define D3D12SerializeVersionedRootSignature D3D12SerializeVersionedRootSignatureSdkDeclaration
 #include "types.h"
 #include "bridge.h"
+#include "crash_handler.h"
 #undef D3D12CreateDevice
 #undef D3D12GetDebugInterface
 #undef D3D12SerializeRootSignature
@@ -14,6 +15,7 @@ INIT_ONCE configOnce = INIT_ONCE_STATIC_INIT;
 
 BOOL CALLBACK InitializeConfig(PINIT_ONCE, PVOID parameter, PVOID*) {
     LoadConfig(static_cast<HMODULE>(parameter));
+    if (Cfg().crashDiagnostics) InstallCrashHandler();
     return TRUE;
 }
 

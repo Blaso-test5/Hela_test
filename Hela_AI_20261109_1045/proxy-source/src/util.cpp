@@ -47,6 +47,8 @@ void LoadConfig(HMODULE self) {
         IniStr(ini, "trace_callers", "0")) == "1";
     g_cfg.diagnosticRenderTrace = EnvOr("D3D12ON11_DIAGNOSTIC_RENDER_TRACE",
         IniStr(ini, "diagnostic_render_trace", "0")) == "1";
+    g_cfg.crashDiagnostics = EnvOr("D3D12ON11_CRASH_DIAGNOSTICS",
+        IniStr(ini, "crash_diagnostics", "0")) == "1";
     g_cfg.dumpShaders = EnvOr("D3D12ON11_DUMP_SHADERS", IniStr(ini, "dump_shaders", "1")) != "0";
     g_cfg.overridesDir = rel(EnvOr("D3D12ON11_OVERRIDES", IniStr(ini, "overrides", "d3d12on11\\overrides")));
     g_cfg.dumpDir = rel(EnvOr("D3D12ON11_DUMP", IniStr(ini, "dump", "d3d12on11\\dump")));
@@ -78,6 +80,7 @@ void LoadConfig(HMODULE self) {
         g_cfg.diagnosticCapabilities ? " (UNSAFE: reports selected capabilities not fully implemented by D3D11 proxy)" : "");
     Log("Config caller-trace=%u", g_cfg.traceCallers);
     Log("Config diagnostic-render-trace=%u", g_cfg.diagnosticRenderTrace);
+    Log("Config crash-diagnostics=%u", g_cfg.crashDiagnostics);
     Log("Config shader-dump=%u dump-dir=%s overrides-dir=%s binding-map=%s entries=%zu",
         g_cfg.dumpShaders, g_cfg.dumpDir.c_str(), g_cfg.overridesDir.c_str(),
         g_cfg.bindingMapPath.empty() ? "(none)" : g_cfg.bindingMapPath.c_str(), g_cfg.bindingMap.size());

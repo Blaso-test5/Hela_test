@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.24)
 project(d3d12on11 LANGUAGES CXX)
 
+option(D3D12ON11_DIAGNOSTIC_SYMBOLS
+  "Generate proxy PDB symbols for diagnostic crash stack traces" OFF)
+
 if(NOT WIN32)
   message(FATAL_ERROR "d3d12on11 is a Windows-only proxy.")
 endif()
@@ -13,6 +16,7 @@ add_library(d3d12 SHARED
   src/backbuffer.cpp
   src/descriptors.cpp
   src/commands.cpp
+  src/crash_handler.cpp
   src/exports.cpp
   src/d3d12.def
   src/pipeline.cpp
@@ -24,8 +28,12 @@ add_library(d3d12 SHARED
 target_compile_features(d3d12 PRIVATE cxx_std_17)
 target_compile_definitions(d3d12 PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_include_directories(d3d12 PRIVATE src generated)
-target_link_libraries(d3d12 PRIVATE d3d11 dxgi dxguid)
+target_link_libraries(d3d12 PRIVATE d3d11 dxgi dxguid dbghelp)
 set_target_properties(d3d12 PROPERTIES OUTPUT_NAME d3d12)
+if(MSVC AND D3D12ON11_DIAGNOSTIC_SYMBOLS)
+  target_compile_options(d3d12 PRIVATE $<$<CONFIG:Release>:/Zi>)
+  target_link_options(d3d12 PRIVATE $<$<CONFIG:Release>:/DEBUG>)
+endif()
 
 add_library(dxgi_proxy SHARED src/dxgi_proxy.cpp src/dxgi_proxy.def)
 target_compile_features(dxgi_proxy PRIVATE cxx_std_17)
@@ -79,4 +87,14 @@ if(BUILD_TESTING)
   target_compile_definitions(d3d11_bc_mip_staging_smoke PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
   target_link_libraries(d3d11_bc_mip_staging_smoke PRIVATE d3d11 dxgi)
   add_test(NAME d3d11_bc_mip_staging_smoke COMMAND d3d11_bc_mip_staging_smoke)
+
+  add_executable(d3d12on11_crash_handler_smoke
+    tests/crash_handler_smoke.cpp
+    src/crash_handler.cpp
+  )
+  target_compile_features(d3d12on11_crash_handler_smoke PRIVATE cxx_std_17)
+  target_compile_definitions(d3d12on11_crash_handler_smoke PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_include_directories(d3d12on11_crash_handler_smoke PRIVATE src generated)
+  target_link_libraries(d3d12on11_crash_handler_smoke PRIVATE dbghelp)
+  add_test(NAME d3d12on11_crash_handler_smoke COMMAND d3d12on11_crash_handler_smoke)
 endif()
