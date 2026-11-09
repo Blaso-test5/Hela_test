@@ -353,6 +353,7 @@ HRESULT PipelineState::CreateGraphics(Device* device, const D3D12_GRAPHICS_PIPEL
     if (result == S_FALSE) anyMissingOverride = true;
     if (HasBytecode(desc->PS)) {
         if (FAILED(result = CreatePixelShader(device, desc->PS, pipeline->ps))) return result;
+        pipeline->pixelShaderHash = Fnv1a64(desc->PS.pShaderBytecode, desc->PS.BytecodeLength);
         if (result == S_FALSE) anyMissingOverride = true;
     }
     if (HasBytecode(desc->GS)) {

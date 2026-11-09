@@ -70,10 +70,11 @@ void RecordDrawExecution(ExecState& state, bool indexed) {
 void LogSkippedDraw(const ExecState& state, const char* operation,
     UINT arg0, UINT arg1) {
     if (!Cfg().diagnosticRenderTrace) return;
-    Log("[RENDER_TRACE] [DRAW_SKIPPED] api=%s pipeline=%p vs-hash=%016llx "
+    Log("[RENDER_TRACE] [DRAW_SKIPPED] api=%s pipeline=%p vs-hash=%016llx ps-hash=%016llx "
         "missing-vs=%u missing-shader=%u arg0=%u arg1=%u rtvs=%u backbuffer=%u",
         operation, reinterpret_cast<void*>(state.graphicsPipelineIdentity),
         static_cast<unsigned long long>(state.graphicsShaderHash),
+        static_cast<unsigned long long>(state.graphicsPixelShaderHash),
         state.graphicsPlaceholderVs ? 1u : 0u, state.skipDraws ? 1u : 0u,
         arg0, arg1, state.numRtv, state.rtvBackbuffer ? 1u : 0u);
 }
@@ -247,6 +248,46 @@ HRESULT CreateStagingTexture(Device* device, D3D12_RESOURCE_DIMENSION dimension,
         return result;
     }
     return logFailure("validation-dimension", E_INVALIDARG);
+}
+
+bool NeedsBcMipStaging(const D3D12_SUBRESOURCE_FOOTPRINT& footprint) {
+    const FormatInfo format = GetFormatInfo(footprint.Format);
+    return format.blockW == 4 && format.blockH == 4 &&
+        (footprint.Width < format.blockW || footprint.Height < format.blockH);
+}
+
+HRESULT CreateBcMipStagingTexture(Device* device,
+    const D3D12_SUBRESOURCE_FOOTPRINT& footprint, UINT cpuAccess,
+    Ptr<ID3D11Resource>& out, UINT& stagingSubresource) {
+    UINT mip = 0;
+    while ((static_cast<UINT64>(footprint.Width) << mip) < 4 ||
+           (static_cast<UINT64>(footprint.Height) << mip) < 4)
+        ++mip;
+
+    const UINT64 width = static_cast<UINT64>(footprint.Width) << mip;
+    const UINT64 height = static_cast<UINT64>(footprint.Height) << mip;
+    if (width > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
+        height > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)
+        return E_INVALIDARG;
+
+    D3D11_TEXTURE2D_DESC desc{};
+    desc.Width = static_cast<UINT>(width);
+    desc.Height = static_cast<UINT>(height);
+    desc.MipLevels = mip + 1;
+    desc.ArraySize = 1;
+    desc.Format = footprint.Format;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_STAGING;
+    desc.CPUAccessFlags = cpuAccess;
+
+    Ptr<ID3D11Texture2D> texture;
+    const HRESULT result = device->d11->CreateTexture2D(&desc, nullptr, texture.Put());
+    if (FAILED(result)) return result;
+    ID3D11Resource* base = texture.Get();
+    base->AddRef();
+    out = Ptr<ID3D11Resource>::Attach(base);
+    stagingSubresource = mip;
+    return S_OK;
 }
 
 HRESULT MapBufferForRead(ExecState& state, Resource* resource, Ptr<ID3D11Buffer>& staging,
@@ -472,6 +513,7 @@ void ApplyPipeline(ExecState& state, PipelineState* pipeline) {
         state.computePlaceholderCs = false;
         state.graphicsPipelineIdentity = 0;
         state.graphicsShaderHash = 0;
+        state.graphicsPixelShaderHash = 0;
         return;
     }
     state.skipDraws = !pipeline->compute && pipeline->missingShader;
@@ -483,6 +525,7 @@ void ApplyPipeline(ExecState& state, PipelineState* pipeline) {
     state.graphicsPipelineIdentity = pipeline->compute
         ? 0 : reinterpret_cast<uintptr_t>(pipeline);
     state.graphicsShaderHash = pipeline->compute ? 0 : pipeline->shaderHash;
+    state.graphicsPixelShaderHash = pipeline->compute ? 0 : pipeline->pixelShaderHash;
     if (pipeline->missingShader)
         Log("Skipped execution for PSO placeholder with missing SM5 shader override");
     state.c->VSSetShader(pipeline->vs.Get(), nullptr, 0);
@@ -953,8 +996,12 @@ void STDMETHODCALLTYPE CommandList::CopyTextureRegion(const D3D12_TEXTURE_COPY_L
             auto* srcResource = dynamic_cast<Resource*>(keepSrc.Get());
             if (!dstResource || !srcResource) return;
             Ptr<ID3D11Resource> stagingTexture;
-            HRESULT result = CreateStagingTexture(state.dev, dstResource->desc.Dimension,
-                footprint, D3D11_CPU_ACCESS_WRITE, stagingTexture);
+            UINT stagingSubresource = 0;
+            HRESULT result = NeedsBcMipStaging(footprint)
+                ? CreateBcMipStagingTexture(state.dev, footprint, D3D11_CPU_ACCESS_WRITE,
+                    stagingTexture, stagingSubresource)
+                : CreateStagingTexture(state.dev, dstResource->desc.Dimension, footprint,
+                    D3D11_CPU_ACCESS_WRITE, stagingTexture);
             if (FAILED(result)) {
                 Log("Could not create texture staging resource for upload: 0x%08lx", result);
                 return;
@@ -968,7 +1015,8 @@ void STDMETHODCALLTYPE CommandList::CopyTextureRegion(const D3D12_TEXTURE_COPY_L
                 return;
             }
             D3D11_MAPPED_SUBRESOURCE mappedTexture{};
-            result = state.c->Map(stagingTexture.Get(), 0, D3D11_MAP_WRITE, 0, &mappedTexture);
+            result = state.c->Map(stagingTexture.Get(), stagingSubresource,
+                D3D11_MAP_WRITE, 0, &mappedTexture);
             if (SUCCEEDED(result)) {
                 const UINT sourceRows = info.rows;
                 const UINT sourceSlices = footprint.Depth;
@@ -984,7 +1032,7 @@ void STDMETHODCALLTYPE CommandList::CopyTextureRegion(const D3D12_TEXTURE_COPY_L
                         memcpy(destinationRow, sourceRow, rowBytes);
                     }
                 }
-                state.c->Unmap(stagingTexture.Get(), 0);
+                state.c->Unmap(stagingTexture.Get(), stagingSubresource);
             }
             if (mappedBuffer.pData) state.c->Unmap(stagingBuffer.Get(), 0);
             if (FAILED(result)) {
@@ -994,7 +1042,7 @@ void STDMETHODCALLTYPE CommandList::CopyTextureRegion(const D3D12_TEXTURE_COPY_L
             const D3D11_BOX box{region.left, region.top, region.front,
                 region.right, region.bottom, region.back};
             state.c->CopySubresourceRegion(dstResource->Raw(), subresource, x, y, z,
-                stagingTexture.Get(), 0, &box);
+                stagingTexture.Get(), stagingSubresource, &box);
         });
         return;
     }
@@ -1056,18 +1104,23 @@ void STDMETHODCALLTYPE CommandList::CopyTextureRegion(const D3D12_TEXTURE_COPY_L
             auto* srcResource = dynamic_cast<Resource*>(keepSrc.Get());
             if (!dstResource || !srcResource) return;
             Ptr<ID3D11Resource> stagingTexture;
-            HRESULT result = CreateStagingTexture(state.dev, srcResource->desc.Dimension,
-                footprint, D3D11_CPU_ACCESS_READ, stagingTexture);
+            UINT stagingSubresource = 0;
+            HRESULT result = NeedsBcMipStaging(footprint)
+                ? CreateBcMipStagingTexture(state.dev, footprint, D3D11_CPU_ACCESS_READ,
+                    stagingTexture, stagingSubresource)
+                : CreateStagingTexture(state.dev, srcResource->desc.Dimension, footprint,
+                    D3D11_CPU_ACCESS_READ, stagingTexture);
             if (FAILED(result)) {
                 Log("Could not create texture staging resource for readback: 0x%08lx", result);
                 return;
             }
             const D3D11_BOX box{region.left, region.top, region.front,
                 region.right, region.bottom, region.back};
-            state.c->CopySubresourceRegion(stagingTexture.Get(), 0, x, y, z,
+            state.c->CopySubresourceRegion(stagingTexture.Get(), stagingSubresource, x, y, z,
                 srcResource->Raw(), sourceSubresource, &box);
             D3D11_MAPPED_SUBRESOURCE mapped{};
-            result = state.c->Map(stagingTexture.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+            result = state.c->Map(stagingTexture.Get(), stagingSubresource,
+                D3D11_MAP_READ, 0, &mapped);
             if (FAILED(result)) {
                 Log("Could not map texture staging resource for readback: 0x%08lx", result);
                 return;
@@ -1095,7 +1148,7 @@ void STDMETHODCALLTYPE CommandList::CopyTextureRegion(const D3D12_TEXTURE_COPY_L
                             static_cast<size_t>(copyRowBytes));
                 }
             }
-            state.c->Unmap(stagingTexture.Get(), 0);
+            state.c->Unmap(stagingTexture.Get(), stagingSubresource);
         });
         return;
     }

@@ -1,11 +1,19 @@
 ﻿BUILD AND ARTIFACT PROVENANCE
 Project source: D:\Plugin_ChatGpt\GHIDRA MCP\Plugin Nuovi\sm6-to-sm5-mcp\d3d12on11
-Existing build output: build-retest-20261106\Release; Visual Studio 17 2022 generator; CMake 3.31.9; x64; CMakeLists uses C++17.
-The project directory is not a Git repository; no commit ID is available. The runtime DLLs copied here hash-identically to that build output.
+Build output: build-retest-20261106\Release; Visual Studio 17 2022 generator; CMake 3.31.9; x64; CMakeLists uses C++17.
+The project directory is not a Git repository; no commit ID is available. The diagnostic runtime DLL copied here hash-identically to that build output.
 
-Exact diagnostic proxy binaries used in this run:
-runtime\bin\d3d12.dll size=318976 sha256=F0DC781625E7E51103AE5FD6987CC783C2DFAFEE3B069A0ED99E64C8AB285E3D
-runtime\bin\dxgi.dll size=37888 sha256=48DB1738E59A0176295999717FDF683A6D4513F377F1F35E5DFA6F928101EAA9
+Final diagnostic d3d12.dll:
+runtime\bin\d3d12.dll size=321536 sha256=13646DD1A826E1DF864B175AD0E4205EEF31DEAEDF8E01772E4B99F8085FCA7B
+It includes skipped-draw PS hash tracing and block-aligned BC mip-tail staging. It was built and smoke-tested but did not reach a Hela draw during the Steam launch attempt.
+dxgi.dll remains the diagnostic binary from the earlier instrumented run, size=37888 sha256=48DB1738E59A0176295999717FDF683A6D4513F377F1F35E5DFA6F928101EAA9.
+
+Validation:
+- CTest Release: 5/5 passed, including d3d11_bc_mip_staging_smoke.
+- D3D11 hardware BC1 and BC7 mip-tail upload/readback round-trip passed
+  for 2x2 and 1x1 subresources on this GTX 1050 Ti PC.
+- Five HLSL candidates compiled with FXC to vs_5_0 / ps_5_0. This verifies
+  compilation only, not shader equivalence or successful Hela rendering.
 
 Shader artifacts:
 shaders\original-dxil\a7f30e5d1d5fc6fb.dxil size=2872 sha256=01C09C7B4756A7D75414EC275B3FC56F7A3E58BC616514388D6238B0E644FADA

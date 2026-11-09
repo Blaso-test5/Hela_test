@@ -1,0 +1,63 @@
+Log file: D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\d3d12on11.log
+[17:56:53.178] Loaded 1 register binding overrides from D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\binding-map.json
+[17:56:53.178] === D3D12On11 diagnostic session ===
+[17:56:53.178] Config ini=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\d3d12on11.ini log=1 debug-layer=0 advertised-shader-model=6_7
+[17:56:53.178] Config diagnostic-capabilities=0
+[17:56:53.178] Config caller-trace=0
+[17:56:53.178] Config diagnostic-render-trace=0
+[17:56:53.178] Config shader-dump=1 dump-dir=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump overrides-dir=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\overrides binding-map=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\binding-map.json entries=1
+[17:56:53.178] Note: DXIL is not compiled by the proxy; a matching SM5 .cso override is required.
+[17:56:53.208] D3D12CreateDevice minimum feature level 0xb000 iid=189819f1-1db6-4b57
+[17:56:53.208] D3D12CreateDevice adapter source=direct native-vendor=0x10de device=0x1c82 luid=00000000:0000ee33
+[17:56:54.195] Created D3D11 device at feature level b100
+[17:56:54.195] D3D11 tiled resources tier=2 feature-query=0x00000000 device2=1 context2=1
+[17:56:54.195] Device QueryInterface ID3D12Device result=0x00000000
+[17:56:54.195] CheckFeatureSupport begin feature=FEATURE_LEVELS(2) size=24 data=present
+[17:56:54.195] CheckFeatureSupport end feature=FEATURE_LEVELS result=0x00000000 requested=[0xc200,0xc100,0xc000,0xb100,0xb000] returned=0xc000
+[17:56:54.195] CheckFeatureSupport begin feature=SHADER_MODEL(7) size=4 data=present
+[17:56:54.195] CheckFeatureSupport end feature=SHADER_MODEL result=0x00000000 requested=0x67 returned=0x67
+[17:56:54.195] CheckFeatureSupport begin feature=D3D12_OPTIONS(0) size=60 data=present
+[17:56:54.195] CheckFeatureSupport end feature=D3D12_OPTIONS result=0x00000000 binding-tier=1 tiled-tier=1 conservative-raster=0 heap-tier=1 double-precision=0 logic-op=0 min-precision=0x0 typed-uav-load=0 ROV=0 stencil-ref=0 swizzle64k=0 cross-node=0 cross-adapter-row-major=0 rasterizer-array-index=0 max-gpu-va-bits=40 gpu-va-query=0x00000000
+[17:56:54.195] CheckFeatureSupport begin feature=D3D12_OPTIONS1(8) size=24 data=present
+[17:56:54.195] CheckFeatureSupport end feature=D3D12_OPTIONS1 result=0x00000000 wave-ops=0 wave-lanes=0..0 total-lanes=0 expanded-compute-states=0 int64-shader-ops=0
+[17:56:54.195] CheckFeatureSupport begin feature=D3D12_OPTIONS9(37) size=24 data=present
+[17:56:54.195] CheckFeatureSupport end feature=D3D12_OPTIONS9 result=0x00000000 mesh-stats=0 full-rt-array-index=0 atomic-int64-typed=0 atomic-int64-groupshared=0 mesh-derivatives=0 wave-mma-tier=0
+[17:56:54.223] CheckFeatureSupport begin feature=ARCHITECTURE(1) size=16 data=present
+[17:56:54.223] CheckFeatureSupport end feature=ARCHITECTURE result=0x00000000 node=0 tiled-renderer=0 UMA=0 coherent-UMA=0
+[17:56:54.223] Device destroyed
+[17:56:54.238] D3D12CreateDevice minimum feature level 0xb000 iid=189819f1-1db6-4b57
+[17:56:54.238] D3D12CreateDevice adapter source=direct native-vendor=0x1414 device=0x008c luid=00000000:0000faf9
+[17:56:54.241] Created D3D11 device at feature level b100
+[17:56:54.241] D3D11 tiled resources tier=2 feature-query=0x00000000 device2=1 context2=1
+[17:56:54.241] Device QueryInterface ID3D12Device result=0x00000000
+[17:56:54.241] CheckFeatureSupport begin feature=FEATURE_LEVELS(2) size=24 data=present
+[17:56:54.241] CheckFeatureSupport end feature=FEATURE_LEVELS result=0x00000000 requested=[0xc200,0xc100,0xc000,0xb100,0xb000] returned=0xc000
+[17:56:54.241] CheckFeatureSupport begin feature=SHADER_MODEL(7) size=4 data=present
+[17:56:54.241] CheckFeatureSupport end feature=SHADER_MODEL result=0x00000000 requested=0x67 returned=0x67
+[17:56:54.241] CheckFeatureSupport begin feature=D3D12_OPTIONS(0) size=60 data=present
+[17:56:54.241] CheckFeatureSupport end feature=D3D12_OPTIONS result=0x00000000 binding-tier=1 tiled-tier=1 conservative-raster=0 heap-tier=1 double-precision=0 logic-op=0 min-precision=0x0 typed-uav-load=0 ROV=0 stencil-ref=0 swizzle64k=0 cross-node=0 cross-adapter-row-major=0 rasterizer-array-index=0 max-gpu-va-bits=32 gpu-va-query=0x00000000
+[17:56:54.241] CheckFeatureSupport begin feature=D3D12_OPTIONS1(8) size=24 data=present
+[17:56:54.241] CheckFeatureSupport end feature=D3D12_OPTIONS1 result=0x00000000 wave-ops=0 wave-lanes=0..0 total-lanes=0 expanded-compute-states=0 int64-shader-ops=0
+[17:56:54.241] CheckFeatureSupport begin feature=D3D12_OPTIONS9(37) size=24 data=present
+[17:56:54.241] CheckFeatureSupport end feature=D3D12_OPTIONS9 result=0x00000000 mesh-stats=0 full-rt-array-index=0 atomic-int64-typed=0 atomic-int64-groupshared=0 mesh-derivatives=0 wave-mma-tier=0
+[17:56:54.241] CheckFeatureSupport begin feature=ARCHITECTURE(1) size=16 data=present
+[17:56:54.241] CheckFeatureSupport end feature=ARCHITECTURE result=0x00000000 node=0 tiled-renderer=0 UMA=0 coherent-UMA=0
+[17:56:54.241] Device destroyed
+[17:56:54.243] D3D12CreateDevice minimum feature level 0xb000 iid=189819f1-1db6-4b57
+[17:56:54.243] D3D12CreateDevice adapter source=direct native-vendor=0x10de device=0x1c82 luid=00000000:00018148
+[17:56:54.414] Created D3D11 device at feature level b100
+[17:56:54.414] D3D11 tiled resources tier=2 feature-query=0x00000000 device2=1 context2=1
+[17:56:54.414] Device QueryInterface ID3D12Device result=0x00000000
+[17:56:54.414] CheckFeatureSupport begin feature=FEATURE_LEVELS(2) size=24 data=present
+[17:56:54.414] CheckFeatureSupport end feature=FEATURE_LEVELS result=0x00000000 requested=[0xc200,0xc100,0xc000,0xb100,0xb000] returned=0xc000
+[17:56:54.414] CheckFeatureSupport begin feature=SHADER_MODEL(7) size=4 data=present
+[17:56:54.414] CheckFeatureSupport end feature=SHADER_MODEL result=0x00000000 requested=0x67 returned=0x67
+[17:56:54.414] CheckFeatureSupport begin feature=D3D12_OPTIONS(0) size=60 data=present
+[17:56:54.414] CheckFeatureSupport end feature=D3D12_OPTIONS result=0x00000000 binding-tier=1 tiled-tier=1 conservative-raster=0 heap-tier=1 double-precision=0 logic-op=0 min-precision=0x0 typed-uav-load=0 ROV=0 stencil-ref=0 swizzle64k=0 cross-node=0 cross-adapter-row-major=0 rasterizer-array-index=0 max-gpu-va-bits=40 gpu-va-query=0x00000000
+[17:56:54.414] CheckFeatureSupport begin feature=D3D12_OPTIONS1(8) size=24 data=present
+[17:56:54.414] CheckFeatureSupport end feature=D3D12_OPTIONS1 result=0x00000000 wave-ops=0 wave-lanes=0..0 total-lanes=0 expanded-compute-states=0 int64-shader-ops=0
+[17:56:54.414] CheckFeatureSupport begin feature=D3D12_OPTIONS9(37) size=24 data=present
+[17:56:54.414] CheckFeatureSupport end feature=D3D12_OPTIONS9 result=0x00000000 mesh-stats=0 full-rt-array-index=0 atomic-int64-typed=0 atomic-int64-groupshared=0 mesh-derivatives=0 wave-mma-tier=0
+[17:56:54.414] CheckFeatureSupport begin feature=ARCHITECTURE(1) size=16 data=present
+[17:56:54.414] CheckFeatureSupport end feature=ARCHITECTURE result=0x00000000 node=0 tiled-renderer=0 UMA=0 coherent-UMA=0
+[17:56:54.414] Device destroyed

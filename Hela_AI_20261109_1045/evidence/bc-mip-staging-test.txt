@@ -1,0 +1,28 @@
+BC MIP-TAIL STAGING TEST - 2026-11-09
+
+Implementation
+- BC staging footprints smaller than one 4x4 compression block now use a
+  block-aligned staging mip chain.
+- The helper pads the staging texture dimensions by the minimum number of
+  mip levels, then maps and copies the mip whose dimensions exactly match
+  the D3D12 footprint.
+- Both buffer-to-texture upload and texture-to-buffer readback use the
+  matching staging subresource. Other formats and BC footprints at least
+  4x4 keep the existing staging path.
+
+Verification
+- Added d3d11_bc_mip_staging_smoke to CTest.
+- Full CTest suite: 5/5 passed.
+- Hardware D3D11 feature level: 0xb000.
+- BC1 and BC7: upload/readback round-trips passed for 2x2 (mip 1) and
+  1x1 (mip 2) subresources in a valid 4x4 mip chain.
+- Standalone 2x2 BC staging descriptor remains rejected with E_INVALIDARG
+  (0x80070057), as expected; the implementation avoids that descriptor.
+
+Limitations
+- This is a D3D11 smoke test, not an Hela runtime verification.
+- Hela was launched through Steam with the candidate shader overrides and
+  PS-hash tracing. The process initialized and destroyed D3D12 devices,
+  then exited before creating PSOs or issuing draws. No shader override
+  loading or visible rendering was verified in that attempt.
+- The GTX 950M remains untested.

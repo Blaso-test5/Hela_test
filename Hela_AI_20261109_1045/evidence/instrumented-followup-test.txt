@@ -30,8 +30,8 @@ DRAW SKIPS
   they use the same pixel shader.
 - Initial PSO #3 binds VS 4ce363172cfd70be and PS 4c1bc8bf7e457acd
   (3,360 bytes). The original DXIL for both initial PS inputs is included
-  under shaders/original-dxil. The second PS used with VS 20e still needs
-  to be identified by recording the pixel-shader hash in the draw trace.
+  under shaders/original-dxil. The second PS candidate is discussed in the
+  follow-up section below; the old trace did not record per-draw PS hashes.
 
 TEXTURE STAGING
 - 1,264 staging creation failures were traced to D3D11
@@ -44,9 +44,9 @@ TEXTURE STAGING
   formats with both CPU READ and CPU WRITE. The same formats succeeded
   at 4x4 with both access modes. R8G8B8A8_UNORM succeeded at 2x2 and 4x4.
 - This isolates the failure to sub-block BC dimensions in the staging
-  descriptor, not to the CPU access mode alone. The correct way to stage
-  and copy 1x1/2x2 BC mip tails still needs a block-aligned copy test;
-  blindly padding the staging texture is not yet validated.
+  descriptor, not to the CPU access mode alone. At this stage the correct
+  way to stage and copy 1x1/2x2 BC tails had not yet been tested; see the
+  follow-up section for the aligned mip-chain test and implementation.
 
 INTERPRETATION
 The previously ready PSO #1 is not sufficient to render the observed
@@ -57,11 +57,38 @@ visible output.
 
 SOURCE / LOG
 - Instrumentation changes are in proxy-source/src/commands.cpp and
-  proxy-source/src/types.h.
-- The package includes original DXIL for the two initial VS/PS pairs, but
-  not the unidentified second PSO sharing VS 20e0826b236597a1.
+  proxy-source/src/types.h; the latest source also includes the tested BC
+  staging fix and its smoke test.
+- Original DXIL includes the two initial VS/PS pairs and the candidate PS
+  44b0a992c2304254.
 - The complete raw log was intentionally not added to this compact
   package. It remains at:
   D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\pre-instrumentation-test-20261109\d3d12on11-instrumented-run.log
 - Hela was closed after the test. The installation was restored to V7
   d3d12.dll / dxgi.dll and the conservative INI; shader overrides remain.
+
+FOLLOW-UP WORK - 2026-11-09
+- Added the bound pixel-shader hash to the skipped-draw trace. In the
+  earlier raw log, PS 44b0a992c2304254 (3,744 bytes) appeared immediately
+  before skips on both pipeline instances using VS 20e0826b236597a1.
+  Because that run predates PS-hash tracing, this is a candidate association,
+  not proof of the PS bound to each instance.
+- Converted VS 20e0826b236597a1, PS d77600bde0076c33,
+  PS 44b0a992c2304254, VS 4ce363172cfd70be, and PS 4c1bc8bf7e457acd
+  to HLSL candidates and compiled them with FXC to SM5. Compilation does
+  not establish semantic equivalence or runtime correctness.
+- A Steam-launched attempt with the candidate overrides and PS-hash trace
+  initialized D3D12 devices and destroyed them, but exited before any PSO
+  creation or draw. No candidate shader was confirmed loaded and no frame
+  was visually verified. See steam-candidate-shader-run.log.
+- Implemented block-aligned staging mip chains for BC footprints smaller
+  than 4x4 in both upload and readback paths. CTest is now 5/5 passing.
+  A native D3D11 smoke test verified BC1 and BC7 upload/readback for 2x2
+  and 1x1 mip-tail subresources; standalone 2x2 staging still returns
+  E_INVALIDARG, which is why the aligned chain is used. Details are in
+  bc-mip-staging-test.txt.
+- The final diagnostic d3d12.dll is 321,536 bytes, SHA-256
+  13646DD1A826E1DF864B175AD0E4205EEF31DEAEDF8E01772E4B99F8085FCA7B.
+  It is not left installed. The game directory was restored to V7 DLLs and
+  conservative INI, and only the original two overrides remain installed.
+- All hardware tests ran on the GTX 1050 Ti. The GTX 950M remains untested.

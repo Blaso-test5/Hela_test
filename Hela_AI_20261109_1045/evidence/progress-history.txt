@@ -383,23 +383,49 @@ proxy su quella macchina e solo dopo il test Hela. Finche' tale prova non
 viene fatta, la risposta e': non e' adattato intrinsecamente alla 1050 Ti,
 ma la compatibilita' con la GTX 950M resta da dimostrare.
 
-PROSSIMI PASSI CONSIGLIATI
---------------------------
-1. Convertire in modo mirato VS 20e0826b236597a1 e VS 4ce363172cfd70be;
-   associare e convertire anche i pixel shader dei PSO che generano gli
-   skip. Migliorare il trace per includere VS hash e PS hash per pipeline.
-2. Correggere il percorso di staging per mip BC sotto 4x4, ma prima
-   progettare e testare copie con dimensioni/regioni allineate ai blocchi.
-   Non limitarsi a creare texture 4x4 senza verificare Map e
-   CopySubresourceRegion ai bordi dei mip 1x1 e 2x2.
-3. Eseguire uno smoke test D3D11 dedicato per le copie BC edge-mip, quindi
-   ripetere Hela e verificare che E_INVALIDARG scompaia e draw(ok) aumenti.
-4. Verificare un frame con grafica visibile; 2.462 Present riuscite non
-   certificano pixel corretti.
-5. Conservare il V7 riproducibile e usare la build render-trace solo per
-   misure diagnostiche temporanee. Non dichiarare compatibilita' GTX 950M
-   finche' il test non viene ripetuto sulla macchina destinataria.
-6. Indagare gli overlap placement dei run precedenti senza rimuovere i
+FOLLOW-UP SHADER E MIP BC - 09/11/2026
+--------------------------------------
+- Aggiunto al trace dei draw saltati l'hash del pixel shader legato, oltre
+  all'hash VS e all'identita' del PSO. Nel log precedente, il PS
+  44b0a992c2304254 (3.744 byte) compare subito prima degli skip sulle due
+  istanze con VS 20e0826b236597a1; senza PS-hash per draw resta una
+  correlazione candidata, non un'associazione certa per ciascuna istanza.
+- Convertiti in HLSL e compilati con FXC SM5 i candidati:
+  VS 20e0826b236597a1; PS d77600bde0076c33 e 44b0a992c2304254;
+  VS 4ce363172cfd70be; PS 4c1bc8bf7e457acd. La compilazione riuscita non
+  dimostra equivalenza semantica o correttezza nel gioco.
+- Il test Hela avviato tramite Steam con i candidati installati ha
+  inizializzato e distrutto i device D3D12, poi e' uscito prima della
+  creazione dei PSO e dei draw. Nessuno shader candidato e' stato
+  confermato caricato e nessun frame visibile e' stato verificato.
+- Implementato per i soli footprint BC sotto 4x4 uno staging texture
+  block-aligned con mip chain: mappatura e copia usano il mip con
+  dimensioni esatte 2x2 o 1x1. Upload e readback usano lo stesso percorso;
+  le altre texture conservano il comportamento precedente.
+- Aggiunto il test D3D11 `d3d11_bc_mip_staging_smoke`: BC1 e BC7 hanno
+  superato round-trip upload/readback sui mip 2x2 e 1x1 di una catena
+  4x4; lo staging standalone 2x2 continua a fallire con E_INVALIDARG,
+  quindi non viene usato. CTest Release: 5/5 superati.
+- DLL diagnostica risultante: 321.536 byte, SHA-256
+  13646DD1A826E1DF864B175AD0E4205EEF31DEAEDF8E01772E4B99F8085FCA7B.
+  Non e' installata in modo permanente. Dopo il test sono stati ripristinati
+  d3d12.dll V7, dxgi.dll V7 e INI conservativa; restano installati solo i
+  due override originari.
+- I test hardware sono stati eseguiti sulla GTX 1050 Ti. La GTX 950M resta
+  da provare.
+
+PROSSIMI PASSI
+--------------
+1. Risolvere perche' Hela termina subito dopo l'enumerazione dei device
+   quando avviato tramite Steam in questo test, quindi ripetere il run con
+   la build diagnostica. Usare il nuovo PS-hash nei draw per confermare le
+   coppie di shader e verificare che gli override vengano caricati.
+2. Nel run in-game verificare che i rifiuti staging BC sub-block spariscano
+   e che le draw arrivino al contesto D3D11. Confermare la grafica osservando
+   un frame, non solo il contatore Present.
+3. Eseguire successivamente i test sulla GTX 950M; la compatibilita' resta
+   non verificata.
+4. Indagare gli overlap placement dei run precedenti senza rimuovere i
    controlli o fingere aliasing heap D3D12.
 
 FINE DEL RICORDO

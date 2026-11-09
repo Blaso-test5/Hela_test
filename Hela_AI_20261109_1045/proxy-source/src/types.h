@@ -173,7 +173,7 @@ struct RootSignature : Stub_ID3D12RootSignature {
 // ------------------------------------------------------------------ PSO
 struct PipelineState : Stub_ID3D12PipelineState {
     bool compute = false, missingShader = false, missingVs = false, missingCs = false;
-    uint64_t shaderHash = 0;
+    uint64_t shaderHash = 0, pixelShaderHash = 0;
     Ptr<ID3D11VertexShader> vs; Ptr<ID3D11PixelShader> ps; Ptr<ID3D11GeometryShader> gs;
     Ptr<ID3D11HullShader> hs; Ptr<ID3D11DomainShader> ds; Ptr<ID3D11ComputeShader> cs;
     Ptr<ID3D11InputLayout> il;
@@ -224,6 +224,7 @@ struct ExecState {
     bool computePlaceholderCs = false;
     uintptr_t graphicsPipelineIdentity = 0;
     uint64_t graphicsShaderHash = 0;
+    uint64_t graphicsPixelShaderHash = 0;
     bool hasVertexBuffer = false;
     bool hasIndexBuffer = false;
     bool rtvBackbuffer = false;
