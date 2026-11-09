@@ -22,8 +22,27 @@ GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
   omits machine/login identifiers, and the minidump can contain process
   memory.
 
+## Tier 0 follow-up
+
+- The proxy was forced to report D3D12 Tiled Resources Tier 0 while the
+  native GTX 950M D3D11 device remained at Tier 1.
+- Hela created a window titled `Hela` and remained alive for about 70
+  seconds. The trace has no `CreateReservedResource` requests; the previous
+  2 GiB reserved-buffer assertion was avoided.
+- Final trace: `present=1025`, `PSO(G=983,C=647)`, `draw(ok)=0`, `bb=0`,
+  `skip-other=1801`, `dispatch(ok)=0`, `placed(ok)=80`, `overlap=0`.
+- The process exited with `0xC0000005` (access violation); no matching
+  Unreal crash context identified the fault. The window and Presents were
+  observed, but no backbuffer draw was recorded, so black-screen pixels
+  were not independently confirmed.
+- Original DLLs, INI, binding map, and overrides were restored. Details and
+  the full trace are in `tier0-test-summary.txt` and
+  `d3d12on11-tier0-test.log`.
+
 ## Files
 
 - `d3d12on11-before.log`: baseline launch log from the conservative setup.
 - `d3d12on11-950m-test.log`: complete proxy trace from the diagnostic run.
 - `crash-summary.txt`: sanitized Unreal assertion summary.
+- `d3d12on11-tier0-test.log`: complete trace from the forced Tier 0 run.
+- `tier0-test-summary.txt`: setup, results, and interpretation of the Tier 0 run.

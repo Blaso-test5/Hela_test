@@ -1,0 +1,38 @@
+HELA GTX 950M FORCED TILED TIER 0 TEST
+Date: 2026-11-10
+
+Hardware and test setup
+- GPU: NVIDIA GeForce GTX 950M, device 0x139A, driver 582.78, 4096 MiB.
+- The underlying D3D11 device reported Tiled Resources Tier 1.
+- The proxy was configured to report D3D12 Tiled Resources Tier 0 using
+  D3D12ON11_TILED_RESOURCES_TIER=0. The log confirms tiled-tier=0 while
+  the underlying D3D11 tier remains 1.
+- Diagnostic capabilities, caller/render tracing, NVIDIA vendor masking
+  (exposed ID 0xFFFF), and four existing SM5 shader overrides were enabled
+  for this run.
+
+Result
+- Hela created a window titled "Hela"; the process remained alive for about
+  70 seconds, then exited with code 0xC0000005 (access violation).
+- The full proxy trace contains no CreateReservedResource request. Reporting
+  Tier 0 therefore avoided the previous 2 GiB reserved-resource assertion.
+- The final heartbeat recorded swap=1, present=1025, graphics PSOs=983,
+  compute PSOs=647, draw(ok)=0, backbuffer-targeted draws=0,
+  skip-other=1801, dispatch(ok)=0, placed(ok)=80, and overlap=0.
+- No matching Unreal crash context was created. The faulting module and
+  cause of the access violation are unknown.
+- A Hela window and successful Presents were observed, but no backbuffer
+  draws were recorded. The result is consistent with a black screen; the
+  displayed pixels were not independently verified.
+
+Interpretation
+Tier 0 allowed Hela to continue past the 2 GiB reserved-buffer request and
+reach PSO creation and swapchain Present. It did not produce a verified
+rendered frame. The trace contains many placeholder PSOs because the
+corresponding SM5 overrides are absent; zero successful draws and the
+skip-other count need separate investigation. Do not treat this as proof
+that Tier 0 itself caused the access violation.
+
+The original game DLLs, INI, binding map, and overrides were restored after
+the test. The complete proxy trace is `d3d12on11-tier0-test.log`. No
+minidump or user-specific crash identifiers are included.

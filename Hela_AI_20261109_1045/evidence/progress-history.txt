@@ -556,19 +556,41 @@ TEST GPU-SPECIFICO HELA GTX 950M - 10/11/2026
   Log e crash summary sanitizzato sono in `evidence\GTX_950M`; il
   CrashContext originale e il minidump non sono stati pubblicati.
 
+FOLLOW-UP TILED TIER 0 - GTX 950M - 10/11/2026
+-------------------------------------------------
+- Avviato Hela con `D3D12ON11_TILED_RESOURCES_TIER=0`. Il log conferma
+  `tiled-tier=0` esposto a D3D12 mentre il device D3D11 sottostante resta
+  Tier 1. Capability diagnostiche, tracing, vendor mask 0xFFFF e quattro
+  override SM5 erano attivi solo per questa prova.
+- Nessuna chiamata `CreateReservedResource` e' stata registrata: l'assert
+  sul buffer riservato da 2 GiB e' stato evitato. Hela ha creato PSO e
+  swapchain, con 1.025 Present.
+- La finestra `Hela` e' rimasta attiva per circa 70 secondi; il processo
+  e' terminato con `0xC0000005` (access violation). Non e' stato creato un
+  CrashContext Unreal corrispondente; modulo e causa restano sconosciuti.
+- Heartbeat finale: `swap=1`, `present=1025`, `PSO(G=983,C=647)`,
+  `draw(ok)=0`, `bb=0`, `skip-other=1801`, `disp(ok)=0`, `placed(ok)=80`,
+  `ovl=0`. Nessun frame visibile verificato; il dato e' compatibile con
+  blackscreen, ma il backbuffer non ha ricevuto draw.
+- DLL, INI, binding map e override originali sono stati ripristinati.
+  Riepilogo e trace completo in `evidence\GTX_950M`; non e' stato
+  pubblicato alcun minidump.
+
 PROSSIMI PASSI
 --------------
-1. Verificare se esiste un percorso reserved-resource onesto e compatibile
-   con Tiled Resources Tier 1 prima di ulteriori run Hela sulla GTX 950M.
-   Non simulare Tier 2/3: questo nasconderebbe la limitazione reale.
-2. Sulla GTX 1050 Ti, diagnosticare perche' i run precedenti avevano
+1. Analizzare il trace Tier 0 per il primo motivo di skip (`skip-other`) e
+   il punto in cui termina il processo; non attribuire l'access violation
+   al Tier 0 senza stack o dump diagnostico.
+2. Identificare e convertire solo gli shader realmente associati ai PSO
+   mancanti; gli override correnti non hanno prodotto draw riusciti.
+3. Sulla GTX 1050 Ti, diagnosticare perche' i run precedenti avevano
    `swap=0` e `present=0`, oltre agli errori placed-resource overlap.
-3. Verificare firma semantica, binding e output sul render target dei VS
+4. Verificare firma semantica, binding e output sul render target dei VS
    corretti; la scomparsa degli errori di input-layout/PSO non prova
    equivalenza semantica.
-4. Proseguire la verifica in-game del percorso staging BC con un run
+5. Proseguire la verifica in-game del percorso staging BC con un run
    riproducibile e di durata sufficiente, registrando l'esito visivo.
-5. Non rimuovere i controlli di overlap o simulare l'aliasing D3D12 senza
+6. Non rimuovere i controlli di overlap o simulare l'aliasing D3D12 senza
    una corretta implementazione.
 
 FINE DEL RICORDO
