@@ -1,0 +1,50 @@
+CONTROLLED HELA RUN WITH CRASH DIAGNOSTICS - 2026-11-09
+
+Setup
+-----
+Game: Hela-Win64-Shipping.exe
+Launch: direct PowerShell launch from the game's Win64 directory
+Start time: 2026-11-09 20:22:29 +01:00
+Diagnostic DLL: runtime\crash-diagnostics\d3d12.dll
+Diagnostic PDB: matching runtime\crash-diagnostics\d3d12.pdb
+Environment: D3D12ON11_CRASH_DIAGNOSTICS=1, diagnostic capabilities,
+caller/render tracing, NVIDIA vendor mask, and tiled tier 3.
+Existing shader overrides and conservative INI were left unchanged.
+
+The test DLL was installed only for this run. The original game DLL was
+backed up under
+`D3D12On11Patch\backups\crash-handler-test-20261109-202227` and restored
+after the game process had exited. The restored V7 DLL has SHA-256
+8C92E594CBF963DE94FE2957FE6162A0D1F3E1CD718B545D3B1808AAF1FF9CC2.
+The temporary PDB was removed. The existing dxgi.dll and INI were not
+modified.
+
+Observed results
+----------------
+- The proxy log confirms `Config crash-diagnostics=1`.
+- Device initialization and command-queue creation succeeded.
+- The final heartbeat at 20:23:51 reported:
+  `swap=0`, `present=0`, `PSO(G=2794,C=4025)`,
+  `draw(ok)=0`, `rtv=0`, `bb=0`, `skip-vs=1816`,
+  `disp(ok)=0`, and `placed(ok)=216`.
+- No `INPUT_LAYOUT_FAILED`, `PSO GRAPHICS FAILED`, or staging-create
+  failure was recorded.
+- Four placed-resource overlap rejections with `E_INVALIDARG` were logged
+  after the final heartbeat.
+- No first-chance crash report/minidump or new UE crash context was found.
+  This run therefore did not exercise the handler's report path in Hela.
+- The process remained active after 75 seconds and was no longer present
+  when the DLL was restored. The exit code was not captured; the available
+  evidence cannot determine whether it was closed manually or exited on its
+  own. No matching Windows Application Error event was found.
+
+Conclusion
+----------
+The diagnostic build initializes and runs the proxy far enough to create
+thousands of PSOs, but this run recorded no swapchain, Present, or draw, so
+it did not verify visible rendering. The first-chance handler was enabled,
+but no access violation report was generated. The overlap errors remain
+visible and should not be attributed to a crash without a captured dump.
+
+The complete proxy trace is in
+`evidence\crash-handler-hela-run-20261109.log`.

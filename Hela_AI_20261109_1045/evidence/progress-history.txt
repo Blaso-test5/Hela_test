@@ -515,14 +515,36 @@ DIAGNOSTICA FIRST-CHANCE ACCESS VIOLATION - 09/11/2026
 - Questo build non e' ancora stato testato in Hela e non sostituisce le DLL
   usate nel run documentato, conservate in `runtime\bin`.
 
+TEST HELA CON CRASH DIAGNOSTICS - 09/11/2026
+--------------------------------------------
+- Eseguito `Hela-Win64-Shipping.exe` direttamente da PowerShell con la
+  diagnostica first-chance attiva e le variabili ambientali diagnostiche
+  note. Il log conferma `Config crash-diagnostics=1`, inizializzazione
+  device e command queue riuscita, 2.794 PSO graphics e 4.025 PSO compute.
+- Heartbeat finale alle 20:23:51: `swap=0`, `present=0`, `draw(ok)=0`,
+  `rtv=0`, `bb=0`, `skip-vs=1816`, `placed(ok)=216`. Nessun errore
+  `INPUT_LAYOUT_FAILED`, `PSO GRAPHICS FAILED` o staging BC; il log registra
+  quattro `CreatePlacedResource OVERLAP` con `E_INVALIDARG` dopo l'ultimo
+  heartbeat.
+- Nessun report/minidump first-chance o nuovo UE crash context e' stato
+  generato durante l'intervallo osservato. Il processo era ancora attivo a
+  75 secondi e non risultava piu' attivo al successivo ripristino; il suo
+  exit code non e' stato acquisito, quindi non e' possibile distinguere una
+  chiusura manuale da una terminazione autonoma.
+- DLL V7 ripristinata e verificata (SHA-256
+  `8C92E594CBF963DE94FE2957FE6162A0D1F3E1CD718B545D3B1808AAF1FF9CC2`);
+  il PDB temporaneo e' stato rimosso. Log integrale e riepilogo in
+  `evidence\crash-handler-hela-run-20261109.log` e
+  `evidence\crash-handler-hela-test-20261109.txt`.
+
 PROSSIMI PASSI
 --------------
-1. Eseguire un run controllato di Hela con `runtime\crash-diagnostics`,
-   `D3D12ON11_CRASH_DIAGNOSTICS=1` e PDB corrispondente; raccogliere report,
-   dump, exit code e log. Correlare la prima-chance con la terminazione
-   effettiva del processo.
-2. Diagnosticare perche' le 2667 draw inoltrate hanno rtv=2667 ma bb=0;
-   nessun frame visibile e' stato verificato.
+1. Ripetere il run con acquisizione controllata dell'exit code e osservazione
+   della finestra; il test attuale non ha prodotto un report AV e non prova
+   una terminazione per access violation.
+2. Diagnosticare perche' il run corrente ha `swap=0` e `present=0`, oltre
+   ai quattro errori placed-resource overlap; nessun frame visibile e'
+   stato verificato.
 3. Verificare firma semantica, binding e output sul render target dei VS
    corretti; la scomparsa degli errori di input-layout/PSO non prova
    equivalenza semantica.

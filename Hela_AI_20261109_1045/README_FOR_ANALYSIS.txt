@@ -24,8 +24,8 @@ PROJECTS AND REPRODUCTION
   `evidence\build-provenance.txt` records the tested build and DLL hashes.
 - `runtime\crash-diagnostics` contains a separate diagnostic build with
   optional first-chance access-violation reporting and its matching PDB. It
-  passed native tests but has not yet been run in Hela; it does not replace
-  the exact tested binaries in `runtime\bin`.
+  passed native tests and was used in the controlled Hela run below; it does
+  not replace the exact previously tested binaries in `runtime\bin`.
 
 LATEST FOLLOW-UP - 2026-11-09
 - Signature investigation identified the first rejected candidate as VS
@@ -53,9 +53,9 @@ LATEST FOLLOW-UP - 2026-11-09
   and evidence\vertex-wrapper-fix-test-20261109.txt.
 - Added an optional first-chance access-violation handler to the proxy.
   Release CTest passed 6/6, including a synthetic exception test that
-  verified the report, captured stack, and minidump. This is a local native
-  test only; the new build has not yet been run in Hela. See
-  evidence\crash-handler-build-test-20261109.txt.
+  verified the report, captured stack, and minidump. A later Hela run with
+  the handler enabled is documented in
+  evidence\crash-handler-hela-test-20261109.txt.
 
 TEST SETUP
 - The game ran on this PC's GTX 1050 Ti. The destination GTX 950M has not
@@ -169,6 +169,9 @@ CONTENTS
   the documented Hela run.
 - evidence\crash-handler-build-test-20261109.txt: build hashes, native
   smoke-test result, and limitations of the new handler.
+- evidence\crash-handler-hela-test-20261109.txt and
+  evidence\crash-handler-hela-run-20261109.log: controlled in-game run,
+  measured results, and full proxy trace.
 - evidence\converter-source: snapshots of the converter post-processor and
   regression tests used for the corrected candidates. The editable source
   remains in the local sm6-to-sm5-mcp project.
