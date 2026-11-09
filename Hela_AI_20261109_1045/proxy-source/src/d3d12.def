@@ -1,0 +1,6 @@
+LIBRARY d3d12
+EXPORTS
+  D3D12CreateDevice @101
+  D3D12GetDebugInterface @102
+  D3D12SerializeRootSignature @116
+  D3D12SerializeVersionedRootSignature @117

@@ -1,0 +1,358 @@
+RICORDO - PROGRESSIONE DEL LAVORO E TEST HELA
+Aggiornato: 09/11/2026
+
+SCOPO
+-----
+Questo file conserva la cronologia delle prove sul proxy sperimentale
+D3D12 -> D3D11, sui convertitori di shader SM6 -> SM5 e sulla demo Steam
+di Hela. Distingue i successi dei test locali dai risultati ottenuti nel
+gioco: un test sintetico passato o un override caricato non dimostrano,
+da soli, che Hela renderizzi correttamente.
+
+AMBIENTE E VINCOLI
+------------------
+- Gioco: Hela: Of Mice & Magic Demo, Steam AppID 4553860.
+- Installazione: D:\SteamLibrary\steamapps\common\Hela Demo
+- Build osservata: Unreal Engine 5.6.1, versione 1.2.0.28450-Demo.
+- Proxy e Shader Lab: D:\Plugin_ChatGpt\GHIDRA MCP\Plugin Nuovi\sm6-to-sm5-mcp
+- GPU della macchina di prova riportata nei test: NVIDIA GeForce GTX 1050 Ti.
+- GPU destinataria dichiarata per la patch: NVIDIA GeForce GTX 950M
+  (l'utente l'ha chiamata "RTX 950M"; verificare il nome esatto con dxdiag
+  sulla macchina destinataria prima di certificare la compatibilita').
+- Il lavoro e' stato sviluppato e provato qui sulla GTX 1050 Ti, ma non
+  contiene una dipendenza esplicita da quel modello. La compatibilita' con
+  la GTX 950M non e' ancora stata provata.
+- La demo usa shader PCD3D_SM6. Il tentativo con -d3d11 ha confermato
+  che questo pacchetto non e' configurato per il renderer Unreal D3D11.
+- Il proxy traduce solo un sottoinsieme D3D12. Non supporta automaticamente
+  DXIL: per gli shader SM6 servono override DXBC SM5 compatibili.
+- Non confondere le capability diagnostiche forzate con supporto reale.
+  diagnostic_capabilities=1 e' stato usato solo per prove temporanee.
+
+CRONOLOGIA DEL PROGETTO
+-----------------------
+
+Fase iniziale - fattibilita' e Shader Lab
+  - Verificato che la demo contiene riferimenti a PCD3D_SM6; non e' stato
+    trovato un percorso D3D11 nativo utilizzabile.
+  - Scelto il proxy D3D12 -> D3D11 esistente invece del renderer D3D11
+    nativo Unreal.
+  - La toolchain shader e' disponibile: fxc, dxil-spirv e spirv-cross.
+  - Alcuni shader Hela sono stati decompilati/convertiti e compilati con
+    FXC in SM5; altri non sono convertibili automaticamente.
+  - Un pixel shader Nanite usa feature quali wave/quad operations,
+    atomiche 64-bit tipizzate e SV_Barycentrics: non e' un semplice
+    candidato SM5.
+
+Primo prototipo del proxy
+  - Aggiunti build CMake, export D3D12, device D3D11, risorse, descriptor,
+    root signature, PSO, command list/queue e lookup degli override.
+  - I primi smoke test hanno verificato device, buffer, descriptor e un
+    dispatch compute SM5 con readback del risultato.
+  - Successo importante: il test sintetico compute ha scritto e letto
+    0x1234ABCD attraverso il proxy.
+  - Aggiunto successivamente il forwarding DXGI, factory e swapchain.
+    Test sintetici hanno verificato factory, GetBuffer, Present,
+    ResizeBuffers e un disegno graphics SM5.
+  - Build e test locali sono passati nelle rispettive tappe (i conteggi
+    sono variati tra 1/1, 3/3 e 4/4 in base alla suite del momento).
+  - Questi test non usano il renderer di Hela.
+
+Avvii preliminari della demo
+  - Alcuni primi avvii sono stati fermati da problemi di packaging/Bootstrap
+    (descriptor .uproject e dati ICU); Steam ha poi ripristinato file della
+    demo mancanti tramite verifica dell'integrita'.
+  - Questi blocchi non erano errori del proxy grafico.
+  - In seguito Hela ha mostrato "DirectX 12 is not supported on your
+    system". Le capability del proxy e gli export richiesti sono stati
+    analizzati e ampliati; il messaggio e' stato aggirato solo nelle prove
+    con capability diagnostiche non necessariamente implementate.
+
+VERSIONI E PROVE RICOSTRUITE DAI CHECKPOINT
+-------------------------------------------
+Nota: nei checkpoint disponibili non esiste un risultato separato e
+verificabile etichettato V1 o V2. Non vengono attribuiti risultati a V1/V2
+per supposizione.
+
+V3
+  Obiettivo: provare il percorso buffer tiled riservato da 2 GiB e il
+  backing D3D11 ridotto.
+  Esito: il tentativo combinato V3/V4 non e' partito. Lo script PowerShell
+  ha avuto un errore di sintassi prima di avviare il gioco. Nessun log V3
+  e' stato prodotto in quel tentativo.
+
+V4
+  Obiettivo: ripetere il test con D3D12ON11_TILED_RESOURCES_TIER=0.
+  Esito: non partito per lo stesso errore di parsing dello script. Nessun
+  risultato runtime V4 e' disponibile nei checkpoint.
+
+V5
+  Successo: Hela ha superato CreateQueryHeap.
+  Blocco successivo: creazione di pipeline/shader; il percorso necessario
+  non era ancora implementato in quel build.
+
+V6
+  Successi: ha superato CreateQueryHeap e creato il backing D3D11 per il
+  buffer tiled riservato da 2 GiB (backing ridotto a 1 GiB).
+  Blocco successivo: pipeline/shader. Nessun rendering verificato.
+
+V7 - pipeline state stream, dump DXIL e placeholder
+  - Implementati parsing del pipeline state stream, dump degli shader DXIL
+    e creazione di PSO placeholder quando manca un override SM5.
+  - Build Release e CTest riportati: 4/4 superati.
+  - Il log del run V7 originario registra circa 4.799 shader iniziati,
+    4.797 dump/placeholder e PSO graphics READY almeno fino al numero 1400.
+  - L'utente ha confermato che questo run produce finestra nera con audio
+    del gioco in sottofondo.
+  - Il log V7 non contiene record effettivi di ExecuteCommandLists,
+    swapchain o Present. Non e' quindi una prova di frame presentati.
+  - Con shader placeholder il proxy puo' saltare i draw/dispatch associati;
+    questo e' compatibile con uno schermo nero, ma non spiega da solo
+    l'intera terminazione/blocco del gioco.
+
+Diagnostica tiled e placed resources (dopo V7)
+  - Implementato e testato un sottoinsieme di tiled resources tramite
+    D3D11.2: texture reserved 2D 64-KiB, tile pool e mapping/copy tiles
+    coperti dagli smoke test.
+  - Build Release e CTest riportati: 3/3 superati.
+  - Implementati QueryInterface per ID3D12Device1/2, placement limitato,
+    CreateCommandSignature/ExecuteIndirect per una forma minima e
+    FORMAT_SUPPORT.
+  - Tappe singole verificate da smoke test; non equivalgono a supporto
+    generale D3D12. Il backing delle risorse placed non condivide la
+    memoria heap D3D12 e l'aliasing non e' implementato.
+  - Hela ha superato alcuni blocchi iniziali solo con capability
+    diagnostiche. Altri tentativi si sono fermati in NVAPI/driver NVIDIA
+    o su successive API non implementate.
+
+TEST OFFLINE DEGLI SHADER
+-------------------------
+- b3aaeb64ad68dd6b: HLSL compute vuoto/no-op. FXC puo' compilarlo, ma non
+  e' un override utile per uno shader che deve produrre output.
+- e558edbc7795e323: conversione fermata da wave operations non supportate
+  nel passaggio SPIR-V -> HLSL SM5.
+- a7f30e5d1d5fc6fb: vertex shader Hela vs_6_0 da 2.872 byte. La pipeline
+  DXIL -> SPIR-V -> HLSL e la compilazione FXC vs_5_0 sono riuscite.
+  Il file DXBC e' di 692 byte; SHA-256:
+  5A993C0D07474AA541AB5436FCD7DADC6BDA5A312A00A4C88B82F8AA81E83EB5
+  FNV-1a 64 del DXIL completo: a7f30e5d1d5fc6fb.
+- La compilazione certifica un DXBC SM5 formalmente valido, non
+  equivalenza semantica o rendering corretto.
+
+TEST V7 CON OVERRIDE - 09/11/2026
+--------------------------------
+Obiettivo: ripristinare il build proxy che aveva prodotto il run V7 con
+audio/finestra nera e verificare se Hela carica l'override VS appena creato.
+
+Preparazione reversibile:
+  - Ripristinati in Hela\Binaries\Win64 i binari V7 dal backup precedente
+    alla patch render-trace. SHA-256 d3d12.dll:
+    8C92E594CBF963DE94FE2957FE6162A0D1F3E1CD718B545D3B1808AAF1FF9CC2
+  - Ripristinato dxgi.dll V7; SHA-256:
+    285FC3B7349BD96C07877944DF2F9F3F65AFE3D4053C6E536F5419E34F04CEBB
+  - Ripristinata l'INI V7 conservativa: diagnostic_capabilities=0,
+    trace_callers=0. Per il singolo processo di test sono state passate
+    variabili diagnostiche, incluso vendor mask 0xffff e tiled tier 3.
+  - Gli attuali file DLL/config/log precedenti al ripristino sono stati
+    conservati in:
+    D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\pre-v7-restore-20261109-1012
+
+Risultato osservato:
+  - Il gioco ha raggiunto il caricamento degli shader; il processo non
+    risultava piu' attivo al controllo finale.
+  - Log: 5.781 SHADER BEGIN, 5.778 SHADER DUMPED, 195 PSO READY (91
+    graphics) e 295 CreatePlacedResource riuscite.
+  - Tre CreatePlacedResource sono state rifiutate per overlap.
+  - Tre override sono stati effettivamente caricati:
+      VS a7f30e5d1d5fc6fb, SM5, file di 692 byte.
+      VS 25e657206d761172, SM5, file di 372 byte.
+      CS 74867736557b00e8, SM5, file di 1.540 byte.
+  - SUCCESSO IMPORTANTE: il proxy ha trovato il nome hash corretto e ha
+    accettato/creato shader D3D11 dai tre .cso durante il run reale Hela.
+    Questo e' il primo riscontro runtime concreto per questi override.
+  - Il conteggio del log e' 195 PSO READY: 91 graphics e 104 compute,
+    tutti con status placeholder-missing-sm5-override. Quindi i tre
+    shader sostitutivi sono stati caricati, ma non e' stato creato un
+    insieme completo di shader per nessuno di quei PSO.
+  - Limite decisivo: il caricamento del VS non dimostra che il pixel
+    shader associato sia disponibile, che un draw sia stato eseguito o
+    che sia stato prodotto un frame visibile.
+  - Il PSO graphics #1 usa proprio quel VS e un pixel shader da 3.704
+    byte, hash FNV-1a f79b80f0f2f58f68. Nel run il PS mancava e il PSO
+    e' stato creato come placeholder.
+  - Nel log non ci sono record di swapchain, Present o ExecuteCommandLists.
+    Il build V7 ha copertura di logging limitata su queste chiamate:
+    l'assenza di righe non prova in assoluto che la chiamata non sia
+    avvenuta.
+  - Ultime righe del log: 10:16:04, un altro overlap placement rifiutato.
+    Non e' stata stabilita la causa della terminazione del processo.
+    Nessun crash e' attribuito con certezza a tale rifiuto.
+  - Non e' stato verificato un frame, un output visibile o una presentazione.
+
+TEST OFFLINE DEL PIXEL SHADER ACCOPPIATO - 09/11/2026
+-----------------------------------------------------
+  - Analizzato il DXIL f79b80f0f2f58f68, stadio PS, shader model ps_6_0.
+    Il container da solo non rivela feature SM6 bloccanti; l'analisi segnala
+    che per una verifica piu' completa occorre anche il disassemblato DXC.
+  - Il convertitore ha prodotto HLSL candidato. Esso legge due Texture2D
+    (t0 e t1), usa SV_Position come coordinata e miscela i colori usando
+    l'alpha della seconda texture.
+  - FXC ha compilato il candidato in ps_5_0, entry point main.
+    DXBC risultante da 796 byte, SHA-256:
+    BF56DD5F681DD2FA8F483F5E1FA308DD432B39E78AF032ACE10634255FC15711
+  - Questo e' un test mirato del pixel shader accoppiato al VS del PSO #1,
+    quindi e' piu' informativo che convertire shader casuali o ampliare
+    subito il convertitore in modo generico.
+  - File di test:
+    D:\Plugin_ChatGpt\GHIDRA MCP\Plugin Nuovi\sm6-to-sm5-mcp\d3d12on11\build-retest-20261106\hela-single-shader-test-20261109\f79b80f0f2f58f68.hlsl
+    D:\Plugin_ChatGpt\GHIDRA MCP\Plugin Nuovi\sm6-to-sm5-mcp\d3d12on11\build-retest-20261106\hela-single-shader-test-20261109\f79b80f0f2f58f68.cso
+
+TEST IN-GAME CON VS + PS - 09/11/2026
+-------------------------------------
+- Installato f79b80f0f2f58f68.cso in
+  D3D12On11Patch\overrides con SHA-256 corrispondente al candidato
+  compilato (BF56DD5F681DD2FA8F483F5E1FA308DD432B39E78AF032ACE10634255FC15711).
+- Avviato Hela con lo stesso build V7 e le variabili diagnostiche usate
+  nel run precedente. Il log conferma il caricamento di entrambi gli
+  override:
+    VS a7f30e5d1d5fc6fb, 692 byte, modello 5_0.
+    PS f79b80f0f2f58f68, 796 byte, modello 5_0.
+- Il PSO graphics #1, che dichiara VS=2872 byte e PS=3704 byte, ha
+  concluso con "PSO GRAPHICS #1 READY status=ready". SUCCESSO: per la
+  prima volta un PSO graphics Hela e' stato creato senza placeholder.
+- Nel log risultano 1 PSO ready e 195 PSO ancora
+  placeholder-missing-sm5-override.
+- Il processo Hela non risultava piu' attivo al controllo dopo 60 secondi.
+  La coda del log termina su GetClockCalibration: il proxy non riesce a
+  creare una query timestamp D3D11 e registra HRESULT 0x887a0005.
+  Questo e' l'ultimo errore osservato, ma non e' dimostrato che sia la
+  causa della terminazione del gioco.
+- Non risultano record di draw, ExecuteCommandLists, swapchain o Present
+  in questo log; la build V7 non fornisce copertura sufficiente per usare
+  tali assenze come prova che nessuna chiamata sia avvenuta.
+- Nessun frame visibile o rendering corretto e' stato confermato. Il
+  risultato prova il caricamento congiunto degli shader e la creazione
+  del PSO #1, non ancora l'esecuzione di una draw.
+- Log completo archiviato in:
+D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\pre-v7-restore-20261109-1012\V7-vs-ps-override-test-final-20261109.log
+
+TEST RENDER-TRACE CON VS + PS - 09/11/2026
+------------------------------------------
+- Eseguito un nuovo test con la build diagnostica render-trace, mantenendo
+  installati entrambi gli override SM5. Il proxy diagnostico usato nel run
+  ha SHA-256 d3d12.dll:
+  F0DC781625E7E51103AE5FD6987CC783C2DFAFEE3B069A0ED99E64C8AB285E3D
+  dxgi.dll:
+  48DB1738E59A0176295999717FDF683A6D4513F377F1F35E5DFA6F928101EAA9
+- Render trace, caller trace e diagnostic capabilities erano attivi solo
+  per questo lancio. La GPU di test e' la GTX 1050 Ti; la GTX 950M di
+  destinazione non e' stata testata.
+- Il log conferma nuovamente il caricamento del VS
+  a7f30e5d1d5fc6fb (692 byte) e del PS f79b80f0f2f58f68 (796 byte).
+  Il PSO graphics #1 ha status=ready.
+- Il contatore finale ha registrato 1.245 Present nella heartbeat e
+  1.290 chiamate Present riuscite nel log; nessuna Present fallita.
+  Questo dimostra che la swapchain presenta, non che i pixel siano corretti.
+- RISULTATO DECISIVO: draw(ok)=0; skip-vs=2.001 alla heartbeat finale.
+  Nel codice, questo contatore aumenta quando la draw viene saltata per un
+  graphics PSO con vertex shader mancante. Il PSO #1 pronto non dimostra
+  che venga usato dalle draw osservate; il trace corrente non associa ogni
+  draw al suo hash PSO.
+- Nei record PSO risultano 89 graphics placeholder e 104 compute
+  placeholder, oltre al solo graphics PSO pronto #1.
+- Sono stati registrati 1.087 errori "Could not create texture staging
+  resource for upload: 0x80070057" (E_INVALIDARG). E' un secondo problema
+  concreto da investigare, senza attribuirgli ancora una causalita' unica
+  per lo schermo nero.
+- Questo run non contiene l'errore GetClockCalibration 0x887a0005 del run
+  precedente. Nessun frame con grafica corretta e' stato confermato.
+- Hela e' stato chiuso al termine della raccolta. La postazione e' stata
+  ripristinata al proxy V7 da 306.176 byte e alla configurazione conservativa;
+  gli override VS e PS restano installati.
+- Log completo archiviato in:
+  D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\pre-render-trace-override-test-20261109-1045\d3d12on11-render-trace.log
+- Pacchetto curato per analisi esterna, con sorgenti, binari esatti, shader,
+  configurazione e log selezionato:
+  C:\Users\Blasonati\Desktop\Hela AI\Hela_AI_20261109_1045
+
+Log archiviato e backup
+-----------------------
+Log della prova V7 con override:
+D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\pre-v7-restore-20261109-1012\V7-override-test-20261109.log
+
+Backup del log della prova V7 precedente con maschera vendor errata:
+D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\pre-v7-restore-20261109-1012\v7-vendor1414-failed.log
+
+Backup dello stato DLL/INI/log precedente al ripristino V7:
+D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\pre-v7-restore-20261109-1012
+
+Il file a7f30e5d1d5fc6fb.cso e' installato in:
+D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\overrides\a7f30e5d1d5fc6fb.cso
+
+STATO AL MOMENTO DEL PROMEMORIA PRECEDENTE
+------------------------------------------
+- Il test V7 con override ha terminato di produrre il log; Hela non
+  risultava attivo al controllo finale.
+- La DLL attiva accanto all'eseguibile e' il build V7 da 306.176 byte.
+- L'INI persistente e' conservativa (diagnostic_capabilities=0,
+  trace_callers=0). Le variabili diagnostiche impostate per il lancio
+  erano temporanee al processo PowerShell usato nel test.
+- Override VS/CS e log sono conservati. Nessun override e' stato rimosso.
+- Il candidato PS f79b80f0f2f58f68 e' installato nell'override del gioco;
+  il test in-game ha creato PSO graphics #1 con status=ready.
+- Il rendering reale resta NON verificato.
+
+RIFLESSIONE SULLA GPU DESTINATARIA (GTX 950M)
+---------------------------------------------
+La build e i test appena descritti sono stati eseguiti su una GTX 1050 Ti,
+non sulla GPU destinataria dichiarata, una GTX 950M. Il codice del proxy
+non e' stato scritto per richiedere proprio una 1050 Ti: traduce un
+sottoinsieme D3D12 in chiamate D3D11 e usa file DXBC SM5. In principio,
+questo puo' renderlo portabile a una GPU piu' vecchia, ma solo se quella
+GPU e il suo driver supportano tutte le feature D3D11 realmente usate.
+
+Non e' quindi corretto concludere che la patch funzionera' sulla 950M
+solo perche' un override e' stato caricato sulla 1050 Ti. Restano almeno
+tre differenze da verificare sulla macchina destinataria:
+  1. livello di feature D3D11, formati, UAV, tiled resources e altre
+     capability effettivamente esposte dal driver;
+  2. compatibilita' e prestazioni della conversione su quella GPU, che
+     puo' essere sensibilmente piu' lenta della 1050 Ti;
+  3. completezza degli shader richiesti da ciascun PSO. Nel run del
+     09/11 con il solo VS sostitutivo, i 195 PSO registrati erano
+     placeholder. Nel run successivo con VS+PS, un PSO graphics e'
+     diventato ready, mentre 195 restavano placeholder. Il lavoro e'
+     ancora troppo incompleto per concludere sulla compatibilita'
+     specifica della 950M.
+
+La demo non supporta il renderer D3D11 nativo. Il percorso in esame e'
+sempre il proxy D3D12 -> D3D11: Hela continua a chiedere API D3D12, mentre
+il proxy traduce solo le operazioni implementate verso D3D11. Non equivale
+a ricreare o abilitare il renderer DX11 originale del gioco.
+
+Per una verifica attendibile sulla GPU destinataria, raccogliere da quel
+PC il nome esatto della GPU, versione driver, livelli di funzionalita'
+D3D11 e capability tiled/formati; poi eseguire prima gli smoke test del
+proxy su quella macchina e solo dopo il test Hela. Finche' tale prova non
+viene fatta, la risposta e': non e' adattato intrinsecamente alla 1050 Ti,
+ma la compatibilita' con la GTX 950M resta da dimostrare.
+
+PROSSIMI PASSI CONSIGLIATI
+--------------------------
+1. Tracciare l'hash del PSO effettivamente legato a ogni draw saltata e
+   convertire il vertex shader mancante di un percorso grafico prioritario.
+   Il PSO #1 e' ready, ma il run render-trace non ha eseguito draw riuscite.
+2. Diagnosticare CreateStagingTexture e i 1.087 errori E_INVALIDARG
+   (0x80070057); registrare dimensione, formato, footprint e parametri
+   passati a CreateTexture1D/2D/3D prima di cambiare il comportamento.
+3. Verificare che un draw reale abbia esito positivo e arrivi a Present con
+   contenuto visibile. Present riuscite da sole non certificano la grafica.
+4. Conservare il V7 riproducibile e usare il build render-trace solo per
+   misure diagnostiche temporanee. La precedente anomalia
+   GetClockCalibration 0x887a0005 non si e' ripetuta nel nuovo run.
+5. Indagare i tre overlap placement osservati nei run precedenti senza
+   rimuovere i controlli o fingere aliasing heap D3D12.
+6. Non dichiarare compatibilita' Hela o GTX 950M finche' non e' verificato
+   un frame corretto sulla macchina destinataria.
+
+FINE DEL RICORDO

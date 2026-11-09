@@ -1,0 +1,8 @@
+﻿[d3d12on11.ini] diagnostic_capabilities=1; trace_callers=1; diagnostic_render_trace=1
+D3D12ON11_DIAGNOSTIC_CAPABILITIES=1
+D3D12ON11_TRACE_CALLERS=1
+D3D12ON11_DIAGNOSTIC_RENDER_TRACE=1
+D3D12ON11_DIAGNOSTIC_MASK_NVIDIA=1
+D3D12ON11_MASK_VENDOR_ID=ffff
+D3D12ON11_TILED_RESOURCES_TIER=3
+Warning: this diagnostic environment is not a safe production/default configuration.

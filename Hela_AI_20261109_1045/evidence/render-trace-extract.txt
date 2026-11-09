@@ -1,0 +1,51 @@
+﻿HELA RENDER-TRACE: CURATED EXTRACT
+Run proxy initialization: 2026-11-09 10:46:06; final heartbeat at 10:47:18.673.
+PSO results: graphics ready=1, graphics placeholder=89, compute ready=0, compute placeholder=104.
+Present: success=1290, failure=0. Render-trace log lines 'Skipped execution for PSO placeholder...'=2048 (pipeline state records, not draw count).
+Texture staging upload failures with 0x80070057=1087. Device-removed/GetDeviceRemovedReason markers in this run=0.
+
+--- Session setup ---
+Log file: D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\d3d12on11.log [tid=26588]
+[10:46:06.546] [tid=26588] Loaded 1 register binding overrides from D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\binding-map.json
+[10:46:06.546] [tid=26588] === D3D12On11 diagnostic session ===
+[10:46:06.546] [tid=26588] Config ini=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\d3d12on11.ini log=1 debug-layer=0 advertised-shader-model=6_7
+[10:46:06.546] [tid=26588] Config diagnostic-capabilities=1 (UNSAFE: reports selected capabilities not fully implemented by D3D11 proxy)
+[10:46:06.546] [tid=26588] Config caller-trace=1
+[10:46:06.546] [tid=26588] Config diagnostic-render-trace=1
+[10:46:06.546] [tid=26588] Config shader-dump=1 dump-dir=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump overrides-dir=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\overrides binding-map=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\binding-map.json entries=1
+[10:46:06.546] [tid=26588] Note: DXIL is not compiled by the proxy; a matching SM5 .cso override is required.
+--- NVIDIA mask / adapter ---
+[10:46:06.547] [tid=26588] DIAGNOSTIC_MASK_NVIDIA: native-vendor=0x10de device=0x1c82 exposed-vendor=0xffff luid=00000000:0000ee33
+[10:46:06.547] [tid=26588] DIAGNOSTIC_MASK_NVIDIA: native-vendor=0x10de device=0x1c82 exposed-vendor=0xffff luid=00000000:00018148
+[10:46:06.590] [tid=26588] DIAGNOSTIC_MASK_NVIDIA: native-vendor=0x10de device=0x1c82 exposed-vendor=0xffff luid=00000000:0000ee33
+[10:46:07.913] [tid=26588] DIAGNOSTIC_MASK_NVIDIA: native-vendor=0x10de device=0x1c82 exposed-vendor=0xffff luid=00000000:00018148
+[10:46:12.937] [tid=26588] DIAGNOSTIC_MASK_NVIDIA: native-vendor=0x10de device=0x1c82 exposed-vendor=0xffff luid=00000000:0000ee33
+[10:46:18.610] [tid=26588] DIAGNOSTIC_MASK_NVIDIA: native-vendor=0x10de device=0x1c82 exposed-vendor=0xffff luid=00000000:0000ee33
+[10:46:18.610] [tid=26588] DIAGNOSTIC_MASK_NVIDIA: native-vendor=0x10de device=0x1c82 exposed-vendor=0xffff luid=00000000:00018148
+[10:46:21.455] [tid=26588] DIAGNOSTIC_MASK_NVIDIA: native-vendor=0x10de device=0x1c82 exposed-vendor=0xffff luid=00000000:0000ee33
+[10:46:21.455] [tid=26588] DIAGNOSTIC_MASK_NVIDIA: native-vendor=0x10de device=0x1c82 exposed-vendor=0xffff luid=00000000:00018148
+--- Tested shader overrides and PSO ---
+[10:46:22.894] [tid=29636] PSO GRAPHICS #1 BEGIN VS=2872 PS=3704 GS=0 HS=0 DS=0 input-elements=0 RTVs=1 samples=1/0 topology=3 flags=0x0
+[10:46:22.957] [tid=29636] SHADER READY stage=VS hash=a7f30e5d1d5fc6fb source=SM5-override path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\overrides\a7f30e5d1d5fc6fb.cso bytes=692 model=5_0
+[10:46:22.989] [tid=29636] SHADER READY stage=PS hash=f79b80f0f2f58f68 source=SM5-override path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\overrides\f79b80f0f2f58f68.cso bytes=796 model=5_0
+[10:46:22.989] [tid=29636] PSO GRAPHICS #1 READY status=ready
+--- Final render-trace heartbeats ---
+[10:47:10.669] [tid=21160] [RENDER_TRACE] [HEARTBEAT] tid=21160 up=64110ms last-api=Device::CreateGraphicsPipelineState(tid=13180,ago=47ms) exec=5015 sig=14367 wait=6715 wctx=14367(fail=0,max-spin=16572) swap=1 present=850 pso(G=1653,C=4021,last=cc4f286199d48b34) draw(ok=0,rtv=0,bb=0,nullrtv=0,skip-pso=0,skip-vs=1606,skip-other=0,skip-vb=0,skip-ib=0,skip-map=0,missing-vb=0,missing-ib=0) disp(ok=0,skip-pso=0,skip-cs=0) placed(ok=92,ovl=0,rel=0,live=92)
+[10:47:12.672] [tid=21160] [RENDER_TRACE] [HEARTBEAT] tid=21160 up=66125ms last-api=Device::CreateGraphicsPipelineState(tid=34404,ago=0ms) exec=5729 sig=16390 wait=7667 wctx=16390(fail=0,max-spin=16572) swap=1 present=969 pso(G=1869,C=4021,last=cc4f286199d48b34) draw(ok=0,rtv=0,bb=0,nullrtv=0,skip-pso=0,skip-vs=1725,skip-other=0,skip-vb=0,skip-ib=0,skip-map=0,missing-vb=0,missing-ib=0) disp(ok=0,skip-pso=0,skip-cs=0) placed(ok=184,ovl=0,rel=0,live=184)
+[10:47:14.673] [tid=21160] [RENDER_TRACE] [HEARTBEAT] tid=21160 up=68125ms last-api=CommandQueue::Signal(tid=26348,ago=0ms) exec=6368 sig=18250 wait=8528 wctx=18250(fail=0,max-spin=16572) swap=1 present=1080 pso(G=2612,C=4021,last=93b1369f3ed4e0f4) draw(ok=0,rtv=0,bb=0,nullrtv=0,skip-pso=0,skip-vs=1836,skip-other=0,skip-vb=0,skip-ib=0,skip-map=0,missing-vb=0,missing-ib=0) disp(ok=0,skip-pso=0,skip-cs=0) placed(ok=186,ovl=0,rel=0,live=186)
+[10:47:16.673] [tid=21160] [RENDER_TRACE] [HEARTBEAT] tid=21160 up=70125ms last-api=CommandQueue::Signal(tid=26348,ago=0ms) exec=7010 sig=20102 wait=9390 wctx=20102(fail=0,max-spin=16572) swap=1 present=1190 pso(G=2612,C=4021,last=93b1369f3ed4e0f4) draw(ok=0,rtv=0,bb=0,nullrtv=0,skip-pso=0,skip-vs=1946,skip-other=0,skip-vb=0,skip-ib=0,skip-map=0,missing-vb=0,missing-ib=0) disp(ok=0,skip-pso=0,skip-cs=0) placed(ok=186,ovl=0,rel=0,live=186)
+[10:47:18.673] [tid=21160] [RENDER_TRACE] [HEARTBEAT] tid=21160 up=72125ms last-api=Device::CreateShaderResourceView(tid=29636,ago=172ms) exec=7335 sig=21032 wait=9825 wctx=21032(fail=0,max-spin=16572) swap=1 present=1245 pso(G=2612,C=4021,last=93b1369f3ed4e0f4) draw(ok=0,rtv=0,bb=0,nullrtv=0,skip-pso=0,skip-vs=2001,skip-other=0,skip-vb=0,skip-ib=0,skip-map=0,missing-vb=0,missing-ib=0) disp(ok=0,skip-pso=0,skip-cs=0) placed(ok=191,ovl=0,rel=0,live=191)
+--- Successful Present samples (first two / last two) ---
+[10:46:23.003] [tid=29636] [RENDER_TRACE] [tid=29636] IDXGISwapChain::Present hr=0x00000000
+[10:46:53.862] [tid=29636] [RENDER_TRACE] [tid=29636] IDXGISwapChain::Present hr=0x00000000
+[10:47:20.093] [tid=29636] [RENDER_TRACE] [tid=29636] IDXGISwapChain::Present hr=0x00000000
+[10:47:20.101] [tid=29636] [RENDER_TRACE] [tid=29636] IDXGISwapChain::Present hr=0x00000000
+--- First and last texture staging failures ---
+[10:46:36.957] [tid=26348] Could not create texture staging resource for upload: 0x80070057
+[10:46:36.957] [tid=26348] Could not create texture staging resource for upload: 0x80070057
+[10:47:19.562] [tid=26348] Could not create texture staging resource for upload: 0x80070057
+[10:47:19.562] [tid=26348] Could not create texture staging resource for upload: 0x80070057
+--- Interpretation ---
+The final heartbeat reports draw(ok)=0 and skip-vs=2001. In commands.cpp, skip-vs increments when DrawInstanced/DrawIndexedInstanced are skipped for a graphics pipeline marked as having a placeholder VS. The log does not associate these draw calls with a PSO hash. PSO #1 being ready therefore does not prove it was used.
+Present S_OK does not prove correct pixels. The repeated staging-resource E_INVALIDARG failures are another independent issue to investigate.
+Complete verbose log omitted from this handoff; retained on the test PC. SHA-256=B9B920A0F60C621A0C9FDEFC02FEF168C28645B73AF385F89E9486917532BE1B
