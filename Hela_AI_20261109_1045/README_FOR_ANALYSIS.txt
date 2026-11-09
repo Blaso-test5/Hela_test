@@ -7,6 +7,26 @@ graphics. This focused package contains the targeted shader conversions,
 pixel-shader tracing, and a tested staging path for compressed mip tails.
 It is for code and log review, not a complete copy of the game or assets.
 
+LATEST FOLLOW-UP - 2026-11-09
+- Fixed the converter entry-point selection so HLSL with a SPIRV-Cross
+  wrapper is compiled through `main`, not its internal `vert_main` helper.
+  The helper-only bytecode had empty input/output signatures.
+- Recompiled VS 20e0826b236597a1 and 4ce363172cfd70be through `main`.
+  Their input signatures match the original DXIL signatures. Both shaders
+  loaded, with zero INPUT_LAYOUT_FAILED and zero PSO GRAPHICS FAILED.
+- Final heartbeat: present=1817, draw(ok)=2667, rtv=2667, bb=0,
+  skip-vs=0, STAGING_CREATE_FAIL=0, placed overlap=0.
+- The user observed a game window and audio but no visible game graphics.
+  No backbuffer-targeted draw was recorded, so this is not a successful
+  visual-rendering result. The process exited with 0xC0000005 after about
+  44 seconds. No matching UE crash context or Windows application-error
+  event was found; the cause of the access violation is unknown.
+- The proxy's V7 d3d12.dll and dxgi.dll and the conservative INI were
+  restored after the test. Only the original shader overrides remain
+  installed in the game.
+- Full trace and measured results: evidence\vertex-wrapper-fix-test-20261109.log
+  and evidence\vertex-wrapper-fix-test-20261109.txt.
+
 TEST SETUP
 - The game ran on this PC's GTX 1050 Ti. The destination GTX 950M has not
   been tested.
@@ -102,15 +122,21 @@ CONTENTS
   run's PipelineStateCache assertion.
 - evidence\shader-candidate-test-20261109.txt: test setup, measured results,
   and limits of the conclusions.
+- evidence\vertex-wrapper-fix-test-20261109.log and
+  evidence\vertex-wrapper-fix-test-20261109.txt: full trace and results
+  from the corrected VS wrapper-entry-point test.
+- evidence\converter-source: snapshots of the converter post-processor and
+  regression tests used for the corrected candidates. The editable source
+  remains in the local sm6-to-sm5-mcp project.
 - evidence\progress-history.txt: chronological project/test record,
-  updated with the candidate run.
+  updated with the candidate and corrected-entry-point runs.
 - evidence\build-provenance.txt and evidence\SHA256SUMS.txt: build details
   and hashes for package files.
 
 The older verbose raw logs (including the 19.1 MB instrumented run) are
-intentionally left out to avoid noise. The complete candidate-test log is
-included because it records the shader loads and PSO failures needed for the
-next diagnosis.
+intentionally left out to avoid noise. The complete candidate-test log and
+the later 14.7 MB corrected-entry-point trace are included because they
+record the shader loads and failures needed for diagnosis.
 The complete original log remains on the test PC under:
 D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\pre-render-trace-override-test-20261109-1045\d3d12on11-render-trace.log
 

@@ -1,0 +1,63 @@
+HELA CORRECTED VERTEX-SHADER ENTRY-POINT TEST
+Date: 2026-11-09 19:07-19:08 local
+
+Purpose
+Retest two candidate vertex shaders after correcting the SM6-to-SM5
+converter to compile the generated SPIRV-Cross wrapper entry point.
+Previously compiling the internal `vert_main` helper produced bytecode
+with empty input/output signatures.
+
+Setup
+- Started Hela directly on the GTX 1050 Ti with the diagnostic proxy and
+  the two corrected VS overrides:
+  20e0826b236597a1.cso (1,768 bytes) and
+  4ce363172cfd70be.cso (596 bytes).
+- The converter now selects `main` when present; `vert_main` is retained
+  as a fallback when no wrapper exists. Regression tests cover VS wrapper
+  selection and compute wrapper/numthreads handling.
+- `npm run build` and `npm test` passed in the local
+  `Plugin Nuovi\sm6-to-sm5-mcp` project. That source directory is not a
+  Git checkout; the tested source remains there at
+  `src\hlsl-post.ts` and `src\test.ts`. Exact source snapshots are included
+  in `converter-source\`.
+- Diagnostic proxy d3d12.dll SHA-256:
+  13646DD1A826E1DF864B175AD0E4205EEF31DEAEDF8E01772E4B99F8085FCA7B
+
+Observed result
+- Both candidate VS overrides loaded as shader model 5.0.
+- INPUT_LAYOUT_FAILED=0 and PSO GRAPHICS FAILED=0.
+- Final heartbeat at 19:08:39: uptime=44,297 ms; present=1,817;
+  draw(ok)=2,667; rtv=2,667; bb=0; skip-vs=0; skip-pso=0.
+- STAGING_CREATE_FAIL=0 and placed overlap=0 in this run.
+- User observation: the game window and audio started, but no game graphics
+  were visible. Since the trace records bb=0, the forwarded draws do not
+  establish that the backbuffer was rendered.
+- Process exit code: 0xC0000005 (access violation). The proxy log ends
+  during normal resource/query and fence activity, not with a recorded
+  HRESULT failure. No matching UE crash context or Windows Application
+  Error event was found. The faulting module and call stack are unknown.
+
+Interpretation limits
+The corrected candidates remove the observed input-layout and graphics
+PSO failures and allow draw commands to be forwarded. This does not prove
+semantic equivalence, correct resource bindings, backbuffer rendering, or
+a visible frame. The absence of staging failures and placed overlaps in
+this approximately 44-second run does not establish general BC staging or
+resource-aliasing correctness. Do not attribute the access violation to a
+specific shader or proxy subsystem without a dump or call stack.
+
+Restoration
+The game was restored to V7 d3d12.dll
+(SHA-256 8C92E594CBF963DE94FE2957FE6162A0D1F3E1CD718B545D3B1808AAF1FF9CC2)
+and dxgi.dll
+(SHA-256 285FC3B7349BD96C07877944DF2F9F3F65AFE3D4053C6E536F5419E34F04CEBB).
+The conservative INI and original installed overrides were restored.
+
+Files
+- vertex-wrapper-fix-test-20261109.log: complete 14,736,325-byte proxy log.
+- ../shaders/hlsl/20e0826b236597a1.converted.hlsl and
+  ../shaders/hlsl/4ce363172cfd70be.converted.hlsl: corrected input
+  semantics.
+- ../shaders/overrides/20e0826b236597a1.cso and
+  ../shaders/overrides/4ce363172cfd70be.cso: bytecode compiled through
+  the wrapper entry point.

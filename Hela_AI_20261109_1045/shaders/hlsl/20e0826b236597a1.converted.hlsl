@@ -19,12 +19,12 @@ static float4 TEXCOORD_1;
 
 struct SPIRV_Cross_Input
 {
-    float4 ATTRIBUTE : TEXCOORD0;
-    float2 ATTRIBUTE_1 : TEXCOORD1;
-    float2 ATTRIBUTE_2 : TEXCOORD2;
-    float4 ATTRIBUTE_3 : TEXCOORD3;
-    float4 ATTRIBUTE_4 : TEXCOORD4;
-    uint2 ATTRIBUTE_5 : TEXCOORD5;
+    float4 ATTRIBUTE : ATTRIBUTE0;
+    float2 ATTRIBUTE_1 : ATTRIBUTE1;
+    float2 ATTRIBUTE_2 : ATTRIBUTE2;
+    float4 ATTRIBUTE_3 : ATTRIBUTE3;
+    float4 ATTRIBUTE_4 : ATTRIBUTE4;
+    uint2 ATTRIBUTE_5 : ATTRIBUTE5;
 };
 
 struct SPIRV_Cross_Output

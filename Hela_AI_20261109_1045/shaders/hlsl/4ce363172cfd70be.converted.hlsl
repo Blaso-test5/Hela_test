@@ -5,8 +5,8 @@ static float2 TEXCOORD;
 
 struct SPIRV_Cross_Input
 {
-    float4 ATTRIBUTE : TEXCOORD0;
-    float2 ATTRIBUTE_1 : TEXCOORD1;
+    float4 ATTRIBUTE : ATTRIBUTE0;
+    float2 ATTRIBUTE_1 : ATTRIBUTE1;
 };
 
 struct SPIRV_Cross_Output

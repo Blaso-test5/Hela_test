@@ -441,19 +441,52 @@ TEST OVERRIDE CANDIDATI - 09/11/2026
   rimangono i cinque override originali. I candidati aggiunti sono stati
   rimossi dalla cartella di installazione, senza modificare gli originali.
 
+FIX ENTRY POINT VS E NUOVO TEST - 09/11/2026
+--------------------------------------------
+- Individuata la causa delle firme I/O vuote nei primi CSO: la compilazione
+  usava l'helper `vert_main` generato da SPIRV-Cross invece del wrapper
+  `main`, che trasferisce gli input/output. Corretto il post-processing
+  dell'HLSL per scegliere `main` quando presente e mantenere l'helper come
+  fallback. Aggiunti test di regressione per wrapper VS e wrapper CS con
+  `[numthreads]`; `npm run build` e `npm test` superati.
+- Rigenerati i VS 20e0826b236597a1 e 4ce363172cfd70be: input semantiche
+  `ATTRIBUTE0..5` e `ATTRIBUTE0..1`, corrispondenti alle firme DXIL
+  originali. I CSO sono stati compilati con l'entry point `main`.
+- Test Hela: entrambi i VS sono stati caricati. INPUT_LAYOUT_FAILED=0 e
+  PSO GRAPHICS FAILED=0. Heartbeat finale a 44.297 ms:
+  present=1817, draw(ok)=2667, rtv=2667, bb=0, skip-vs=0,
+  STAGING_CREATE_FAIL=0, placed overlap=0.
+- L'utente ha osservato finestra e audio ma nessuna grafica visibile.
+  `bb=0` conferma che il trace non ha registrato draw verso il backbuffer;
+  draw(ok)>0 da solo non prova un frame visibile.
+- Il processo e' terminato con 0xC0000005 (access violation). Il log termina
+  durante normali operazioni di query/risorse/fence e non registra l'errore.
+  Non e' stato trovato un crash context UE corrispondente ne' un evento
+  Windows Application Error; modulo e stack del fault restano sconosciuti.
+- Durante questo run non sono stati rilevati errori staging BC o overlap,
+  ma la durata di circa 44 secondi non dimostra la correttezza generale dei
+  percorsi staging/aliasing. Non attribuire l'access violation a uno shader
+  o componente senza dump e stack.
+- Evidenze: vertex-wrapper-fix-test-20261109.txt e il trace completo
+  vertex-wrapper-fix-test-20261109.log. I sorgenti testati restano nella
+  directory locale `Plugin Nuovi\sm6-to-sm5-mcp` (non e' un checkout Git);
+  snapshot dei file `hlsl-post.ts` e `test.ts` inclusi in
+  `evidence\converter-source` con shader, log e risultati del test.
+- Ripristinati DLL V7, INI conservativa e override originari del gioco.
+
 PROSSIMI PASSI
 --------------
-1. Analizzare INPUT_LAYOUT_FAILED nei 35 PSO rifiutati, usando la
-   descrizione PSO, i VS effettivamente legati e i candidati convertiti;
-   non attribuire il problema a uno shader specifico senza conferma.
-2. Ripetere test controllati piu' brevi con un solo set di override alla
-   volta. Verificare che PSO venga creato e che draw(ok) aumenti; la sola
-   presenza di SHADER READY non prova l'equivalenza dello shader.
-3. Nel run in-game verificare le copie staging BC nel percorso reale e
-   confermare la grafica osservando un frame, non solo il contatore Present.
-4. Eseguire successivamente i test sulla GTX 950M; la compatibilita' resta
-   non verificata.
-5. Indagare gli overlap placement dei run precedenti senza rimuovere i
-   controlli o fingere aliasing heap D3D12.
+1. Raccogliere un dump/stack per l'access violation 0xC0000005; il log
+   disponibile non identifica il modulo o il call stack responsabile.
+2. Diagnosticare perche' le 2667 draw inoltrate hanno rtv=2667 ma bb=0;
+   nessun frame visibile e' stato verificato.
+3. Verificare firma semantica, binding e output sul render target dei VS
+   corretti; la scomparsa degli errori di input-layout/PSO non prova
+   equivalenza semantica.
+4. Proseguire la verifica in-game del percorso staging BC con un run
+   riproducibile e di durata sufficiente, registrando l'esito visivo.
+5. Testare la GTX 950M solo dopo aver stabilizzato e verificato il rendering
+   sulla GTX 1050 Ti. Non rimuovere i controlli di overlap o simulare
+   l'aliasing D3D12 senza una corretta implementazione.
 
 FINE DEL RICORDO
