@@ -7,6 +7,22 @@ graphics. This focused package contains the targeted shader conversions,
 pixel-shader tracing, and a tested staging path for compressed mip tails.
 It is for code and log review, not a complete copy of the game or assets.
 
+PROJECTS AND REPRODUCTION
+- `Plugin Nuovi\sm6-to-sm5-mcp` is the Shader Lab: its TypeScript MCP server
+  analyzes/converts shader HLSL and prepares SM5 candidates.
+- `Plugin Nuovi\sm6-to-sm5-mcp\d3d12on11` is a separate native C++ project
+  colocated in that workspace. It builds the D3D12-to-D3D11 proxy DLLs and
+  contains the proxy's CMake build and native smoke tests. Hela in-game
+  proxy runs use these DLLs; they are not runs of the Shader Lab server.
+- `proxy-source` in this package is the portable Git snapshot of the
+  `d3d12on11` CMakeLists, source, generated headers, tests, and tools.
+  The local workspace itself is not a Git checkout. Use this committed
+  snapshot to reproduce the proxy build on another PC; do not copy the
+  machine-specific `build*` or `backups` directories.
+- `runtime\bin` contains the exact diagnostic DLL artifacts used by the
+  documented Hela test. The CMake source snapshot is the build input;
+  `evidence\build-provenance.txt` records the tested build and DLL hashes.
+
 LATEST FOLLOW-UP - 2026-11-09
 - Fixed the converter entry-point selection so HLSL with a SPIRV-Cross
   wrapper is compiled through `main`, not its internal `vert_main` helper.
@@ -100,8 +116,8 @@ INTERPRETATION / REVIEW QUESTIONS
    In-game behavior of this fix remains unverified.
 
 CONTENTS
-- proxy-source: CMakeLists.txt plus the proxy src, generated headers, and
-  smoke-test sources needed to inspect the implementation.
+- proxy-source: portable CMake project snapshot, including proxy source,
+  generated headers, native tests, and build/helper tools.
 - runtime\bin: exact diagnostic d3d12.dll and dxgi.dll used in the run.
 - runtime\config: diagnostic INI and binding map used in the run.
 - shaders\original-dxil: dumped shader inputs, including the additional

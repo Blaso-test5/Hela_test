@@ -1,7 +1,23 @@
 ﻿BUILD AND ARTIFACT PROVENANCE
-Project source: D:\Plugin_ChatGpt\GHIDRA MCP\Plugin Nuovi\sm6-to-sm5-mcp\d3d12on11
-Build output: build-retest-20261106\Release; Visual Studio 17 2022 generator; CMake 3.31.9; x64; CMakeLists uses C++17.
-The project directory is not a Git repository; no commit ID is available. The diagnostic runtime DLL copied here hash-identically to that build output.
+Project source used for the test: the native C++ project at
+`Plugin Nuovi\sm6-to-sm5-mcp\d3d12on11` on the test PC.
+The portable, versioned source snapshot is in `proxy-source` at the root of
+this package. The original workspace is not a Git repository; this Hela_test
+repository is the canonical versioned copy for transferring the tested
+source to another PC.
+Build output: `build-retest-20261106\Release`; Visual Studio 17 2022
+generator; CMake 3.31.9; x64; CMakeLists uses C++17. Generated build
+directories and backups are machine-specific and are not part of the source
+snapshot; configure a fresh build from `proxy-source\CMakeLists.txt`.
+From the Hela_test repository root on Windows, the corresponding commands
+are:
+  cmake -S Hela_AI_20261109_1045\proxy-source -B build-proxy -A x64
+  cmake --build build-proxy --config Release
+  ctest --test-dir build-proxy -C Release --output-on-failure
+
+The Hela run on 2026-11-09 used the corrected shader CSOs but the same
+diagnostic proxy DLL built at 18:00:41. No native proxy source changes were
+made between that build and the 19:07-19:08 game run.
 
 Final diagnostic d3d12.dll:
 runtime\bin\d3d12.dll size=321536 sha256=13646DD1A826E1DF864B175AD0E4205EEF31DEAEDF8E01772E4B99F8085FCA7B
@@ -10,6 +26,17 @@ dxgi.dll remains the diagnostic binary from the earlier instrumented run, size=3
 
 Validation:
 - CTest Release: 5/5 passed, including d3d11_bc_mip_staging_smoke.
+- CTest build output: `build-retest-20261106\Release`; the native test
+  sources and CMake definitions are versioned in `proxy-source`.
+- A fresh configure/build from this committed `proxy-source` snapshot also
+  passed CTest 5/5 on 2026-11-09 using Visual Studio 17 2022, x64, and
+  Windows SDK 10.0.26100.0. The temporary build directory was removed.
+  Its newly built d3d12.dll SHA-256 was
+  868E4E0E1434A6965428A522FDE15B87F5AA2EAC83443D224365F2E8B97406AA
+  and dxgi.dll was
+  D469377F54A7BB5508367511267CAC8D89EF27114D7CCAD4677F720E8CBE7156.
+  These clean-build outputs were not used in the Hela run; use the hashes
+  above under “Final diagnostic” for the exact tested runtime binaries.
 - D3D11 hardware BC1 and BC7 mip-tail upload/readback round-trip passed
   for 2x2 and 1x1 subresources on this GTX 1050 Ti PC.
 - Five HLSL candidates compiled with FXC to vs_5_0 / ps_5_0. This verifies
