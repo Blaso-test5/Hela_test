@@ -537,21 +537,38 @@ TEST HELA CON CRASH DIAGNOSTICS - 09/11/2026
   `evidence\crash-handler-hela-run-20261109.log` e
   `evidence\crash-handler-hela-test-20261109.txt`.
 
+TEST GPU-SPECIFICO HELA GTX 950M - 10/11/2026
+------------------------------------------------
+- Rilevata NVIDIA GeForce GTX 950M, device 0x139A, driver 582.78, 4 GiB.
+  Il test e' stato eseguito prima con la configurazione conservativa e poi
+  con il proxy diagnostico, caller/render tracing e i due VS corretti.
+- Il run conservativo e' terminato con exit code 0 dopo circa 13 secondi,
+  senza creare la finestra principale del gioco. Il run diagnostico ha
+  mostrato la finestra di crash Unreal e terminato con exit code 3 dopo
+  circa 10 secondi.
+- Il log identifica la causa immediata dell'assert: Hela richiede un buffer
+  reserved da 2 GiB; il device D3D11 della GTX 950M espone Tiled Resources
+  Tier 1, mentre il percorso proxy richiede Tier 2 e restituisce
+  E_NOTIMPL (0x80004001).
+- Il run non ha raggiunto PSO, swapchain Present o draw; non dimostra un
+  frame nero o rendering visibile. Non e' stato forzato un tier superiore.
+- DLL, INI e override originali sono stati ripristinati dopo la prova.
+  Log e crash summary sanitizzato sono in `evidence\GTX_950M`; il
+  CrashContext originale e il minidump non sono stati pubblicati.
+
 PROSSIMI PASSI
 --------------
-1. Ripetere il run con acquisizione controllata dell'exit code e osservazione
-   della finestra; il test attuale non ha prodotto un report AV e non prova
-   una terminazione per access violation.
-2. Diagnosticare perche' il run corrente ha `swap=0` e `present=0`, oltre
-   ai quattro errori placed-resource overlap; nessun frame visibile e'
-   stato verificato.
+1. Verificare se esiste un percorso reserved-resource onesto e compatibile
+   con Tiled Resources Tier 1 prima di ulteriori run Hela sulla GTX 950M.
+   Non simulare Tier 2/3: questo nasconderebbe la limitazione reale.
+2. Sulla GTX 1050 Ti, diagnosticare perche' i run precedenti avevano
+   `swap=0` e `present=0`, oltre agli errori placed-resource overlap.
 3. Verificare firma semantica, binding e output sul render target dei VS
    corretti; la scomparsa degli errori di input-layout/PSO non prova
    equivalenza semantica.
 4. Proseguire la verifica in-game del percorso staging BC con un run
    riproducibile e di durata sufficiente, registrando l'esito visivo.
-5. Testare la GTX 950M solo dopo aver stabilizzato e verificato il rendering
-   sulla GTX 1050 Ti. Non rimuovere i controlli di overlap o simulare
-   l'aliasing D3D12 senza una corretta implementazione.
+5. Non rimuovere i controlli di overlap o simulare l'aliasing D3D12 senza
+   una corretta implementazione.
 
 FINE DEL RICORDO

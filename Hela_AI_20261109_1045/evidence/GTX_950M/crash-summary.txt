@@ -1,0 +1,26 @@
+HELA GTX 950M DIAGNOSTIC RUN
+Date: 2026-11-10
+
+GPU: NVIDIA GeForce GTX 950M (device 0x139A)
+Driver: 582.78
+Dedicated memory: 4096 MiB
+Process: Hela-Win64-Shipping.exe
+Exit code: 3 (0x00000003), approximately 10 seconds after launch
+Unreal crash type: Assert
+
+Assertion:
+CreateReservedResource failed in D3D12RHI with HRESULT 0x80004001
+(E_NOTIMPL).
+
+The proxy trace identifies the request as a 2 GiB reserved buffer. The
+selected NVIDIA D3D11 device reports Tiled Resources Tier 1, while this
+reserved-resource path requires Tier 2. The proxy therefore rejects the
+request before PSO creation, swapchain Present, or drawing.
+
+No visual rendering result was obtained. This is a hardware-capability
+limitation observed in this run, not evidence that a black-screen frame was
+rendered.
+
+The original CrashContext.runtime-xml and UEMinidump.dmp are intentionally
+not included. The report's machine/login identifiers and the process memory
+dump are not needed to document this result.

@@ -7,6 +7,21 @@ graphics. This focused package contains the targeted shader conversions,
 pixel-shader tracing, and a tested staging path for compressed mip tails.
 It is for code and log review, not a complete copy of the game or assets.
 
+LATEST GPU-SPECIFIC TEST - 2026-11-10
+- The GTX 950M was tested on this PC. Its D3D11 device reports Tiled
+  Resources Tier 1. Hela requests a 2 GiB reserved buffer; the proxy's
+  reserved-resource path requires Tier 2 and returns E_NOTIMPL.
+- With the conservative configuration, Hela exited with code 0 after about
+  13 seconds without creating the game window. With diagnostic tracing and
+  corrected vertex-shader overrides, Unreal displayed its crash window and
+  exited with code 3 after about 10 seconds.
+- The diagnostic run stopped before PSO creation, swapchain Present, or
+  drawing. It did not demonstrate a black-screen frame or visible rendering.
+- The original game DLLs, INI, and shader overrides were restored. The
+  GTX 950M-only logs and sanitized crash summary are in
+  `evidence\GTX_950M`. Machine/login identifiers and the process minidump
+  were not included.
+
 PROJECTS AND REPRODUCTION
 - `Plugin Nuovi\sm6-to-sm5-mcp` is the Shader Lab: its TypeScript MCP server
   analyzes/converts shader HLSL and prepares SM5 candidates.
@@ -70,7 +85,8 @@ TEST SETUP
   production configuration.
 - The game's native D3D11 renderer is not enabled. Hela still calls D3D12;
   the proxy translates only the D3D12 subset it implements to D3D11.
-- This PC's GTX 1050 Ti was used. The destination GTX 950M remains untested.
+- These earlier runs used the GTX 1050 Ti. The separate GTX 950M test and
+  its Tier 1 reserved-resource limitation are documented above.
 
 TEST RESULT
 - The proxy loaded VS a7f30e5d1d5fc6fb (692-byte vs_5_0 override) and PS
@@ -177,6 +193,8 @@ CONTENTS
   remains in the local sm6-to-sm5-mcp project.
 - evidence\progress-history.txt: chronological project/test record,
   updated with the candidate and corrected-entry-point runs.
+- evidence\GTX_950M: GPU-specific baseline and diagnostic logs from
+  2026-11-10 plus a sanitized crash summary. No minidump is included.
 - evidence\build-provenance.txt and evidence\SHA256SUMS.txt: build details
   and hashes for package files.
 
