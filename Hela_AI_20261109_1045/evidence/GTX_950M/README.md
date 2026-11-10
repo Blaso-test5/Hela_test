@@ -2,6 +2,9 @@
 
 Run date: 2026-11-10
 
+For the latest continuation state and next diagnostic run, see
+[`checkpoint-20261110.md`](./checkpoint-20261110.md).
+
 This directory contains only evidence from the Hela run on this PC's NVIDIA
 GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
 
