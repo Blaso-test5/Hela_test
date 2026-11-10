@@ -58,13 +58,25 @@ void RecordDrawExecution(ExecState& state, bool indexed) {
         hasRtv = hasRtv || static_cast<bool>(state.rtvs[i]);
     if (hasRtv) {
         stats.drawWithRtv.fetch_add(1, std::memory_order_relaxed);
-        if (state.rtvBackbuffer)
+        if (state.rtvBackbuffer) {
             stats.drawWithBackbuffer.fetch_add(1, std::memory_order_relaxed);
+            Log("[BACKBUFFER] Draw to backbuffer detected! api=%s vs-hash=%016llx ps-hash=%016llx",
+                indexed ? "DrawIndexed" : "Draw",
+                static_cast<unsigned long long>(state.graphicsShaderHash),
+                static_cast<unsigned long long>(state.graphicsPixelShaderHash));
+        }
     } else {
         stats.drawNullRtv.fetch_add(1, std::memory_order_relaxed);
     }
     if (!state.hasVertexBuffer) stats.drawMissingVb.fetch_add(1, std::memory_order_relaxed);
     if (indexed && !state.hasIndexBuffer) stats.drawMissingIb.fetch_add(1, std::memory_order_relaxed);
+}
+
+void LogBackbufferCopy(const char* operation, const Resource* destination,
+    const Resource* source) {
+    if (!Cfg().diagnosticRenderTrace || !destination || !destination->backbuffer) return;
+    Log("[BACKBUFFER] Copy to backbuffer detected! api=%s dst=%p src=%p",
+        operation, destination, source);
 }
 
 void LogSkippedDraw(const ExecState& state, const char* operation,
@@ -941,9 +953,11 @@ void STDMETHODCALLTYPE CommandList::CopyTextureRegion(const D3D12_TEXTURE_COPY_L
     Add([=](ExecState& state) {
         auto* dstResource = dynamic_cast<Resource*>(keepDst.Get());
         auto* srcResource = dynamic_cast<Resource*>(keepSrc.Get());
-        if (dstResource && srcResource)
+        if (dstResource && srcResource) {
+            LogBackbufferCopy("CopyTextureRegion", dstResource, srcResource);
             state.c->CopySubresourceRegion(dstResource->Raw(), dstSubresource, x, y, z,
                                            srcResource->Raw(), srcSubresource, &box);
+        }
     });
         return;
     }
@@ -1041,6 +1055,7 @@ void STDMETHODCALLTYPE CommandList::CopyTextureRegion(const D3D12_TEXTURE_COPY_L
             }
             const D3D11_BOX box{region.left, region.top, region.front,
                 region.right, region.bottom, region.back};
+            LogBackbufferCopy("CopyTextureRegion", dstResource, srcResource);
             state.c->CopySubresourceRegion(dstResource->Raw(), subresource, x, y, z,
                 stagingTexture.Get(), stagingSubresource, &box);
         });
@@ -1173,7 +1188,10 @@ void STDMETHODCALLTYPE CommandList::CopyResource(ID3D12Resource* destination, ID
     Add([keepDst, keepSrc](ExecState& state) {
         auto* dstResource = dynamic_cast<Resource*>(keepDst.Get());
         auto* srcResource = dynamic_cast<Resource*>(keepSrc.Get());
-        if (dstResource && srcResource) state.c->CopyResource(dstResource->Raw(), srcResource->Raw());
+        if (dstResource && srcResource) {
+            LogBackbufferCopy("CopyResource", dstResource, srcResource);
+            state.c->CopyResource(dstResource->Raw(), srcResource->Raw());
+        }
     });
 }
 

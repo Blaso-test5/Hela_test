@@ -12,6 +12,17 @@
 
 namespace {
 
+void LogDxgi(const char* format, ...) {
+    char message[512]{};
+    va_list args;
+    va_start(args, format);
+    const int written = vsnprintf(message, sizeof(message), format, args);
+    va_end(args);
+    if (written < 0) return;
+    message[sizeof(message) - 1] = '\0';
+    D3D12On11LogMessage(message);
+}
+
 bool DiagnosticMaskNvidiaAdapter() {
     wchar_t value[2]{};
     return GetEnvironmentVariableW(L"D3D12ON11_DIAGNOSTIC_MASK_NVIDIA",
@@ -464,13 +475,30 @@ HRESULT STDMETHODCALLTYPE SwapChain::GetDevice(REFIID riid, void** out) {
 }
 
 HRESULT STDMETHODCALLTYPE SwapChain::GetBuffer(UINT index, REFIID riid, void** out) {
-    if (!out) return E_POINTER;
+    LogDxgi("[SWAPCHAIN] GetBuffer called index=%u riid=%08lx-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+        index, riid.Data1, static_cast<unsigned int>(riid.Data2),
+        static_cast<unsigned int>(riid.Data3),
+        static_cast<unsigned int>(riid.Data4[0]), static_cast<unsigned int>(riid.Data4[1]),
+        static_cast<unsigned int>(riid.Data4[2]), static_cast<unsigned int>(riid.Data4[3]),
+        static_cast<unsigned int>(riid.Data4[4]), static_cast<unsigned int>(riid.Data4[5]),
+        static_cast<unsigned int>(riid.Data4[6]), static_cast<unsigned int>(riid.Data4[7]));
+    if (!out) {
+        LogDxgi("[SWAPCHAIN] GetBuffer rejected null output pointer");
+        return E_POINTER;
+    }
     *out = nullptr;
     Ptr<ID3D11Texture2D> texture;
     HRESULT result = real->GetBuffer(index, __uuidof(ID3D11Texture2D),
         reinterpret_cast<void**>(texture.Put()));
-    if (FAILED(result)) return result;
-    return D3D12On11WrapBackbuffer(source, texture.Get(), riid, out);
+    if (FAILED(result)) {
+        LogDxgi("[SWAPCHAIN] GetBuffer failed hr=0x%08lx", result);
+        return result;
+    }
+    LogDxgi("[SWAPCHAIN] GetBuffer acquired texture=%p", texture.Get());
+    result = D3D12On11WrapBackbuffer(source, texture.Get(), riid, out);
+    LogDxgi("[SWAPCHAIN] GetBuffer wrapping completed hr=0x%08lx resource=%p",
+        result, *out);
+    return result;
 }
 
 HRESULT STDMETHODCALLTYPE SwapChain::Present(UINT interval, UINT flags) {

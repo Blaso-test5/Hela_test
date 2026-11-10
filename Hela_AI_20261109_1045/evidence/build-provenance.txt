@@ -67,3 +67,17 @@ This diagnostic build has not been run in Hela. The handler is disabled by
 default; set `D3D12ON11_CRASH_DIAGNOSTICS=1` for the controlled run. Full
 details and limitations are in
 `evidence\crash-handler-build-test-20261109.txt`.
+
+Backbuffer tracing build and GTX 950M run, 2026-11-10:
+The active proxy sources were instrumented to log swapchain `GetBuffer`,
+backbuffer wrapping, draw-to-backbuffer, and copy-to-backbuffer operations.
+The Hela run used `d3d12.dll` SHA-256
+`C8F007865EF1EBAEDEF547C07885F0D893F150F7DCEBB9DD2F534E9366F260D4` and
+`dxgi.dll` SHA-256
+`C5D86B1D4565E49DC782D989CA362995D8514D946900ECE408EB09A0B4B62027`.
+The DXGI log was then corrected to print the complete requested IID; the
+rebuilt `dxgi.dll` SHA-256 is
+`FC48DBFF52FD705FB3211BAD2AC9EC6834EEA5E7C71A1B971723CA6636646D03`.
+After that format-only change, `dxgi_proxy_smoke` and
+`dxgi_swapchain_smoke` passed (2/2). The game DLLs were restored after the
+run; see `evidence\GTX_950M\backbuffer-copy-test-summary.txt`.

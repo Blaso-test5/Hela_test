@@ -69,6 +69,27 @@ GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
   Details and the full trace are in `pixel-shader-test-summary.txt` and
   `d3d12on11-tier0-ps-overrides-test.log`.
 
+## Backbuffer copy trace
+
+- The instrumented DXGI path logged 7,057 successful `GetBuffer` wraps;
+  each corresponding resource was flagged as a backbuffer. The native
+  swapchain texture is 1536x864, format 24 (`R10G10B10A2_UNORM`).
+- The run recorded 3,527 `CopyResource` operations targeting a backbuffer
+  and 3,527 successful Presents. The first observed backbuffer copy
+  immediately preceded a successful Present. This points to a copy/blit
+  composite, not a draw directly to the swapchain buffer.
+- `draw(ok)=3903` and `bb=0` are consistent with that route: no draw was
+  classified as targeting the backbuffer. The process exited with code
+  `16384` after about 135 seconds; its window was observed for about 103
+  seconds.
+- This confirms the proxy submits copies into the swapchain texture, but
+  no pixel readback or screenshot was captured. A visible rendered image
+  is therefore still unverified. Next, inspect the copy source and capture
+  a bounded backbuffer readback before Present.
+- DLLs, INI, and all staged overrides were restored. The raw 59 MB trace
+  remains in the local test backup; only the sanitized summary is included
+  in this evidence directory.
+
 ## Files
 
 - `d3d12on11-before.log`: baseline launch log from the conservative setup.
@@ -79,3 +100,5 @@ GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
 - `d3d12on11-tier0-ps-overrides-test.log`: full trace after staging the
   three missing PS overrides.
 - `pixel-shader-test-summary.txt`: results and interpretation of the PS test.
+- `backbuffer-copy-test-summary.txt`: sanitized GetBuffer, resource-wrap,
+  backbuffer-copy, and Present counts from the instrumented run.

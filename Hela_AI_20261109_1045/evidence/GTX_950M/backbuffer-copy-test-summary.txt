@@ -1,0 +1,39 @@
+HELA GTX 950M BACKBUFFER COPY TRACE
+Date: 2026-11-10
+
+Setup
+- GTX 950M, device 0x139A, driver 582.78.
+- Instrumented D3D12 and DXGI proxy DLLs; Tier 0 and diagnostic tracing
+  enabled temporarily. Shader Model 6.7 was advertised, and the same seven
+  baseline / corrected VS / candidate PS overrides as the prior run were
+  staged.
+- The game window was observed for about 103 seconds. The process exited
+  with code 16384 after about 135 seconds. This code is not attributed to
+  a particular crash.
+
+Backbuffer path
+- 7,057 GetBuffer calls were logged; all 7,057 acquired textures and
+  completed wrapping successfully. Each wrapped resource was flagged as
+  a backbuffer.
+- Native swapchain texture: 1536x864, format 24
+  (DXGI_FORMAT_R10G10B10A2_UNORM), bind flags 0x28.
+- 3,527 CopyResource operations targeted a backbuffer; the log also has
+  3,527 successful Present records. The first observed CopyResource to the
+  backbuffer immediately preceded a successful Present.
+- No draw-to-backbuffer event was logged. Final heartbeat:
+  present=3527, draw(ok)=3903, rtv=3903, bb=0, skip-vs=40381,
+  skip-other=0, placed(ok)=334, overlap=6.
+- The proxy's bb counter tracks draws. Its zero value is expected when
+  the final swapchain update uses CopyResource instead of a draw.
+
+Interpretation
+The evidence confirms the proxy gets and wraps the swapchain texture, then
+issues a CopyResource into it once per successful Present in this run.
+This identifies a copy/blit path for the final composite; a composite PS
+is not required for that copy. The log records the copy call before it is
+issued, but no pixel readback or screenshot was captured, so the resulting
+pixel values and a visible image remain unverified. The full 59 MB trace
+is kept in the local test backup and is not included here.
+
+The original d3d12.dll, dxgi.dll, INI, and three installed override files
+were restored and hash-checked. No minidump is included.

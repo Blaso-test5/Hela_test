@@ -612,20 +612,44 @@ TEST OVERRIDE PIXEL SHADER - GTX 950M - 10/11/2026
 - Riepilogo e trace completo in `evidence\GTX_950M`; nessun minidump
   pubblicato.
 
+TRACE GETBUFFER E COPY DEL BACKBUFFER - GTX 950M - 10/11/2026
+-------------------------------------------------------------
+- Aggiunto logging diagnostico a `SwapChain::GetBuffer`,
+  `D3D12On11WrapBackbuffer`, `RecordDrawExecution` e alle copie texture /
+  `CopyResource` con destinazione backbuffer. Ricompilati i proxy; smoke
+  test `dxgi_proxy_smoke` e `dxgi_swapchain_smoke` passati (2/2).
+- Nel run controllato: 7.057 GetBuffer wrap riusciti e altrettante risorse
+  marcate backbuffer; texture nativa 1536x864, formato 24
+  (`R10G10B10A2_UNORM`).
+- Registrati 3.527 `CopyResource` con destinazione backbuffer e 3.527
+  Present riusciti. La prima copia osservata precede immediatamente un
+  Present riuscito. Il composite finale passa quindi dal percorso di copia,
+  non da una draw diretta sulla swapchain.
+- Heartbeat: `present=3527`, `draw(ok)=3903`, `bb=0`,
+  `skip-vs=40381`, `placed(ok)=334`, `overlap=6`. Il contatore `bb`
+  considera draw, quindi resta zero anche con la copia per frame.
+- Finestra osservata per circa 103 secondi; processo uscito con codice
+  `16384` dopo circa 135 secondi. Il codice non e' stato attribuito a un
+  crash specifico. Nessun pixel readback o screenshot: immagine visibile
+  ancora non verificata.
+- DLL, INI e override originali ripristinati. Riepilogo sanitizzato in
+  `evidence\GTX_950M\backbuffer-copy-test-summary.txt`; trace integrale
+  da 59 MB mantenuto solo nel backup locale.
+
 PROSSIMI PASSI
 --------------
-1. Verificare perche' tutti i 2.505 draw riusciti sono su render target
-   non identificati come backbuffer; acquisire un'immagine o pixel readback
-   per stabilire se e' stato prodotto un frame visibile.
+1. Verificare i pixel del backbuffer dopo il `CopyResource` e prima del
+   Present con un readback limitato o screenshot controllato.
 2. Verificare firma semantica, binding e output dei candidati shader; il
    caricamento e l'assenza di skip non provano equivalenza visiva.
-3. Indagare l'access violation solo con evidenza di fault/module/stack;
-   non attribuirla al Tier 0 o agli shader in assenza di tale evidenza.
-4. Sulla GTX 1050 Ti, diagnosticare perche' i run precedenti avevano
+3. Analizzare i 40.381 skip VS rimasti e i 6 overlap placed-resource senza
+   rimuovere i controlli di sicurezza.
+4. Indagare l'uscita `16384` solo con evidenza di fault/module/stack.
+5. Sulla GTX 1050 Ti, diagnosticare perche' i run precedenti avevano
    `swap=0` e `present=0`, oltre agli errori placed-resource overlap.
-5. Proseguire la verifica in-game del percorso staging BC con un run
+6. Proseguire la verifica in-game del percorso staging BC con un run
    riproducibile e di durata sufficiente, registrando l'esito visivo.
-6. Non rimuovere i controlli di overlap o simulare l'aliasing D3D12 senza
+7. Non simulare l'aliasing D3D12 senza
    una corretta implementazione.
 
 FINE DEL RICORDO
