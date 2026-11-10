@@ -1,0 +1,26 @@
+Run: 1050ti-cbv-readback-20261110-1942
+Log sorgente: D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\d3d12on11.log
+Profilo incluso: run-profile.txt
+
+[19:46:05.137] === D3D12On11 diagnostic session ===
+[19:46:05.137] Config diagnostic-render-trace=1
+[19:47:25.805] [TARGET_ROOT_BIND] draw=1 root=0000018C61891EA0 params=4 heaps=2
+[19:47:25.805] [TARGET_ROOT_PARAM] draw=1 index=2 type=2 visibility=5 arg_kind=2 arg_value=0x103740000 ranges=0
+[19:47:25.806] [TARGET_ROOT_PARAM] draw=1 index=3 type=2 visibility=1 arg_kind=2 arg_value=0x103730100 ranges=0
+[19:47:25.805] [TARGET_ROOT_CBV] draw=1 index=2 stages=0x10 gpu_va=0x103740000 resource=0000018C6181DE90 resource_va=0x103730000 offset=65536 width=4194304 heap=2 cb_bytes=65536 shadow_bytes=4194304 shadow_status=ok words=3f800000,3ee8ba2e,00000000,3f800000 floats=1,0.454545438,0,1
+[19:47:25.806] [TARGET_ROOT_CBV] draw=1 index=3 stages=0x1 gpu_va=0x103730100 resource=0000018C6181DE90 resource_va=0x103730000 offset=256 width=4194304 heap=2 cb_bytes=65536 shadow_bytes=4194304 shadow_status=ok words=3acccccd,00000000,00000000,00000000 floats=0.00156250002,0,0,0
+[19:47:25.816] [TARGET_CBV] hit=1 stage=VS slot=0 buffer=0000018C102F2738 width=65536 status=ok words=3acccccd,00000000,00000000,00000000 floats=0.00156250002,0,0,0
+[19:47:25.816] [TARGET_CBV] hit=1 stage=PS slot=0 buffer=0000018C102F2F38 width=65536 status=ok words=3f800000,3ee8ba2e,00000000,3f800000 floats=1,0.454545438,0,1
+[19:47:25.818] [TARGET_PS_BINDINGS] hit=1 srv_mask=0x0001 srv0=0000018C5D3DED80 resource0=0000018C5D42E138 srv_dimension=4 srv_format=28 resource_dimension=3 texture_size=1x1 texture_format=27 sampler0=0000018C5D3E3AE0 sampler_filter=20 address=3/3/3
+[19:47:25.818] [TARGET_DRAW_DIAG] hit=1 resource_hit=1 vs=20e0826b236597a1 ps=44b0a992c2304254 indices=6 instances=1 start_index=0 base_vertex=0 start_instance=0 ib=0000018C616E7178 ib_format=42 ib_offset=393216 vb_mask=0x00000001 vb_count=1 vb0_stride=44 vb0_offset=262240 topology=4
+[19:47:25.818] [TARGET_DRAW_DIAG] hit=1 rtv=0000018C61872778 rtv_format=24 rtv_resource=0000018C61B36FF8 tracked_resource=0000018C61B36FF8 previous_copy_source=0000018C618102F8 previous_copy_sequence=1 matches_previous_copy_source=0 dsv=0000000000000000
+[19:47:25.818] [TARGET_DRAW_DIAG] hit=1 viewports=1 first_viewport=(0.0,0.0,1280.0,720.0) scissors=1 first_scissor=(0,0,1280,720) raster_bound=1 cull=1 scissor_enable=1 depth_bound=1 depth_enable=0 stencil_enable=0 depth_write=1 blend_bound=1 blend_enable=1 write_mask=0xf sample_mask=0xffffffff stencil_ref=0
+
+Valori PS b0 successivi misurati:
+[19:47:25.818] [TARGET_ROOT_CBV] draw=2 index=2 stages=0x10 gpu_va=0x103740100 resource=0000018C6181DE90 resource_va=0x103730000 offset=65792 width=4194304 heap=2 cb_bytes=65536 shadow_bytes=4194304 shadow_status=ok words=400ccccd,3f800000,00000000,3f800000 floats=2.20000005,1,0,1
+[19:47:25.849] [TARGET_ROOT_CBV] draw=3 index=2 stages=0x10 gpu_va=0x103740200 resource=0000018C6181DE90 resource_va=0x103730000 offset=66048 width=4194304 heap=2 cb_bytes=65536 shadow_bytes=4194304 shadow_status=ok words=3f800000,3ee8ba2e,00000000,3f800000 floats=1,0.454545438,0,1
+[19:47:25.850] [TARGET_ROOT_CBV] draw=4 index=2 stages=0x10 gpu_va=0x103740300 resource=0000018C6181DE90 resource_va=0x103730000 offset=66304 width=4194304 heap=2 cb_bytes=65536 shadow_bytes=4194304 shadow_status=ok words=400ccccd,3f800000,00000000,3f800000 floats=2.20000005,1,0,1
+
+Nel run sono stati registrati 12 TARGET_ROOT_BIND, 24 TARGET_ROOT_CBV,
+18 TARGET_DRAW_DIAG e 12 TARGET_CBV. La lettura staging dei primi 16 byte
+per i constant buffer D3D11 risulta status=ok.

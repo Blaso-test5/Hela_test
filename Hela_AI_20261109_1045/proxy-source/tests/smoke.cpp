@@ -212,7 +212,27 @@ static int RunComputeSmoke(ID3D12Device* device) {
     srv.Buffer.NumElements = 64;
     srv.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
     D3D12_CPU_DESCRIPTOR_HANDLE srvHandle{cpuStart.ptr + descriptorStride};
-    device->CreateShaderResourceView(input, &srv, srvHandle);
+    D3D12_DESCRIPTOR_HEAP_DESC stagingHeapDesc{};
+    stagingHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    stagingHeapDesc.NumDescriptors = 1;
+    ID3D12DescriptorHeap* stagingHeap = nullptr;
+    result = device->CreateDescriptorHeap(&stagingHeapDesc, __uuidof(ID3D12DescriptorHeap),
+        reinterpret_cast<void**>(&stagingHeap));
+    if (FAILED(result)) {
+        constantInput->Release();
+        input->Release();
+        descriptorHeap->Release();
+        output->Release();
+        pipeline->Release();
+        rootSignature->Release();
+        return 15;
+    }
+    const D3D12_CPU_DESCRIPTOR_HANDLE stagingHandle =
+        stagingHeap->GetCPUDescriptorHandleForHeapStart();
+    device->CreateShaderResourceView(input, &srv, stagingHandle);
+    device->CopyDescriptors(1, &srvHandle, nullptr, 1, &stagingHandle, nullptr,
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    stagingHeap->Release();
 
     D3D12_RESOURCE_DESC textureDesc{};
     textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;

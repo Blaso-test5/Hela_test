@@ -8,6 +8,29 @@ DescriptorHeap* GetHeap(SIZE_T handle, UINT* index) {
     return heap;
 }
 
+void TraceTargetDescriptorWrite(const char* operation, DescriptorHeap* heap, UINT index,
+                                const Descriptor& descriptor,
+                                const DescriptorHeap* sourceHeap = nullptr,
+                                UINT sourceIndex = UINT_MAX) {
+    constexpr UINT firstIndex = 1998;
+    constexpr UINT endIndex = 2064;
+    static std::atomic<UINT> cpuHeapTraceCount{0};
+    static std::atomic<UINT> gpuHeapTraceCount{0};
+    if (!Cfg().diagnosticRenderTrace || index < firstIndex || index >= endIndex)
+        return;
+    auto& traceCount = heap->gpuBase ? gpuHeapTraceCount : cpuHeapTraceCount;
+    const UINT traceLimit = heap->gpuBase ? 512 : 64;
+    if (traceCount.fetch_add(1, std::memory_order_relaxed) >= traceLimit)
+        return;
+    Log("[TARGET_DESCRIPTOR_WRITE] op=%s heap=%p heap_type=%u gpu_base=0x%llx index=%u kind=%u "
+        "srv=%p resource=%p source_heap=%p source_gpu_base=0x%llx source_index=%u",
+        operation, heap, static_cast<unsigned int>(heap->hd.Type),
+        static_cast<unsigned long long>(heap->gpuBase), index,
+        static_cast<unsigned int>(descriptor.kind), descriptor.srv.Get(), descriptor.keep.Get(),
+        sourceHeap, static_cast<unsigned long long>(sourceHeap ? sourceHeap->gpuBase : 0),
+        sourceIndex);
+}
+
 Resource* AsResource(ID3D12Resource* resource) {
     return resource ? dynamic_cast<Resource*>(resource) : nullptr;
 }
@@ -16,6 +39,7 @@ void Store(D3D12_CPU_DESCRIPTOR_HANDLE handle, Descriptor&& descriptor) {
     UINT index = 0;
     DescriptorHeap* heap = GetHeap(handle.ptr, &index);
     if (!heap) return;
+    TraceTargetDescriptorWrite("store", heap, index, descriptor);
     heap->items[index] = std::move(descriptor);
 }
 
@@ -585,13 +609,18 @@ void STDMETHODCALLTYPE Device::CreateSampler(const D3D12_SAMPLER_DESC* source, D
 void STDMETHODCALLTYPE Device::CopyDescriptors(UINT destCount, const D3D12_CPU_DESCRIPTOR_HANDLE* destStarts,
     const UINT* destSizes, UINT sourceCount, const D3D12_CPU_DESCRIPTOR_HANDLE* sourceStarts,
     const UINT* sourceSizes, D3D12_DESCRIPTOR_HEAP_TYPE type) {
-    if (!destStarts || !destSizes || !sourceStarts || !sourceSizes) {
-        Log("CopyDescriptors received a null range array");
+    if ((destCount && !destStarts) || (sourceCount && !sourceStarts)) {
+        Log("CopyDescriptors received a null range-start array dest_count=%u source_count=%u "
+            "dest_starts=%p source_starts=%p type=%u",
+            destCount, sourceCount, destStarts, sourceStarts, static_cast<unsigned int>(type));
         return;
     }
+    const auto rangeSize = [](const UINT* sizes, UINT index) {
+        return sizes ? sizes[index] : 1u;
+    };
     UINT64 destTotal = 0, sourceTotal = 0;
-    for (UINT i = 0; i < destCount; ++i) destTotal += destSizes[i];
-    for (UINT i = 0; i < sourceCount; ++i) sourceTotal += sourceSizes[i];
+    for (UINT i = 0; i < destCount; ++i) destTotal += rangeSize(destSizes, i);
+    for (UINT i = 0; i < sourceCount; ++i) sourceTotal += rangeSize(sourceSizes, i);
     if (destTotal != sourceTotal || destTotal > SIZE_MAX / sizeof(Descriptor)) {
         Log("CopyDescriptors range counts do not match");
         return;
@@ -602,8 +631,14 @@ void STDMETHODCALLTYPE Device::CopyDescriptors(UINT destCount, const D3D12_CPU_D
     for (UINT i = 0; i < sourceCount; ++i) {
         UINT startIndex = 0;
         DescriptorHeap* heap = GetHeap(sourceStarts[i].ptr, &startIndex);
-        if (!heap || heap->hd.Type != type || sourceSizes[i] > heap->items.size() - startIndex) return;
-        for (UINT n = 0; n < sourceSizes[i]; ++n) copies.push_back(heap->items[startIndex + n]);
+        const UINT size = rangeSize(sourceSizes, i);
+        if (!heap || heap->hd.Type != type || startIndex > heap->items.size() ||
+            size > heap->items.size() - startIndex) {
+            Log("CopyDescriptors source range is invalid index=%u size=%u type=%u",
+                startIndex, size, static_cast<unsigned int>(type));
+            return;
+        }
+        for (UINT n = 0; n < size; ++n) copies.push_back(heap->items[startIndex + n]);
     }
 
     std::vector<std::pair<DescriptorHeap*, UINT>> destinations;
@@ -611,7 +646,13 @@ void STDMETHODCALLTYPE Device::CopyDescriptors(UINT destCount, const D3D12_CPU_D
     for (UINT i = 0; i < destCount; ++i) {
         UINT startIndex = 0;
         DescriptorHeap* heap = GetHeap(destStarts[i].ptr, &startIndex);
-        if (!heap || heap->hd.Type != type || destSizes[i] > heap->items.size() - startIndex) return;
+        const UINT size = rangeSize(destSizes, i);
+        if (!heap || heap->hd.Type != type || startIndex > heap->items.size() ||
+            size > heap->items.size() - startIndex) {
+            Log("CopyDescriptors destination range is invalid index=%u size=%u type=%u",
+                startIndex, size, static_cast<unsigned int>(type));
+            return;
+        }
         destinations.emplace_back(heap, startIndex);
     }
 
@@ -619,7 +660,11 @@ void STDMETHODCALLTYPE Device::CopyDescriptors(UINT destCount, const D3D12_CPU_D
     for (UINT i = 0; i < destCount; ++i) {
         auto* heap = destinations[i].first;
         const UINT startIndex = destinations[i].second;
-        for (UINT n = 0; n < destSizes[i]; ++n) heap->items[startIndex + n] = copies[cursor++];
+        const UINT size = rangeSize(destSizes, i);
+        for (UINT n = 0; n < size; ++n) {
+            TraceTargetDescriptorWrite("copy", heap, startIndex + n, copies[cursor]);
+            heap->items[startIndex + n] = copies[cursor++];
+        }
     }
 }
 
@@ -637,5 +682,9 @@ void STDMETHODCALLTYPE Device::CopyDescriptorsSimple(UINT count, D3D12_CPU_DESCR
     std::vector<Descriptor> copies;
     copies.reserve(count);
     for (UINT i = 0; i < count; ++i) copies.push_back(sourceHeap->items[sourceIndex + i]);
-    for (UINT i = 0; i < count; ++i) destHeap->items[destIndex + i] = copies[i];
+    for (UINT i = 0; i < count; ++i) {
+        TraceTargetDescriptorWrite("copy-simple", destHeap, destIndex + i, copies[i],
+                                   sourceHeap, sourceIndex + i);
+        destHeap->items[destIndex + i] = copies[i];
+    }
 }

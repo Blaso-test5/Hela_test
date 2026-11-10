@@ -1,0 +1,15 @@
+Run: 1050ti-cbv-readback-20261110-1942
+Executable: D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\Hela-Win64-Shipping.exe
+GPU: NVIDIA GeForce GTX 1050 Ti (10DE:1C82)
+Proxy DLL SHA256: 41C3CD9E26EDEB2251AF273594E0B63038B297BF532DFB9BA8E0135013D07410
+Pixel shader override SHA256: 43C029B121212D0A37E0A00AAF983D9B6F7EA3EE593412C46EF22C52513D263D
+Shader model: 6_7
+Diagnostic render trace: enabled
+Backbuffer readback: enabled
+Full BMP readback: enabled
+Run start: 2026-11-10T19:45:31.7294868+01:00
+PID at launch: 34380
+
+Esito: il log contiene i marker TARGET_ROOT_CBV e TARGET_CBV; il processo
+Hela non era piu' presente al controllo successivo. Non e' stata registrata
+qui una causa di uscita.
