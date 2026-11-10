@@ -1,0 +1,57 @@
+HELA GTX 950M SOURCE-RESOURCE DRAW HISTORY
+Date: 2026-11-10
+
+Test setup
+- Built the proxy from the five modified source files in proxy-source using
+  Visual Studio 18, MSVC 19.50, CMake 4.1.1, x64, Release.
+- Ran the complete CTest suite with D3D12ON11_TILED_RESOURCES_TIER=0:
+  6/6 tests passed.
+- Installed the matching built d3d12.dll and dxgi.dll, plus the SM5 overrides
+  for VS 20e0826b236597a1 and PS 44b0a992c2304254 / d77600bde0076c33.
+- Started Hela-Win64-Shipping.exe directly, without Steam, with:
+  -graphicsadapter=0 -windowed -ResX=1280 -ResY=720
+- Environment: D3D12ON11_SHADER_MODEL=6_7,
+  D3D12ON11_DIAGNOSTIC_CAPABILITIES=1,
+  D3D12ON11_TRACE_CALLERS=1,
+  D3D12ON11_DIAGNOSTIC_RENDER_TRACE=1,
+  D3D12ON11_TILED_RESOURCES_TIER=0.
+- No injection or pixel-readback environment variables were enabled.
+
+Result
+- Hela displayed a window; the user observed it was completely black.
+- The process ran for about 132.6 seconds and exited with code 0x4000.
+- The log recorded 2,478 Presents. Final heartbeat:
+  draw(ok)=2853, skip-vs=204, skip-other=0, placed(ok)=334,
+  overlap=6.
+- The three target overrides loaded successfully as SM5 shaders. No
+  placeholder records were reported for these three hashes.
+- At Present #100 the source-resource history reported:
+  Resource 0000023F4B28F9B8: operations=64, draws=64,
+    skipped=0, clears=0
+  Resource 0000023F4B290978: operations=64, draws=64,
+    skipped=0, clears=0
+  Resource 0000023F4B291938: operations=66, draws=66,
+    skipped=0, clears=0
+- Each history retained at most 20 representative entries. For each
+  resource, these entries contain 10 DrawIndexedInstanced calls with
+  VS 20e0826b236597a1 / PS 44b0a992c2304254 and 10 with
+  VS 20e0826b236597a1 / PS d77600bde0076c33. All report 6 elements,
+  1 instance, RTV slot 0, and viewport (0,0,1280,720).
+- The diagnostic DLL SHA-256 values were:
+  d3d12.dll 209C78CA0FA244228A967A6A98465CD625A92D1696FE6D1A68EDC45CFDEAF062
+  dxgi.dll  06F0836565BFC577956BB4CB2540E104C94DE1FB68AC6FBA5283D8082DFDC2E2
+
+Interpretation and limits
+The test confirms that the specified source resources had RTV-bound draw
+commands executed with the listed shaders and viewport; those draw calls
+were not skipped, and no RTV clears were recorded for these resources.
+This run did not read back the source or backbuffer pixels. The black
+window alone does not establish that these particular draws produced black
+pixels, nor does the bounded history establish every operation during the
+full run. A pixel readback must be enabled in the same shader-override run
+to determine the source contents after these draws.
+
+The original game d3d12.dll, dxgi.dll, INI, and all installed overrides
+were restored and hash-checked after the run. The complete 34.1 MB proxy log
+is retained locally at:
+D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\950m-exact-source-history-run-20261110-0320\source-history-exact-run.log

@@ -186,9 +186,33 @@ GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
 - Added opt-in `[CMDLIST_SUMMARY]` counters for each submitted command list
   when diagnostic render tracing is enabled. The summary counts draw
   executions, skipped draws, executions with an RTV, backbuffer draws, and
-  CopyResource operations to the backbuffer. This instrumentation was added
-  after this run; it compiled and passed the targeted smoke tests but has not
-  yet been captured in a game trace.
+  CopyResource operations to the backbuffer.
+
+## Source-resource draw history with SM5 overrides
+
+- Built and tested the source-resource history instrumentation together with
+  the DXGI bridge. All six CTest tests passed with the GTX 950M Tier 0
+  diagnostic setting.
+- Ran `Hela-Win64-Shipping.exe` directly, without Steam, using
+  `-graphicsadapter=0 -windowed -ResX=1280 -ResY=720`,
+  `D3D12ON11_SHADER_MODEL=6_7`, diagnostic tracing, and Tier 0. Installed
+  the matching Release DLL pair and the SM5 overrides for VS
+  `20e0826b236597a1` and PS `44b0a992c2304254` / `d77600bde0076c33`.
+- The window remained black. At Present #100, three CopyResource source
+  resources reported 64, 64, and 66 operations; all were executed draws,
+  with zero skipped draws and zero RTV clears. The first 20 retained
+  entries per resource show alternating draws with the listed PS shaders,
+  six elements, one instance, RTV slot 0, and viewport 1280x720.
+- Final trace: `present=2478`, `draw(ok)=2853`, `skip-vs=204`,
+  `skip-other=0`, `placed(ok)=334`, `overlap=6`. Hela exited with `0x4000`
+  after about 132.6 seconds.
+- This confirms execution of draw commands on the CopyResource source
+  resources, not their pixel values. Pixel readback was not enabled in this
+  run, so the black window does not prove these particular draws produced
+  black pixels. A same-run readback with the overrides is still needed.
+- The original game DLLs, INI, and installed overrides were restored and
+  verified. The 34.1 MB raw trace remains local; see
+  `source-history-test-summary.txt` for the sanitized findings.
 
 ## Files
 
@@ -212,5 +236,7 @@ GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
 - `full-red-backbuffer-readback-test-summary.txt`: results from the verified
   windowed red-injection run, including complete source and destination
   BMP analysis.
+- `source-history-test-summary.txt`: results from the source-resource
+  history run with the three target SM5 overrides loaded.
 - `Present100_source.bmp` and `Present100_backbuffer.bmp`: full 1280x720
   BMP readbacks from Present #100.

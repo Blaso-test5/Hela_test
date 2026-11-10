@@ -116,3 +116,17 @@ different machine path. The resulting `d3d12.dll` SHA-256 is
 run enabled opt-in sampled backbuffer readback; test results and limitations
 are recorded in `evidence\GTX_950M\backbuffer-readback-test-summary.txt`.
 The original game DLLs, INI, and override files were restored and verified.
+
+Source-resource draw-history build and exact override test, 2026-11-10:
+Built the five modified proxy sources with Visual Studio 18, MSVC 19.50,
+CMake 4.1.1, x64, Release, and Windows SDK 10.0.26100.0. The build output
+was `hela-source-history-build-20261110-v2\Release`. All six CTest tests
+passed with `D3D12ON11_TILED_RESOURCES_TIER=0`.
+  runtime\bin\d3d12.dll size=361472 sha256=209C78CA0FA244228A967A6A98465CD625A92D1696FE6D1A68EDC45CFDEAF062
+  runtime\bin\dxgi.dll size=42496 sha256=06F0836565BFC577956BB4CB2540E104C94DE1FB68AC6FBA5283D8082DFDC2E2
+These are the current packaged binaries and the matching pair used in the
+source-resource draw-history run. Hela was launched directly, without
+Steam, with Shader Model 6.7 and the target SM5 overrides. The run reached
+Present #100 and emitted the per-resource history; it did not enable pixel
+readback. See `evidence\GTX_950M\source-history-test-summary.txt` for
+results and interpretation limits.

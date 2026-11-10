@@ -255,6 +255,8 @@ void CaptureBackbufferReadback(IDXGISwapChain4* swapChain, IUnknown* source) {
     std::lock_guard<std::recursive_mutex> contextLock(device->ctxLock);
     device->ctx->Flush();
     const uint64_t count = presentCount.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (count == 100)
+        D3D12On11DumpBackbufferSourceHistory();
     if (!enabled || count % 100 != 0) return;
     if (!device->d11) {
         LogDxgi("[READBACK] Present #%llu skipped: wrapped D3D11 device unavailable",

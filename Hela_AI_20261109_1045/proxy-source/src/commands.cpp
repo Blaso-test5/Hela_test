@@ -2,6 +2,55 @@
 
 namespace {
 
+enum class TargetHistoryKind {
+    ExecutedDraw,
+    SkippedDraw,
+    Clear
+};
+
+struct BackbufferSourceHistory {
+    Ptr<ID3D11Resource> resource;
+    uint64_t executedDraws = 0;
+    uint64_t skippedDraws = 0;
+    uint64_t clears = 0;
+    std::vector<std::string> entries;
+};
+
+std::mutex g_resourceDrawMutex;
+std::map<ID3D11Resource*, BackbufferSourceHistory> g_backbufferSourceHistory;
+bool g_backbufferSourceHistoryDumped = false;
+
+void TrackTargetOperation(ID3D11Resource* resource, const std::string& context,
+    TargetHistoryKind kind) {
+    if (!resource || !Cfg().diagnosticRenderTrace) return;
+    std::lock_guard<std::mutex> lock(g_resourceDrawMutex);
+    if (g_backbufferSourceHistoryDumped) return;
+    auto it = g_backbufferSourceHistory.find(resource);
+    if (it == g_backbufferSourceHistory.end()) return;
+    auto& history = it->second;
+    switch (kind) {
+    case TargetHistoryKind::ExecutedDraw:
+        ++history.executedDraws;
+        break;
+    case TargetHistoryKind::SkippedDraw:
+        ++history.skippedDraws;
+        break;
+    case TargetHistoryKind::Clear:
+        ++history.clears;
+        break;
+    }
+    if (history.entries.size() < 20)
+        history.entries.push_back(context);
+}
+
+void RegisterBackbufferCopySource(ID3D11Resource* resource) {
+    if (!resource || !Cfg().diagnosticRenderTrace) return;
+    std::lock_guard<std::mutex> lock(g_resourceDrawMutex);
+    if (g_backbufferSourceHistoryDumped) return;
+    auto& history = g_backbufferSourceHistory[resource];
+    if (!history.resource) history.resource = Ptr<ID3D11Resource>(resource);
+}
+
 Resource* AsResource(ID3D12Resource* resource) {
     return resource ? dynamic_cast<Resource*>(resource) : nullptr;
 }
@@ -49,14 +98,45 @@ HRESULT WaitForContext(Device* device) {
     return result;
 }
 
-void RecordDrawExecution(ExecState& state, bool indexed) {
+void RecordDrawExecution(ExecState& state, bool indexed, const char* operation,
+    UINT elementCount, UINT instanceCount, bool indirect = false) {
     if (!Cfg().diagnosticRenderTrace) return;
     auto& stats = TraceStats();
-    stats.drawExec.fetch_add(1, std::memory_order_relaxed);
+    const uint64_t drawIndex = stats.drawExec.fetch_add(1, std::memory_order_relaxed) + 1;
     ++state.drawsExecuted;
     bool hasRtv = false;
     for (UINT i = 0; i < state.numRtv && i < ARRAYSIZE(state.rtvs); ++i)
         hasRtv = hasRtv || static_cast<bool>(state.rtvs[i]);
+    char viewport[128] = "unset";
+    if (state.numViewports) {
+        const D3D12_VIEWPORT& first = state.viewports[0];
+        snprintf(viewport, sizeof(viewport), "(%.1f,%.1f,%.1f,%.1f)",
+            first.TopLeftX, first.TopLeftY, first.Width, first.Height);
+    }
+    char elements[32]{};
+    char instances[32]{};
+    if (indirect) {
+        snprintf(elements, sizeof(elements), "indirect");
+        snprintf(instances, sizeof(instances), "indirect");
+    } else {
+        snprintf(elements, sizeof(elements), "%u", elementCount);
+        snprintf(instances, sizeof(instances), "%u", instanceCount);
+    }
+    for (UINT i = 0; i < state.numRtv && i < ARRAYSIZE(state.rtvs); ++i) {
+        ID3D11Resource* resource = state.rtvResources[i].Get();
+        if (!resource) continue;
+        char context[512]{};
+        snprintf(context, sizeof(context),
+            "Draw #%llu api=%s indexed=%u rtv_slot=%u pso=%p vs_hash=%016llx "
+            "ps_hash=%016llx elements=%s instances=%s viewport=%s",
+            static_cast<unsigned long long>(drawIndex), operation,
+            indexed ? 1u : 0u, i,
+            reinterpret_cast<void*>(state.graphicsPipelineIdentity),
+            static_cast<unsigned long long>(state.graphicsShaderHash),
+            static_cast<unsigned long long>(state.graphicsPixelShaderHash),
+            elements, instances, viewport);
+        TrackTargetOperation(resource, context, TargetHistoryKind::ExecutedDraw);
+    }
     if (hasRtv) {
         stats.drawWithRtv.fetch_add(1, std::memory_order_relaxed);
         ++state.rtvBound;
@@ -86,6 +166,20 @@ void LogSkippedDraw(ExecState& state, const char* operation,
     UINT arg0, UINT arg1) {
     if (!Cfg().diagnosticRenderTrace) return;
     ++state.drawsSkipped;
+    for (UINT i = 0; i < state.numRtv && i < ARRAYSIZE(state.rtvs); ++i) {
+        ID3D11Resource* resource = state.rtvResources[i].Get();
+        if (!resource) continue;
+        char context[512]{};
+        snprintf(context, sizeof(context),
+            "Skipped %s rtv_slot=%u pso=%p vs_hash=%016llx ps_hash=%016llx "
+            "missing_vs=%u missing_shader=%u arg0=%u arg1=%u",
+            operation, i, reinterpret_cast<void*>(state.graphicsPipelineIdentity),
+            static_cast<unsigned long long>(state.graphicsShaderHash),
+            static_cast<unsigned long long>(state.graphicsPixelShaderHash),
+            state.graphicsPlaceholderVs ? 1u : 0u, state.skipDraws ? 1u : 0u,
+            arg0, arg1);
+        TrackTargetOperation(resource, context, TargetHistoryKind::SkippedDraw);
+    }
     Log("[RENDER_TRACE] [DRAW_SKIPPED] api=%s pipeline=%p vs-hash=%016llx ps-hash=%016llx "
         "missing-vs=%u missing-shader=%u arg0=%u arg1=%u rtvs=%u backbuffer=%u",
         operation, reinterpret_cast<void*>(state.graphicsPipelineIdentity),
@@ -93,6 +187,56 @@ void LogSkippedDraw(ExecState& state, const char* operation,
         static_cast<unsigned long long>(state.graphicsPixelShaderHash),
         state.graphicsPlaceholderVs ? 1u : 0u, state.skipDraws ? 1u : 0u,
         arg0, arg1, state.numRtv, state.rtvBackbuffer ? 1u : 0u);
+}
+
+void DumpBackbufferSourceHistoryImpl() {
+    struct Snapshot {
+        ID3D11Resource* resource = nullptr;
+        uint64_t executedDraws = 0;
+        uint64_t skippedDraws = 0;
+        uint64_t clears = 0;
+        std::vector<std::string> entries;
+    };
+    std::vector<Snapshot> snapshots;
+    {
+        std::lock_guard<std::mutex> lock(g_resourceDrawMutex);
+        g_backbufferSourceHistoryDumped = true;
+        snapshots.reserve(g_backbufferSourceHistory.size());
+        for (const auto& pair : g_backbufferSourceHistory) {
+            Snapshot snapshot{};
+            snapshot.resource = pair.first;
+            snapshot.executedDraws = pair.second.executedDraws;
+            snapshot.skippedDraws = pair.second.skippedDraws;
+            snapshot.clears = pair.second.clears;
+            snapshot.entries = pair.second.entries;
+            snapshots.push_back(std::move(snapshot));
+        }
+        g_backbufferSourceHistory.clear();
+    }
+
+    if (snapshots.empty()) {
+        Log("[BB_SOURCE_HISTORY] No CopyResource-to-backbuffer sources registered");
+        return;
+    }
+    for (const auto& snapshot : snapshots) {
+        const size_t total = static_cast<size_t>(snapshot.executedDraws +
+            snapshot.skippedDraws + snapshot.clears);
+        if (!total) {
+            Log("[BB_SOURCE_HISTORY] Resource %p has NO draw/clear history",
+                snapshot.resource);
+            continue;
+        }
+        Log("[BB_SOURCE_HISTORY] Resource %p operations=%llu draws=%llu skipped=%llu clears=%llu",
+            snapshot.resource, static_cast<unsigned long long>(total),
+            static_cast<unsigned long long>(snapshot.executedDraws),
+            static_cast<unsigned long long>(snapshot.skippedDraws),
+            static_cast<unsigned long long>(snapshot.clears));
+        for (const auto& entry : snapshot.entries)
+            Log("[BB_SOURCE_HISTORY]   %s", entry.c_str());
+        if (total > snapshot.entries.size())
+            Log("[BB_SOURCE_HISTORY]   ... and %llu more operations",
+                static_cast<unsigned long long>(total - snapshot.entries.size()));
+    }
 }
 
 void RecordDispatchExecution() {
@@ -560,6 +704,10 @@ void ApplyPipeline(ExecState& state, PipelineState* pipeline) {
 
 } // namespace
 
+void DumpBackbufferSourceHistory() {
+    DumpBackbufferSourceHistoryImpl();
+}
+
 void STDMETHODCALLTYPE CommandList::SetDescriptorHeaps(UINT count, ID3D12DescriptorHeap* const* heaps) {
     if (count > 2 || (count && !heaps)) {
         Log("Rejected invalid descriptor heap array");
@@ -743,7 +891,7 @@ void STDMETHODCALLTYPE CommandList::DrawInstanced(UINT vertexCount, UINT instanc
         }
         BindRootSnapshot(state, snapshot, false);
         state.c->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
-        RecordDrawExecution(state, false);
+        RecordDrawExecution(state, false, "DrawInstanced", vertexCount, instanceCount);
         FlushStructWrites(state);
     });
 }
@@ -766,7 +914,7 @@ void STDMETHODCALLTYPE CommandList::DrawIndexedInstanced(UINT indexCount, UINT i
         }
         BindRootSnapshot(state, snapshot, false);
         state.c->DrawIndexedInstanced(indexCount, instanceCount, startIndex, baseVertex, startInstance);
-        RecordDrawExecution(state, true);
+        RecordDrawExecution(state, true, "DrawIndexedInstanced", indexCount, instanceCount);
         FlushStructWrites(state);
     });
 }
@@ -871,11 +1019,11 @@ void STDMETHODCALLTYPE CommandList::ExecuteIndirect(ID3D12CommandSignature* sour
                 break;
             case D3D12_INDIRECT_ARGUMENT_TYPE_DRAW:
                 state.c->DrawInstancedIndirect(argumentBuffer, offset);
-                RecordDrawExecution(state, false);
+                RecordDrawExecution(state, false, "ExecuteIndirect", 0, 0, true);
                 break;
             case D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED:
                 state.c->DrawIndexedInstancedIndirect(argumentBuffer, offset);
-                RecordDrawExecution(state, true);
+                RecordDrawExecution(state, true, "ExecuteIndirect", 0, 0, true);
                 break;
             default:
                 Log("ExecuteIndirect encountered unsupported argument type=%u", argumentType);
@@ -1187,6 +1335,8 @@ void STDMETHODCALLTYPE CommandList::CopyResource(ID3D12Resource* destination, ID
         Log("Rejected incompatible CopyResource request");
         return;
     }
+    if (dst->backbuffer && src->tex)
+        RegisterBackbufferCopySource(src->tex.Get());
     Ptr<IUnknown> keepDst(static_cast<ID3D12Resource*>(dst));
     Ptr<IUnknown> keepSrc(static_cast<ID3D12Resource*>(src));
     Add([keepDst, keepSrc](ExecState& state) {
@@ -1300,8 +1450,11 @@ void STDMETHODCALLTYPE CommandList::RSSetViewports(UINT count, const D3D12_VIEWP
         native[i].MinDepth = viewports[i].MinDepth;
         native[i].MaxDepth = viewports[i].MaxDepth;
     }
-    Add([native = std::move(native)](ExecState& state) {
+    std::vector<D3D12_VIEWPORT> diagnosticViewports(viewports, viewports + count);
+    Add([native = std::move(native), diagnosticViewports = std::move(diagnosticViewports)](ExecState& state) {
         state.c->RSSetViewports(static_cast<UINT>(native.size()), native.data());
+        state.numViewports = static_cast<UINT>(diagnosticViewports.size());
+        std::copy(diagnosticViewports.begin(), diagnosticViewports.end(), state.viewports.begin());
     });
 }
 
@@ -1493,26 +1646,36 @@ void STDMETHODCALLTYPE CommandList::OMSetRenderTargets(UINT count, const D3D12_C
     TraceApi("CommandList::OMSetRenderTargets");
     if (count > 8 || (count && !handles)) return;
     std::vector<Ptr<ID3D11RenderTargetView>> views(count);
+    std::vector<Ptr<ID3D11Resource>> resources(count);
     std::vector<bool> backbuffers(count, false);
     for (UINT i = 0; i < count; ++i) {
         auto handle = handles[i];
         if (single) handle.ptr += static_cast<SIZE_T>(i) * kDescStride;
         Descriptor descriptor = DescriptorAt(handle, DKind::RTV);
         views[i] = descriptor.rtv;
+        if (descriptor.res && descriptor.res->tex)
+            resources[i] = Ptr<ID3D11Resource>(descriptor.res->tex.Get());
         backbuffers[i] = descriptor.res && descriptor.res->backbuffer;
     }
     Ptr<ID3D11DepthStencilView> depth;
     if (depthHandle) depth = DescriptorAt(*depthHandle, DKind::DSV).dsv;
-    Add([views = std::move(views), backbuffers = std::move(backbuffers), depth](ExecState& state) {
+    Add([views = std::move(views), resources = std::move(resources),
+        backbuffers = std::move(backbuffers), depth](ExecState& state) {
         std::vector<ID3D11RenderTargetView*> raw;
         raw.reserve(views.size());
         for (const auto& view : views) raw.push_back(view.Get());
         state.c->OMSetRenderTargets(static_cast<UINT>(raw.size()), raw.data(), depth.Get());
-        for (auto& view : state.rtvs) view.Reset();
+        for (UINT i = 0; i < ARRAYSIZE(state.rtvs); ++i) {
+            state.rtvs[i].Reset();
+            state.rtvResources[i].Reset();
+        }
         state.numRtv = static_cast<UINT>(views.size());
         state.dsv = depth;
         state.rtvBackbuffer = false;
-        for (UINT i = 0; i < views.size() && i < 8; ++i) state.rtvs[i] = views[i];
+        for (UINT i = 0; i < views.size() && i < 8; ++i) {
+            state.rtvs[i] = views[i];
+            state.rtvResources[i] = resources[i];
+        }
         for (size_t i = 0; i < backbuffers.size(); ++i)
             state.rtvBackbuffer = state.rtvBackbuffer || backbuffers[i];
     });
@@ -1538,7 +1701,16 @@ void STDMETHODCALLTYPE CommandList::ClearRenderTargetView(D3D12_CPU_DESCRIPTOR_H
     Descriptor descriptor = DescriptorAt(handle, DKind::RTV);
     if (!descriptor.rtv) return;
     float copy[4] = {color[0], color[1], color[2], color[3]};
-    Add([descriptor, copy](ExecState& state) { state.c->ClearRenderTargetView(descriptor.rtv.Get(), copy); });
+    Ptr<ID3D11Resource> target;
+    if (descriptor.res && descriptor.res->tex)
+        target = Ptr<ID3D11Resource>(descriptor.res->tex.Get());
+    Add([descriptor, copy, target](ExecState& state) {
+        state.c->ClearRenderTargetView(descriptor.rtv.Get(), copy);
+        char context[128]{};
+        snprintf(context, sizeof(context), "ClearRenderTargetView color=(%.3f,%.3f,%.3f,%.3f)",
+            copy[0], copy[1], copy[2], copy[3]);
+        TrackTargetOperation(target.Get(), context, TargetHistoryKind::Clear);
+    });
 }
 
 void STDMETHODCALLTYPE CommandList::ClearUnorderedAccessViewUint(D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle,

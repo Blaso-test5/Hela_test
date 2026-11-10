@@ -22,6 +22,7 @@ D3D12ON11_BRIDGE_API HRESULT WINAPI D3D12On11WrapBackbuffer(IUnknown* source, ID
                                                             REFIID riid, void** resource);
 D3D12ON11_BRIDGE_API void WINAPI D3D12On11ReleaseBackbufferViews(IUnknown* source);
 D3D12ON11_BRIDGE_API void WINAPI D3D12On11Flush(IUnknown* source);
+D3D12ON11_BRIDGE_API void WINAPI D3D12On11DumpBackbufferSourceHistory();
 D3D12ON11_BRIDGE_API void WINAPI D3D12On11LogUnsupported(const char* operation);
 D3D12ON11_BRIDGE_API void WINAPI D3D12On11LogMessage(const char* message);
 D3D12ON11_BRIDGE_API void WINAPI D3D12On11TraceCaller(const char* api, const void* returnAddress);

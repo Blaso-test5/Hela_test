@@ -103,3 +103,7 @@ extern "C" void WINAPI D3D12On11Flush(IUnknown* source) {
         if (device->ctx) device->ctx->Flush();
     }
 }
+
+extern "C" void WINAPI D3D12On11DumpBackbufferSourceHistory() {
+    DumpBackbufferSourceHistory();
+}

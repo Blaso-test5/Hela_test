@@ -221,6 +221,9 @@ struct ExecState {
     uint64_t rtvBound = 0;
     uint64_t backbufferDraws = 0;
     uint64_t copyToBackbuffer = 0;
+    std::array<Ptr<ID3D11Resource>, 8> rtvResources;
+    std::array<D3D12_VIEWPORT, D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE> viewports{};
+    UINT numViewports = 0;
     bool skipDraws = false;
     bool skipDispatches = false;
     bool hasGraphicsPipeline = false;
@@ -340,6 +343,8 @@ struct CommandList : Stub_ID3D12GraphicsCommandList {
     void STDMETHODCALLTYPE BeginEvent(UINT, const void*, UINT) override {}
     void STDMETHODCALLTYPE EndEvent() override {}
 };
+
+void DumpBackbufferSourceHistory();
 
 struct CommandQueue : Stub_ID3D12CommandQueue {
     D3D12_COMMAND_QUEUE_DESC qd{};
