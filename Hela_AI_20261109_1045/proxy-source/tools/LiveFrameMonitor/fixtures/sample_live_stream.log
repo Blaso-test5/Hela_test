@@ -1,0 +1,27 @@
+[INIT] Hela D3D12On11 diagnostic proxy started (shader_model=6_7, tiled_tier=0)
+[SHADER READY] stage=VS hash=20e0826b236597a1 source=override model=sm_5_0
+[SHADER READY] stage=PS hash=44b0a992c2304254 source=override model=sm_5_0
+[SHADER READY] stage=PS hash=d77600bde0076c33 source=override model=sm_5_0
+[SHADER PLACEHOLDER] stage=CS hash=d17286aa32897a75 reason=no-usable-SM5-bytecode
+[SHADER PLACEHOLDER] stage=CS hash=fb1aa7e82eb127e4 reason=no-usable-SM5-bytecode
+[SHADER PLACEHOLDER] stage=CS hash=55c5bae546982689 reason=no-usable-SM5-bytecode
+[COPY_TO_BB] sequence=100 source=0000024096331C38 width=1280 height=720 format=24
+[SOURCE_HISTORY] Present #100 Backbuffer Copy Source History:
+Resource 0000024096331C38 operations=66 draws=66 skipped=0 clears=0
+  DrawIndexedInstanced VS=20e0826b236597a1 PS=44b0a992c2304254 elements=6 instances=1 RTV slot=0 viewport=1280x720
+  DrawIndexedInstanced VS=20e0826b236597a1 PS=d77600bde0076c33 elements=6 instances=1 RTV slot=0 viewport=1280x720
+[READBACK_SRC] Present #100 CopyResource source=0000024096331C38 dimension=3 width=1280 height=720 format=24 sequence=100
+  Sample (640, 360): RGBA=(0, 0, 0, 0)
+  Sample (320, 180): RGBA=(0, 0, 0, 0)
+  Sample (960, 180): RGBA=(0, 0, 0, 0)
+  Sample (320, 540): RGBA=(0, 0, 0, 0)
+  Sample (960, 540): RGBA=(0, 0, 0, 0)
+  Non-black pixels: 0/100 (0.0%)
+[READBACK] Present #100 size=1280x720 format=24 buffer=0
+  Sample (640, 360): RGBA=(0, 0, 0, 0)
+  Sample (320, 180): RGBA=(0, 0, 0, 0)
+  Sample (960, 180): RGBA=(0, 0, 0, 0)
+  Sample (320, 540): RGBA=(0, 0, 0, 0)
+  Sample (960, 540): RGBA=(0, 0, 0, 0)
+  Non-black pixels: 0/100 (0.0%)
+[HEARTBEAT] present=2478, draw(ok)=2853, skip-vs=204, skip-other=0, placed(ok)=334, overlap=6
