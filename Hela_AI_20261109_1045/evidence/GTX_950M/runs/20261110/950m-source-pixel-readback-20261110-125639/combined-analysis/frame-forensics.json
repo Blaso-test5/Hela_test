@@ -1,0 +1,1041 @@
+{
+  "schema": "hela.frame-forensics",
+  "schema_version": 1,
+  "source": "D:\\SteamLibrary\\steamapps\\common\\Hela Demo\\Hela\\Binaries\\Win64\\D3D12On11Patch\\backups\\950m-source-pixel-readback-20261110-125639\\source-pixel-readback.log",
+  "lines_read": 250281,
+  "present_100": {
+    "source": {
+      "kind": "readback_src",
+      "present": 100,
+      "line": 15968,
+      "resource": "0000024096331c38",
+      "dimension": 3,
+      "width": 1280,
+      "height": 720,
+      "format": 24,
+      "sequence": 100,
+      "buffer": 0,
+      "samples": {
+        "top_left": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "top_right": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "center": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "bottom_left": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "bottom_right": [
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "non_black_pixels": 0,
+      "sample_pixel_count": 100,
+      "non_black_percent": 0.0
+    },
+    "backbuffer": {
+      "kind": "readback",
+      "present": 100,
+      "width": 1280,
+      "height": 720,
+      "format": 24,
+      "buffer": 0,
+      "samples": {
+        "top_left": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "top_right": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "center": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "bottom_left": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "bottom_right": [
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "non_black_pixels": 0,
+      "sample_pixel_count": 100,
+      "non_black_percent": 0.0
+    },
+    "matching_history": {
+      "resource": "0000024096331c38",
+      "operations": 66,
+      "draws": 66,
+      "skipped": 0,
+      "clears": 0,
+      "line": 15902,
+      "draw_samples": [
+        {
+          "draw": 5,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15903
+        },
+        {
+          "draw": 6,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15904
+        },
+        {
+          "draw": 11,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15905
+        },
+        {
+          "draw": 12,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15906
+        },
+        {
+          "draw": 17,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15907
+        },
+        {
+          "draw": 18,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15908
+        },
+        {
+          "draw": 23,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15909
+        },
+        {
+          "draw": 24,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15910
+        },
+        {
+          "draw": 29,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15911
+        },
+        {
+          "draw": 30,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15912
+        },
+        {
+          "draw": 35,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15913
+        },
+        {
+          "draw": 36,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15914
+        },
+        {
+          "draw": 41,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15915
+        },
+        {
+          "draw": 42,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15916
+        },
+        {
+          "draw": 47,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15917
+        },
+        {
+          "draw": 48,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15918
+        },
+        {
+          "draw": 53,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15919
+        },
+        {
+          "draw": 54,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15920
+        },
+        {
+          "draw": 59,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15921
+        },
+        {
+          "draw": 60,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15922
+        }
+      ]
+    }
+  },
+  "histories": [
+    {
+      "resource": "0000024096331c38",
+      "operations": 66,
+      "draws": 66,
+      "skipped": 0,
+      "clears": 0,
+      "line": 15902,
+      "draw_samples": [
+        {
+          "draw": 5,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15903
+        },
+        {
+          "draw": 6,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15904
+        },
+        {
+          "draw": 11,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15905
+        },
+        {
+          "draw": 12,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15906
+        },
+        {
+          "draw": 17,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15907
+        },
+        {
+          "draw": 18,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15908
+        },
+        {
+          "draw": 23,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15909
+        },
+        {
+          "draw": 24,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15910
+        },
+        {
+          "draw": 29,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15911
+        },
+        {
+          "draw": 30,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15912
+        },
+        {
+          "draw": 35,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15913
+        },
+        {
+          "draw": 36,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15914
+        },
+        {
+          "draw": 41,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15915
+        },
+        {
+          "draw": 42,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15916
+        },
+        {
+          "draw": 47,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15917
+        },
+        {
+          "draw": 48,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15918
+        },
+        {
+          "draw": 53,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15919
+        },
+        {
+          "draw": 54,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15920
+        },
+        {
+          "draw": 59,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15921
+        },
+        {
+          "draw": 60,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15922
+        }
+      ]
+    },
+    {
+      "resource": "0000024096332438",
+      "operations": 64,
+      "draws": 64,
+      "skipped": 0,
+      "clears": 0,
+      "line": 15924,
+      "draw_samples": [
+        {
+          "draw": 9,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15925
+        },
+        {
+          "draw": 10,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15926
+        },
+        {
+          "draw": 15,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15927
+        },
+        {
+          "draw": 16,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15928
+        },
+        {
+          "draw": 21,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15929
+        },
+        {
+          "draw": 22,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15930
+        },
+        {
+          "draw": 27,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15931
+        },
+        {
+          "draw": 28,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15932
+        },
+        {
+          "draw": 33,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15933
+        },
+        {
+          "draw": 34,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15934
+        },
+        {
+          "draw": 39,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15935
+        },
+        {
+          "draw": 40,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15936
+        },
+        {
+          "draw": 45,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15937
+        },
+        {
+          "draw": 46,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15938
+        },
+        {
+          "draw": 51,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15939
+        },
+        {
+          "draw": 52,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15940
+        },
+        {
+          "draw": 57,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15941
+        },
+        {
+          "draw": 58,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15942
+        },
+        {
+          "draw": 63,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15943
+        },
+        {
+          "draw": 64,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15944
+        }
+      ]
+    },
+    {
+      "resource": "00000240963326b8",
+      "operations": 64,
+      "draws": 64,
+      "skipped": 0,
+      "clears": 0,
+      "line": 15946,
+      "draw_samples": [
+        {
+          "draw": 7,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15947
+        },
+        {
+          "draw": 8,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15948
+        },
+        {
+          "draw": 13,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15949
+        },
+        {
+          "draw": 14,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15950
+        },
+        {
+          "draw": 19,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15951
+        },
+        {
+          "draw": 20,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15952
+        },
+        {
+          "draw": 25,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15953
+        },
+        {
+          "draw": 26,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15954
+        },
+        {
+          "draw": 31,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15955
+        },
+        {
+          "draw": 32,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15956
+        },
+        {
+          "draw": 37,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15957
+        },
+        {
+          "draw": 38,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15958
+        },
+        {
+          "draw": 43,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15959
+        },
+        {
+          "draw": 44,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15960
+        },
+        {
+          "draw": 49,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15961
+        },
+        {
+          "draw": 50,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15962
+        },
+        {
+          "draw": 55,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15963
+        },
+        {
+          "draw": 56,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15964
+        },
+        {
+          "draw": 61,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "44b0a992c2304254",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15965
+        },
+        {
+          "draw": 62,
+          "vs_hash": "20e0826b236597a1",
+          "ps_hash": "d77600bde0076c33",
+          "elements": "6",
+          "instances": "1",
+          "viewport": "0.0,0.0,1280.0,720.0",
+          "line": 15966
+        }
+      ]
+    }
+  ],
+  "shader_event_counts": {
+    "VS:placeholder": 426,
+    "PS:placeholder": 1378,
+    "VS:ready": 2,
+    "GS:placeholder": 1,
+    "CS:placeholder": 4021,
+    "PS:ready": 2,
+    "CS:ready": 1
+  },
+  "relevant_shader_events": [
+    {
+      "stage": "VS",
+      "hash": "20e0826b236597a1",
+      "status": "ready",
+      "reason": null,
+      "occurrences": 1,
+      "first_line": 4659
+    },
+    {
+      "stage": "PS",
+      "hash": "44b0a992c2304254",
+      "status": "ready",
+      "reason": null,
+      "occurrences": 1,
+      "first_line": 4661
+    },
+    {
+      "stage": "PS",
+      "hash": "d77600bde0076c33",
+      "status": "ready",
+      "reason": null,
+      "occurrences": 1,
+      "first_line": 4667
+    },
+    {
+      "stage": "CS",
+      "hash": "d17286aa32897a75",
+      "status": "placeholder",
+      "reason": "no-usable-SM5-bytecode",
+      "occurrences": 1,
+      "first_line": 15977
+    },
+    {
+      "stage": "CS",
+      "hash": "fb1aa7e82eb127e4",
+      "status": "placeholder",
+      "reason": "no-usable-SM5-bytecode",
+      "occurrences": 1,
+      "first_line": 15983
+    },
+    {
+      "stage": "CS",
+      "hash": "55c5bae546982689",
+      "status": "placeholder",
+      "reason": "no-usable-SM5-bytecode",
+      "occurrences": 1,
+      "first_line": 15986
+    },
+    {
+      "stage": "CS",
+      "hash": "c9c96b4569bb6b57",
+      "status": "placeholder",
+      "reason": "no-usable-SM5-bytecode",
+      "occurrences": 1,
+      "first_line": 15995
+    },
+    {
+      "stage": "CS",
+      "hash": "8c11dd05ace7d505",
+      "status": "placeholder",
+      "reason": "no-usable-SM5-bytecode",
+      "occurrences": 1,
+      "first_line": 15997
+    },
+    {
+      "stage": "CS",
+      "hash": "60dad8964787c8c5",
+      "status": "placeholder",
+      "reason": "no-usable-SM5-bytecode",
+      "occurrences": 1,
+      "first_line": 16000
+    },
+    {
+      "stage": "CS",
+      "hash": "61eefa1f7e800217",
+      "status": "placeholder",
+      "reason": "no-usable-SM5-bytecode",
+      "occurrences": 1,
+      "first_line": 16006
+    },
+    {
+      "stage": "CS",
+      "hash": "69c93e28f703eac5",
+      "status": "placeholder",
+      "reason": "no-usable-SM5-bytecode",
+      "occurrences": 1,
+      "first_line": 16009
+    },
+    {
+      "stage": "CS",
+      "hash": "5da82c7c93e6e6da",
+      "status": "placeholder",
+      "reason": "no-usable-SM5-bytecode",
+      "occurrences": 1,
+      "first_line": 16011
+    },
+    {
+      "stage": "CS",
+      "hash": "ab479789e3966fa7",
+      "status": "placeholder",
+      "reason": "no-usable-SM5-bytecode",
+      "occurrences": 1,
+      "first_line": 16013
+    },
+    {
+      "stage": "CS",
+      "hash": "7abeb04ba2fab026",
+      "status": "placeholder",
+      "reason": "no-usable-SM5-bytecode",
+      "occurrences": 1,
+      "first_line": 16015
+    },
+    {
+      "stage": "CS",
+      "hash": "57e648af86e7f30d",
+      "status": "placeholder",
+      "reason": "no-usable-SM5-bytecode",
+      "occurrences": 1,
+      "first_line": 16018
+    }
+  ],
+  "latest_heartbeat": {
+    "line": 249545,
+    "metrics": {
+      "tid": 28540,
+      "up": 62016,
+      "ago": 31,
+      "exec": 12752,
+      "sig": 36449,
+      "wait": 17058,
+      "wctx": 36449,
+      "fail": 0,
+      "max-spin": 14192,
+      "swap": 1,
+      "present": 2153,
+      "G": 2846,
+      "C": 4022,
+      "ok": 203,
+      "rtv": 4303,
+      "bb": 0,
+      "nullrtv": 0,
+      "skip-pso": 0,
+      "skip-vs": 296,
+      "skip-other": 0,
+      "skip-vb": 0,
+      "skip-ib": 0,
+      "skip-map": 0,
+      "missing-vb": 0,
+      "missing-ib": 0,
+      "skip-cs": 21,
+      "ovl": 0,
+      "rel": 0,
+      "live": 203
+    }
+  },
+  "verified_facts": [
+    "At Present #100, source pointer 0000024096331c38 matches history with 66 draws, 0 skipped and 0 clears.",
+    "Source sampled 0/100 non-black pixels (0.0%).",
+    "Backbuffer sampled 0/100 non-black pixels (0.0%).",
+    "Compute shader placeholder records exist: d17286aa32897a75, fb1aa7e82eb127e4, 55c5bae546982689, c9c96b4569bb6b57, 8c11dd05ace7d505, 60dad8964787c8c5, 61eefa1f7e800217, 69c93e28f703eac5, 5da82c7c93e6e6da, ab479789e3966fa7, 7abeb04ba2fab026, 57e648af86e7f30d. Dispatch impact/resource outputs are not established by shader status alone."
+  ],
+  "hypotheses": [
+    "A missing compute override may affect resources consumed by graphics passes; confirm dispatch skip counts and the affected resource before attributing the black output.",
+    "The source was black at readback; this does not prove that CopyResource itself is correct.",
+    "Heartbeat counters are cumulative; they identify skips but do not by themselves associate a skipped dispatch with the Present #100 source."
+  ],
+  "limits": [
+    "This analyzer reports log evidence; it does not prove GPU pixel writes or command correctness.",
+    "A black source and black backbuffer do not independently validate CopyResource.",
+    "Shader placeholders do not prove their dispatches were skipped or identify their resource effects."
+  ]
+}

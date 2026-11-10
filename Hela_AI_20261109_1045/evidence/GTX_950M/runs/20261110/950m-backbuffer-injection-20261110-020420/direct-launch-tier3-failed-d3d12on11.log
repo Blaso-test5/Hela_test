@@ -1,0 +1,1269 @@
+Log file: D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\d3d12on11.log [tid=419144]
+[02:22:20.664] [tid=419144] Loaded 1 register binding overrides from D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\binding-map.json
+[02:22:20.665] [tid=419144] === D3D12On11 diagnostic session ===
+[02:22:20.665] [tid=419144] Config ini=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\d3d12on11.ini log=1 debug-layer=0 advertised-shader-model=6_7
+[02:22:20.665] [tid=419144] Config diagnostic-capabilities=1 (UNSAFE: reports selected capabilities not fully implemented by D3D11 proxy)
+[02:22:20.665] [tid=419144] Config caller-trace=1
+[02:22:20.665] [tid=419144] Config diagnostic-render-trace=1
+[02:22:20.665] [tid=419144] Config crash-diagnostics=0
+[02:22:20.665] [tid=419144] Config shader-dump=1 dump-dir=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump overrides-dir=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\overrides binding-map=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\binding-map.json entries=1
+[02:22:20.665] [tid=419144] Note: DXIL is not compiled by the proxy; a matching SM5 .cso override is required.
+[02:22:20.697] [tid=419144] [d3d12on11] TRACE api=Factory::EnumAdapters caller=Hela-Win64-Shipping.exe+0x1769544 thread=419144
+[02:22:20.698] [tid=419144] [d3d12on11] TRACE api=Factory::EnumAdapters caller=Hela-Win64-Shipping.exe+0x1769544 thread=419144
+[02:22:20.698] [tid=419144] [d3d12on11] TRACE api=Factory::EnumAdapters caller=Hela-Win64-Shipping.exe+0x1769544 thread=419144
+[02:22:20.698] [tid=419144] [d3d12on11] TRACE api=Factory::EnumAdapters caller=Hela-Win64-Shipping.exe+0x1769544 thread=419144
+[02:22:20.738] [tid=419144] [d3d12on11] TRACE api=Factory::EnumAdapterByGpuPreference caller=Hela-Win64-Shipping.exe+0x2ff2cb7 thread=419144
+[02:22:20.762] [tid=419144] [d3d12on11] TRACE api=D3D12CreateDevice caller=Hela-Win64-Shipping.exe+0x2ffcd12 thread=419144
+[02:22:20.762] [tid=419144] D3D12CreateDevice minimum feature level 0xb000 iid=189819f1-1db6-4b57
+[02:22:20.762] [tid=419144] D3D12CreateDevice adapter source=direct native-vendor=0x10de device=0x139a luid=00000000:0000f00e
+[02:22:22.137] [tid=419144] Created D3D11 device at feature level b000
+[02:22:22.152] [tid=419144] D3D11 tiled resources tier=1 feature-query=0x00000000 device2=1 context2=1
+[02:22:22.152] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=d3d12.dll+0x1e64e thread=419144
+[02:22:22.152] [tid=419144] Device QueryInterface ID3D12Device result=0x00000000
+[02:22:22.161] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffcd72 thread=419144
+[02:22:22.161] [tid=419144] CheckFeatureSupport begin feature=FEATURE_LEVELS(2) size=24 data=present
+[02:22:22.161] [tid=419144] CheckFeatureSupport end feature=FEATURE_LEVELS result=0x00000000 requested=[0xc200,0xc100,0xc000,0xb100,0xb000] returned=0xc000
+[02:22:22.161] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffcde3 thread=419144
+[02:22:22.161] [tid=419144] CheckFeatureSupport begin feature=SHADER_MODEL(7) size=4 data=present
+[02:22:22.161] [tid=419144] CheckFeatureSupport end feature=SHADER_MODEL result=0x00000000 requested=0x67 returned=0x67
+[02:22:22.176] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff47ef thread=419144
+[02:22:22.176] [tid=419144] CheckFeatureSupport begin feature=D3D12_OPTIONS(0) size=60 data=present
+[02:22:22.177] [tid=419144] CheckFeatureSupport end feature=D3D12_OPTIONS result=0x00000000 binding-tier=3 tiled-tier=3 conservative-raster=0 heap-tier=1 double-precision=0 logic-op=0 min-precision=0x0 typed-uav-load=0 ROV=0 stencil-ref=0 swizzle64k=0 cross-node=0 cross-adapter-row-major=0 rasterizer-array-index=0 max-gpu-va-bits=40 gpu-va-query=0x00000000
+[02:22:22.177] [tid=419144] [d3d12on11] TRACE api=GetNodeCount caller=Hela-Win64-Shipping.exe+0x2ffce1c thread=419144
+[02:22:22.177] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffce4b thread=419144
+[02:22:22.177] [tid=419144] CheckFeatureSupport begin feature=D3D12_OPTIONS1(8) size=24 data=present
+[02:22:22.177] [tid=419144] CheckFeatureSupport end feature=D3D12_OPTIONS1 result=0x00000000 wave-ops=1 wave-lanes=32..32 total-lanes=32 expanded-compute-states=0 int64-shader-ops=1
+[02:22:22.177] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff4f1a thread=419144
+[02:22:22.177] [tid=419144] CheckFeatureSupport begin feature=D3D12_OPTIONS9(37) size=24 data=present
+[02:22:22.177] [tid=419144] CheckFeatureSupport end feature=D3D12_OPTIONS9 result=0x00000000 mesh-stats=0 full-rt-array-index=0 atomic-int64-typed=1 atomic-int64-groupshared=0 mesh-derivatives=0 wave-mma-tier=0
+[02:22:22.197] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff72f0 thread=419144
+[02:22:22.197] [tid=419144] CheckFeatureSupport begin feature=ARCHITECTURE(1) size=16 data=present
+[02:22:22.197] [tid=419144] CheckFeatureSupport end feature=ARCHITECTURE result=0x00000000 node=0 tiled-renderer=0 UMA=0 coherent-UMA=0
+[02:22:22.197] [tid=419144] Device destroyed
+[02:22:22.262] [tid=419144] [d3d12on11] TRACE api=Factory::EnumAdapterByGpuPreference caller=Hela-Win64-Shipping.exe+0x2ff2cb7 thread=419144
+[02:22:22.296] [tid=419144] [d3d12on11] TRACE api=D3D12CreateDevice caller=Hela-Win64-Shipping.exe+0x2ffcd12 thread=419144
+[02:22:22.296] [tid=419144] D3D12CreateDevice minimum feature level 0xb000 iid=189819f1-1db6-4b57
+[02:22:22.296] [tid=419144] D3D12CreateDevice adapter source=direct native-vendor=0x8086 device=0x191b luid=00000000:0000ec00
+[02:22:22.443] [tid=419144] Created D3D11 device at feature level b100
+[02:22:22.443] [tid=419144] D3D11 tiled resources tier=2 feature-query=0x00000000 device2=1 context2=1
+[02:22:22.443] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=d3d12.dll+0x1e64e thread=419144
+[02:22:22.443] [tid=419144] Device QueryInterface ID3D12Device result=0x00000000
+[02:22:22.443] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffcd72 thread=419144
+[02:22:22.443] [tid=419144] CheckFeatureSupport begin feature=FEATURE_LEVELS(2) size=24 data=present
+[02:22:22.443] [tid=419144] CheckFeatureSupport end feature=FEATURE_LEVELS result=0x00000000 requested=[0xc200,0xc100,0xc000,0xb100,0xb000] returned=0xc000
+[02:22:22.443] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffcde3 thread=419144
+[02:22:22.443] [tid=419144] CheckFeatureSupport begin feature=SHADER_MODEL(7) size=4 data=present
+[02:22:22.443] [tid=419144] CheckFeatureSupport end feature=SHADER_MODEL result=0x00000000 requested=0x67 returned=0x67
+[02:22:22.443] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff47ef thread=419144
+[02:22:22.443] [tid=419144] CheckFeatureSupport begin feature=D3D12_OPTIONS(0) size=60 data=present
+[02:22:22.443] [tid=419144] CheckFeatureSupport end feature=D3D12_OPTIONS result=0x00000000 binding-tier=3 tiled-tier=3 conservative-raster=0 heap-tier=1 double-precision=0 logic-op=0 min-precision=0x0 typed-uav-load=0 ROV=0 stencil-ref=0 swizzle64k=0 cross-node=0 cross-adapter-row-major=0 rasterizer-array-index=0 max-gpu-va-bits=38 gpu-va-query=0x00000000
+[02:22:22.443] [tid=419144] [d3d12on11] TRACE api=GetNodeCount caller=Hela-Win64-Shipping.exe+0x2ffce1c thread=419144
+[02:22:22.443] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffce4b thread=419144
+[02:22:22.443] [tid=419144] CheckFeatureSupport begin feature=D3D12_OPTIONS1(8) size=24 data=present
+[02:22:22.443] [tid=419144] CheckFeatureSupport end feature=D3D12_OPTIONS1 result=0x00000000 wave-ops=1 wave-lanes=32..32 total-lanes=32 expanded-compute-states=0 int64-shader-ops=1
+[02:22:22.443] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff4f1a thread=419144
+[02:22:22.443] [tid=419144] CheckFeatureSupport begin feature=D3D12_OPTIONS9(37) size=24 data=present
+[02:22:22.443] [tid=419144] CheckFeatureSupport end feature=D3D12_OPTIONS9 result=0x00000000 mesh-stats=0 full-rt-array-index=0 atomic-int64-typed=1 atomic-int64-groupshared=0 mesh-derivatives=0 wave-mma-tier=0
+[02:22:22.443] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff72f0 thread=419144
+[02:22:22.443] [tid=419144] CheckFeatureSupport begin feature=ARCHITECTURE(1) size=16 data=present
+[02:22:22.443] [tid=419144] CheckFeatureSupport end feature=ARCHITECTURE result=0x00000000 node=0 tiled-renderer=0 UMA=0 coherent-UMA=0
+[02:22:22.443] [tid=419144] Device destroyed
+[02:22:22.453] [tid=419144] [d3d12on11] TRACE api=Factory::EnumAdapterByGpuPreference caller=Hela-Win64-Shipping.exe+0x2ff2cb7 thread=419144
+[02:22:22.453] [tid=419144] [d3d12on11] TRACE api=D3D12CreateDevice caller=Hela-Win64-Shipping.exe+0x2ffcd12 thread=419144
+[02:22:22.453] [tid=419144] D3D12CreateDevice minimum feature level 0xb000 iid=189819f1-1db6-4b57
+[02:22:22.453] [tid=419144] D3D12CreateDevice adapter source=direct native-vendor=0x1414 device=0x008c luid=00000000:0000efe9
+[02:22:22.461] [tid=419144] Created D3D11 device at feature level b100
+[02:22:22.461] [tid=419144] D3D11 tiled resources tier=2 feature-query=0x00000000 device2=1 context2=1
+[02:22:22.461] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=d3d12.dll+0x1e64e thread=419144
+[02:22:22.461] [tid=419144] Device QueryInterface ID3D12Device result=0x00000000
+[02:22:22.461] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffcd72 thread=419144
+[02:22:22.461] [tid=419144] CheckFeatureSupport begin feature=FEATURE_LEVELS(2) size=24 data=present
+[02:22:22.461] [tid=419144] CheckFeatureSupport end feature=FEATURE_LEVELS result=0x00000000 requested=[0xc200,0xc100,0xc000,0xb100,0xb000] returned=0xc000
+[02:22:22.461] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffcde3 thread=419144
+[02:22:22.461] [tid=419144] CheckFeatureSupport begin feature=SHADER_MODEL(7) size=4 data=present
+[02:22:22.461] [tid=419144] CheckFeatureSupport end feature=SHADER_MODEL result=0x00000000 requested=0x67 returned=0x67
+[02:22:22.461] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff47ef thread=419144
+[02:22:22.461] [tid=419144] CheckFeatureSupport begin feature=D3D12_OPTIONS(0) size=60 data=present
+[02:22:22.461] [tid=419144] CheckFeatureSupport end feature=D3D12_OPTIONS result=0x00000000 binding-tier=3 tiled-tier=3 conservative-raster=0 heap-tier=1 double-precision=0 logic-op=0 min-precision=0x0 typed-uav-load=0 ROV=0 stencil-ref=0 swizzle64k=0 cross-node=0 cross-adapter-row-major=0 rasterizer-array-index=0 max-gpu-va-bits=32 gpu-va-query=0x00000000
+[02:22:22.461] [tid=419144] [d3d12on11] TRACE api=GetNodeCount caller=Hela-Win64-Shipping.exe+0x2ffce1c thread=419144
+[02:22:22.461] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffce4b thread=419144
+[02:22:22.461] [tid=419144] CheckFeatureSupport begin feature=D3D12_OPTIONS1(8) size=24 data=present
+[02:22:22.461] [tid=419144] CheckFeatureSupport end feature=D3D12_OPTIONS1 result=0x00000000 wave-ops=1 wave-lanes=32..32 total-lanes=32 expanded-compute-states=0 int64-shader-ops=1
+[02:22:22.461] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff4f1a thread=419144
+[02:22:22.461] [tid=419144] CheckFeatureSupport begin feature=D3D12_OPTIONS9(37) size=24 data=present
+[02:22:22.461] [tid=419144] CheckFeatureSupport end feature=D3D12_OPTIONS9 result=0x00000000 mesh-stats=0 full-rt-array-index=0 atomic-int64-typed=1 atomic-int64-groupshared=0 mesh-derivatives=0 wave-mma-tier=0
+[02:22:22.461] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff72f0 thread=419144
+[02:22:22.461] [tid=419144] CheckFeatureSupport begin feature=ARCHITECTURE(1) size=16 data=present
+[02:22:22.461] [tid=419144] CheckFeatureSupport end feature=ARCHITECTURE result=0x00000000 node=0 tiled-renderer=0 UMA=0 coherent-UMA=0
+[02:22:22.461] [tid=419144] Device destroyed
+[02:22:22.463] [tid=419144] [d3d12on11] TRACE api=Factory::EnumAdapterByGpuPreference caller=Hela-Win64-Shipping.exe+0x2ff2cb7 thread=419144
+[02:22:22.703] [tid=225224] [RENDER_TRACE] [HEARTBEAT] tid=225224 up=2031ms last-api=init(tid=0,ago=2031ms) exec=0 sig=0 wait=0 wctx=0(fail=0,max-spin=0) swap=0 present=0 pso(G=0,C=0,last=0000000000000000) draw(ok=0,rtv=0,bb=0,nullrtv=0,skip-pso=0,skip-vs=0,skip-other=0,skip-vb=0,skip-ib=0,skip-map=0,missing-vb=0,missing-ib=0) disp(ok=0,skip-pso=0,skip-cs=0) placed(ok=0,ovl=0,rel=0,live=0)
+[02:22:24.712] [tid=225224] [RENDER_TRACE] [HEARTBEAT] tid=225224 up=4047ms last-api=init(tid=0,ago=4047ms) exec=0 sig=0 wait=0 wctx=0(fail=0,max-spin=0) swap=0 present=0 pso(G=0,C=0,last=0000000000000000) draw(ok=0,rtv=0,bb=0,nullrtv=0,skip-pso=0,skip-vs=0,skip-other=0,skip-vb=0,skip-ib=0,skip-map=0,missing-vb=0,missing-ib=0) disp(ok=0,skip-pso=0,skip-cs=0) placed(ok=0,ovl=0,rel=0,live=0)
+[02:22:25.826] [tid=419144] [d3d12on11] TRACE api=Factory::EnumAdapterByGpuPreference caller=Hela-Win64-Shipping.exe+0x2f7bb27 thread=419144
+[02:22:25.826] [tid=419144] [d3d12on11] TRACE api=D3D12CreateDevice caller=Hela-Win64-Shipping.exe+0x2f7becd thread=419144
+[02:22:25.826] [tid=419144] D3D12CreateDevice minimum feature level 0xc000 iid=189819f1-1db6-4b57
+[02:22:25.826] [tid=419144] D3D12CreateDevice adapter source=direct native-vendor=0x10de device=0x139a luid=00000000:0000f00e
+[02:22:25.826] [tid=419144] Accepting D3D12 minimum feature level 0xc000 on the D3D11 translation backend
+[02:22:25.908] [tid=419144] Created D3D11 device at feature level b000
+[02:22:25.908] [tid=419144] D3D11 tiled resources tier=1 feature-query=0x00000000 device2=1 context2=1
+[02:22:25.908] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=d3d12.dll+0x1e64e thread=419144
+[02:22:25.908] [tid=419144] Device QueryInterface ID3D12Device result=0x00000000
+[02:22:25.926] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=GFSDK_Aftermath_Lib.x64.dll+0x7c51a thread=419144
+[02:22:25.926] [tid=419144] Device QueryInterface unsupported iid=3febd6dd-4973-4787
+[02:22:25.927] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=nvapi64.dll+0x33a727 thread=419144
+[02:22:25.928] [tid=419144] Device QueryInterface ID3D12Device result=0x00000000
+[02:22:25.928] [tid=419144] [d3d12on11] TRACE api=GetPrivateData caller=nvapi64.dll+0x313df0 thread=419144
+[02:22:25.928] [tid=419144] GetPrivateData end guid=48596da1-814c-45bd requested=8 returned=0 has-data=1 result=0x887a0002
+[02:22:25.928] [tid=419144] [d3d12on11] TRACE api=GetPrivateData caller=nvapi64.dll+0x313e3f thread=419144
+[02:22:25.928] [tid=419144] GetPrivateData end guid=48596da1-814c-45bd requested=8 returned=0 has-data=1 result=0x887a0002
+[02:22:25.928] [tid=419144] [d3d12on11] TRACE api=Device::GetAdapterLuid caller=nvapi64.dll+0x314ef2 thread=419144
+[02:22:25.928] [tid=419144] [d3d12on11] TRACE api=Factory::EnumAdapters caller=nvapi64.dll+0x314fb6 thread=419144
+[02:22:25.928] [tid=419144] [d3d12on11] TRACE api=Device::CreateReservedResource caller=nvapi64.dll+0x315207 thread=419144
+[02:22:25.928] [tid=419144] CreateReservedResource request dimension=3 width=1 height=1 depth-or-array=1 mips=1 format=28 layout=2 flags=0x4 state=0x0 clear=none
+[02:22:25.928] [tid=419144] CreateReservedResource unavailable: D3D11 tiled resources tier=1 device2=1 context2=1
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=Hela-Win64-Shipping.exe+0x2f7f397 thread=419144
+[02:22:25.929] [tid=419144] Device QueryInterface ID3D12Device1 result=0x00000000
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=Hela-Win64-Shipping.exe+0x2f7f3c5 thread=419144
+[02:22:25.929] [tid=419144] Device QueryInterface ID3D12Device2 result=0x00000000
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=Hela-Win64-Shipping.exe+0x2f7f417 thread=419144
+[02:22:25.929] [tid=419144] Device QueryInterface unsupported iid=81dadc15-2bad-4392
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=Hela-Win64-Shipping.exe+0x2f7f445 thread=419144
+[02:22:25.929] [tid=419144] Device QueryInterface unsupported iid=e865df17-a9ee-46f9
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=Hela-Win64-Shipping.exe+0x2f7f472 thread=419144
+[02:22:25.929] [tid=419144] Device QueryInterface unsupported iid=8b4f173b-2fea-4b80
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=Hela-Win64-Shipping.exe+0x2f7f4a0 thread=419144
+[02:22:25.929] [tid=419144] Device QueryInterface unsupported iid=c70b221b-40e4-4a17
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=Hela-Win64-Shipping.exe+0x2f7f4d0 thread=419144
+[02:22:25.929] [tid=419144] Device QueryInterface unsupported iid=5c014b53-68a1-4b9b
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=Hela-Win64-Shipping.exe+0x2f7f4fe thread=419144
+[02:22:25.929] [tid=419144] Device QueryInterface unsupported iid=9218e6bb-f944-4f7e
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=Hela-Win64-Shipping.exe+0x2f7f537 thread=419144
+[02:22:25.929] [tid=419144] Device QueryInterface unsupported iid=4c80e962-f032-4f60
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=Hela-Win64-Shipping.exe+0x2f7f565 thread=419144
+[02:22:25.929] [tid=419144] Device QueryInterface unsupported iid=517f8718-aa66-49f9
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=Hela-Win64-Shipping.exe+0x2f7f593 thread=419144
+[02:22:25.929] [tid=419144] Device QueryInterface unsupported iid=5405c344-d457-444e
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=Hela-Win64-Shipping.exe+0x2f7f5c1 thread=419144
+[02:22:25.929] [tid=419144] Device QueryInterface unsupported iid=5af5c532-4c91-4cd0
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2f7f5ea thread=419144
+[02:22:25.929] [tid=419144] CheckFeatureSupport begin feature=unknown(48) size=40 data=present
+[02:22:25.929] [tid=419144] CheckFeatureSupport end feature=unknown(48) result=0x80070057 reason=unimplemented
+[02:22:25.929] [tid=419144] UNIMPL ID3D12Device::CheckFeatureSupport unsupported feature
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=Hela-Win64-Shipping.exe+0x2f7f683 thread=419144
+[02:22:25.929] [tid=419144] Device QueryInterface unsupported iid=a7aa6116-9c8d-4bba
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2f7f6f5 thread=419144
+[02:22:25.929] [tid=419144] CheckFeatureSupport begin feature=D3D12_OPTIONS(0) size=60 data=present
+[02:22:25.929] [tid=419144] CheckFeatureSupport end feature=D3D12_OPTIONS result=0x00000000 binding-tier=3 tiled-tier=3 conservative-raster=0 heap-tier=1 double-precision=0 logic-op=0 min-precision=0x0 typed-uav-load=0 ROV=0 stencil-ref=0 swizzle64k=0 cross-node=0 cross-adapter-row-major=0 rasterizer-array-index=0 max-gpu-va-bits=40 gpu-va-query=0x00000000
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2f7f739 thread=419144
+[02:22:25.929] [tid=419144] CheckFeatureSupport begin feature=D3D12_OPTIONS1(8) size=24 data=present
+[02:22:25.929] [tid=419144] CheckFeatureSupport end feature=D3D12_OPTIONS1 result=0x00000000 wave-ops=1 wave-lanes=32..32 total-lanes=32 expanded-compute-states=0 int64-shader-ops=1
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2f7f77a thread=419144
+[02:22:25.929] [tid=419144] CheckFeatureSupport begin feature=unknown(21) size=20 data=present
+[02:22:25.929] [tid=419144] CheckFeatureSupport end feature=unknown(21) result=0x80070057 reason=unimplemented
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2f7f7a6 thread=419144
+[02:22:25.929] [tid=419144] CheckFeatureSupport begin feature=unknown(23) size=12 data=present
+[02:22:25.929] [tid=419144] CheckFeatureSupport end feature=unknown(23) result=0x80070057 reason=unimplemented
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2f7f7d2 thread=419144
+[02:22:25.929] [tid=419144] CheckFeatureSupport begin feature=unknown(27) size=12 data=present
+[02:22:25.929] [tid=419144] CheckFeatureSupport end feature=unknown(27) result=0x80070057 reason=unimplemented
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2f7f99a thread=419144
+[02:22:25.929] [tid=419144] CheckFeatureSupport begin feature=unknown(32) size=8 data=present
+[02:22:25.929] [tid=419144] CheckFeatureSupport end feature=unknown(32) result=0x80070057 reason=unimplemented
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2f7f9bf thread=419144
+[02:22:25.929] [tid=419144] CheckFeatureSupport begin feature=D3D12_OPTIONS9(37) size=24 data=present
+[02:22:25.929] [tid=419144] CheckFeatureSupport end feature=D3D12_OPTIONS9 result=0x00000000 mesh-stats=0 full-rt-array-index=0 atomic-int64-typed=1 atomic-int64-groupshared=0 mesh-derivatives=0 wave-mma-tier=0
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2f7f9db thread=419144
+[02:22:25.929] [tid=419144] CheckFeatureSupport begin feature=unknown(40) size=4 data=present
+[02:22:25.929] [tid=419144] CheckFeatureSupport end feature=unknown(40) result=0x80070057 reason=unimplemented
+[02:22:25.929] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2f7fa2f thread=419144
+[02:22:25.930] [tid=419144] CheckFeatureSupport begin feature=unknown(53) size=16 data=present
+[02:22:25.930] [tid=419144] CheckFeatureSupport end feature=unknown(53) result=0x80070057 reason=unimplemented
+[02:22:25.930] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2f7fae6 thread=419144
+[02:22:25.930] [tid=419144] CheckFeatureSupport begin feature=unknown(30) size=20 data=present
+[02:22:25.930] [tid=419144] CheckFeatureSupport end feature=unknown(30) result=0x80070057 reason=unimplemented
+[02:22:25.930] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2f7fb3c thread=419144
+[02:22:25.930] [tid=419144] CheckFeatureSupport begin feature=unknown(18) size=8 data=present
+[02:22:25.930] [tid=419144] CheckFeatureSupport end feature=unknown(18) result=0x80070057 reason=unimplemented
+[02:22:25.930] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2f7fb7e thread=419144
+[02:22:25.930] [tid=419144] CheckFeatureSupport begin feature=unknown(12) size=4 data=present
+[02:22:25.930] [tid=419144] CheckFeatureSupport end feature=unknown(12) result=0x80070057 reason=unimplemented
+[02:22:25.930] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2f7fbbf thread=419144
+[02:22:25.930] [tid=419144] CheckFeatureSupport begin feature=unknown(21) size=20 data=present
+[02:22:25.930] [tid=419144] CheckFeatureSupport end feature=unknown(21) result=0x80070057 reason=unimplemented
+[02:22:25.937] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=Hela-Win64-Shipping.exe+0x2faa94b thread=419144
+[02:22:25.937] [tid=419144] Device QueryInterface unsupported iid=81dadc15-2bad-4392
+[02:22:25.974] [tid=419144] CreateCommandQueue type=0 result=0x00000000
+[02:22:25.975] [tid=419144] CreateCommandQueue type=3 result=0x00000000
+[02:22:25.975] [tid=419144] CreateCommandQueue type=2 result=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=2 result=0x00000000 support1=0x02f4d3fb support2=0x000002c0 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=2 result=0x00000000 support1=0x02f4d3fb support2=0x000002c0 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=2 result=0x00000000 support1=0x02f4d3fb support2=0x000002c0 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=2 result=0x00000000 support1=0x02f4d3fb support2=0x000002c0 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=2 result=0x00000000 support1=0x02f4d3fb support2=0x000002c0 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=90 result=0x00000000 support1=0x001010f0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=87 result=0x00000000 support1=0x33fcd3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=87 result=0x00000000 support1=0x33fcd3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=87 result=0x00000000 support1=0x33fcd3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=90 result=0x00000000 support1=0x001010f0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=61 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=61 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=61 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=61 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=61 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=56 result=0x00000000 support1=0x06f4d7f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=56 result=0x00000000 support1=0x06f4d7f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=56 result=0x00000000 support1=0x06f4d7f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.975] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.975] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.975] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=56 result=0x00000000 support1=0x06f4d7f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.976] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=56 result=0x00000000 support1=0x06f4d7f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.976] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=70 result=0x00000000 support1=0x001010e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.976] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=71 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.976] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=70 result=0x00000000 support1=0x001010e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.976] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=71 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.976] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=70 result=0x00000000 support1=0x001010e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.976] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=73 result=0x00000000 support1=0x001010e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.976] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=74 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.976] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=73 result=0x00000000 support1=0x001010e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.976] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=74 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.976] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=73 result=0x00000000 support1=0x001010e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.976] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=76 result=0x00000000 support1=0x001010e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.976] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=77 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.976] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=76 result=0x00000000 support1=0x001010e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.976] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=77 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.976] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=76 result=0x00000000 support1=0x001010e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.976] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.976] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=26 result=0x00000000 support1=0x02e4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=26 result=0x00000000 support1=0x02e4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=26 result=0x00000000 support1=0x02e4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=26 result=0x00000000 support1=0x02e4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=26 result=0x00000000 support1=0x02e4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=10 result=0x00000000 support1=0x12fcd3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=10 result=0x00000000 support1=0x12fcd3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=10 result=0x00000000 support1=0x12fcd3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=10 result=0x00000000 support1=0x12fcd3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=10 result=0x00000000 support1=0x12fcd3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=19 result=0x00000000 support1=0x001010b0 support2=0x00000000 support2-query=0x80004005
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=21 result=0x00000000 support1=0x04d017b0 support2=0x00000000 support2-query=0x80004005
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=21 result=0x00000000 support1=0x04d017b0 support2=0x00000000 support2-query=0x80004005
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=21 result=0x00000000 support1=0x04d017b0 support2=0x00000000 support2-query=0x80004005
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=20 result=0x00000000 support1=0x003110b0 support2=0x00000000 support2-query=0x80004005
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=53 result=0x00000000 support1=0x001010f0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=56 result=0x00000000 support1=0x06f4d7f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=53 result=0x00000000 support1=0x001010f0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=56 result=0x00000000 support1=0x06f4d7f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=55 result=0x00000000 support1=0x003110b0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.977] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.977] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=41 result=0x00000000 support1=0x06f4d7fb support2=0x000002c8 support2-query=0x00000000
+[02:22:25.977] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.978] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.978] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=41 result=0x00000000 support1=0x06f4d7fb support2=0x000002c8 support2-query=0x00000000
+[02:22:25.978] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.978] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.978] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=41 result=0x00000000 support1=0x06f4d7fb support2=0x000002c8 support2-query=0x00000000
+[02:22:25.978] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.978] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.978] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=41 result=0x00000000 support1=0x06f4d7fb support2=0x000002c8 support2-query=0x00000000
+[02:22:25.978] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.978] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.978] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=41 result=0x00000000 support1=0x06f4d7fb support2=0x000002c8 support2-query=0x00000000
+[02:22:25.978] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.978] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.996] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=35 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.996] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.997] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.997] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=35 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.997] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.997] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.997] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=35 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.997] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.997] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.997] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=35 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.997] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.997] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.997] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=35 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.997] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.997] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.997] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=34 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.997] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.997] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.997] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=34 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.997] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.997] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.997] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=34 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.997] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.997] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.997] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=34 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.997] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.997] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.997] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=34 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.997] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.997] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.997] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=34 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.997] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.997] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.997] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=34 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.997] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.997] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.997] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=34 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.997] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.997] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.997] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=34 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.997] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.997] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.997] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=34 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.997] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.997] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.997] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=16 result=0x00000000 support1=0x02f4d3fb support2=0x000002c0 support2-query=0x00000000
+[02:22:25.997] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.997] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.997] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=16 result=0x00000000 support1=0x02f4d3fb support2=0x000002c0 support2-query=0x00000000
+[02:22:25.998] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.998] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.998] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=16 result=0x00000000 support1=0x02f4d3fb support2=0x000002c0 support2-query=0x00000000
+[02:22:25.998] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.998] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.998] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=16 result=0x00000000 support1=0x02f4d3fb support2=0x000002c0 support2-query=0x00000000
+[02:22:25.998] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.998] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.998] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=16 result=0x00000000 support1=0x02f4d3fb support2=0x000002c0 support2-query=0x00000000
+[02:22:25.998] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.998] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.998] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=24 result=0x00000000 support1=0x33fcd3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.998] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.998] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.998] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=24 result=0x00000000 support1=0x33fcd3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.998] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.998] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.998] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=24 result=0x00000000 support1=0x33fcd3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.998] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.998] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.998] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=24 result=0x00000000 support1=0x33fcd3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.998] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.998] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.998] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=24 result=0x00000000 support1=0x33fcd3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.998] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.998] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.998] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=11 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.998] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.998] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.998] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=11 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.998] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.998] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.998] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=11 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.998] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.998] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.998] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=11 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.998] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.998] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.998] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=11 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.998] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.998] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.998] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=44 result=0x00000000 support1=0x001010b0 support2=0x00000000 support2-query=0x80004005
+[02:22:25.998] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.998] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.998] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=46 result=0x00000000 support1=0x04d017b0 support2=0x00000000 support2-query=0x80004005
+[02:22:25.999] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.999] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.999] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=44 result=0x00000000 support1=0x001010b0 support2=0x00000000 support2-query=0x80004005
+[02:22:25.999] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.999] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.999] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=46 result=0x00000000 support1=0x04d017b0 support2=0x00000000 support2-query=0x80004005
+[02:22:25.999] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.999] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.999] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=45 result=0x00000000 support1=0x003110b0 support2=0x00000000 support2-query=0x80004005
+[02:22:25.999] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.999] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.999] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=54 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.999] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.999] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.999] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=54 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.999] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.999] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.999] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=54 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.999] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.999] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.999] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=54 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.999] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.999] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.999] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=54 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.999] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.999] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.999] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=54 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.999] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.999] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.999] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=54 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.999] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:25.999] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.999] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=54 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.999] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:25.999] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.999] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=54 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.999] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:25.999] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.999] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=54 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:25.999] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:25.999] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.999] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=83 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.999] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:25.999] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:25.999] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=83 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:25.999] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.000] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.000] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=83 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.000] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.000] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.000] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=83 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.000] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.000] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.000] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=83 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.000] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.000] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.000] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=51 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.000] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.000] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.000] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=51 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.000] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.000] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.000] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=51 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.000] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.000] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.000] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=51 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.000] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.000] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.000] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=51 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.000] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.000] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.000] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=66 result=0x80004005 support1-query=0x80004005
+[02:22:26.000] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.000] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.000] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=66 result=0x80004005 support1-query=0x80004005
+[02:22:26.000] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.000] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.000] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=66 result=0x80004005 support1-query=0x80004005
+[02:22:26.000] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.000] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.000] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=66 result=0x80004005 support1-query=0x80004005
+[02:22:26.000] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.000] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.000] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=66 result=0x80004005 support1-query=0x80004005
+[02:22:26.000] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.000] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.000] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=26 result=0x00000000 support1=0x02e4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.000] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.000] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.000] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=26 result=0x00000000 support1=0x02e4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.000] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.000] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.000] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=26 result=0x00000000 support1=0x02e4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=26 result=0x00000000 support1=0x02e4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=26 result=0x00000000 support1=0x02e4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=65 result=0x00000000 support1=0x02e4d3f0 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=65 result=0x00000000 support1=0x02e4d3f0 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=65 result=0x00000000 support1=0x02e4d3f0 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=65 result=0x00000000 support1=0x02e4d3f0 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=65 result=0x00000000 support1=0x02e4d3f0 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=42 result=0x00000000 support1=0x027051ff support2=0x000003ff support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=42 result=0x00000000 support1=0x027051ff support2=0x000003ff support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=42 result=0x00000000 support1=0x027051ff support2=0x000003ff support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=42 result=0x00000000 support1=0x027051ff support2=0x000003ff support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=42 result=0x00000000 support1=0x027051ff support2=0x000003ff support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=43 result=0x00000000 support1=0x027051fb support2=0x000002ff support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=43 result=0x00000000 support1=0x027051fb support2=0x000002ff support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=43 result=0x00000000 support1=0x027051fb support2=0x000002ff support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=43 result=0x00000000 support1=0x027051fb support2=0x000002ff support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=43 result=0x00000000 support1=0x027051fb support2=0x000002ff support2-query=0x00000000
+[02:22:26.001] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.001] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.001] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=57 result=0x00000000 support1=0x027051f7 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=57 result=0x00000000 support1=0x027051f7 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=57 result=0x00000000 support1=0x027051f7 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=57 result=0x00000000 support1=0x027051f7 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=57 result=0x00000000 support1=0x027051f7 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=59 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=59 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=59 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=59 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=59 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=12 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=12 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=12 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=12 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=12 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=14 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=14 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=14 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.002] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.002] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.002] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=14 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=14 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=85 result=0x00000000 support1=0x00e4d3f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=85 result=0x00000000 support1=0x00e4d3f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=85 result=0x00000000 support1=0x00e4d3f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=85 result=0x00000000 support1=0x00e4d3f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=85 result=0x00000000 support1=0x00e4d3f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=27 result=0x00000000 support1=0x001010f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=28 result=0x00000000 support1=0x33fcd3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=28 result=0x00000000 support1=0x33fcd3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=28 result=0x00000000 support1=0x33fcd3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=27 result=0x00000000 support1=0x001010f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=80 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=80 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=80 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=80 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=80 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.003] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.003] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.003] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=49 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.004] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.004] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.004] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=49 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.004] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.004] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.004] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=49 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.004] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.004] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.004] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=49 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.004] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.004] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.004] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=49 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.004] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.004] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.004] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=22 result=0x00000000 support1=0x005011b0 support2=0x00000000 support2-query=0x80004005
+[02:22:26.004] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.004] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.004] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=22 result=0x00000000 support1=0x005011b0 support2=0x00000000 support2-query=0x80004005
+[02:22:26.004] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.004] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.004] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=22 result=0x00000000 support1=0x005011b0 support2=0x00000000 support2-query=0x80004005
+[02:22:26.004] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.004] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.004] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=22 result=0x00000000 support1=0x005011b0 support2=0x00000000 support2-query=0x80004005
+[02:22:26.004] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.004] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.004] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=22 result=0x00000000 support1=0x005011b0 support2=0x00000000 support2-query=0x80004005
+[02:22:26.004] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.004] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.004] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=3 result=0x00000000 support1=0x027051fb support2=0x000003c0 support2-query=0x00000000
+[02:22:26.004] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.004] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.004] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=3 result=0x00000000 support1=0x027051fb support2=0x000003c0 support2-query=0x00000000
+[02:22:26.004] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.004] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.004] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=3 result=0x00000000 support1=0x027051fb support2=0x000003c0 support2-query=0x00000000
+[02:22:26.004] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.004] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.004] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=3 result=0x00000000 support1=0x027051fb support2=0x000003c0 support2-query=0x00000000
+[02:22:26.004] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.004] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.004] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=3 result=0x00000000 support1=0x027051fb support2=0x000003c0 support2-query=0x00000000
+[02:22:26.004] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.004] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.005] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=36 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.005] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.005] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.005] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=36 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.005] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.005] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.005] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=36 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.005] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.005] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.005] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=36 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.005] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.005] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.005] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=36 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.005] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.005] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.005] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=95 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.005] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.005] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.005] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=95 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.005] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.005] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.005] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=95 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.005] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.005] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.005] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=95 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.005] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.005] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.005] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=95 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.005] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.005] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.005] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=97 result=0x00000000 support1=0x001010e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.005] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.005] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.005] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=98 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.005] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.005] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.005] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=97 result=0x00000000 support1=0x001010e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.005] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.005] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.005] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=98 result=0x00000000 support1=0x009013e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.005] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.005] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.005] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=97 result=0x00000000 support1=0x001010e0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.005] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.006] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.006] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=62 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.006] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.006] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.006] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=62 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.006] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.006] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.006] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=62 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.006] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.006] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.006] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=62 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.006] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.006] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.006] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=62 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.006] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.006] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.006] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=30 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.006] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.006] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.006] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=30 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.006] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.006] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.006] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=30 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.006] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.006] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.006] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=30 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.006] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.006] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.006] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=30 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.006] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.006] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.006] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=31 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.006] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.006] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.006] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=31 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.006] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.006] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.006] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=31 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.006] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.006] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.006] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=31 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.006] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.006] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.006] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=31 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.006] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.006] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.006] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=11 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.006] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.007] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.007] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=11 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.007] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.007] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.007] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=11 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.007] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.007] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.007] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=11 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.007] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.007] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.007] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=11 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.007] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.007] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.007] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=13 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.007] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.007] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.007] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=13 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.007] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.007] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.007] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=13 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.007] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.007] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.007] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=13 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.007] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.007] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.007] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=13 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.007] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.007] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.007] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=103 result=0x00000000 support1=0xfa80c320 support2=0x00000080 support2-query=0x00000000
+[02:22:26.007] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.007] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.007] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=103 result=0x00000000 support1=0xfa80c320 support2=0x00000080 support2-query=0x00000000
+[02:22:26.007] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.007] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.007] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=103 result=0x00000000 support1=0xfa80c320 support2=0x00000080 support2-query=0x00000000
+[02:22:26.007] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.007] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.007] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=103 result=0x00000000 support1=0xfa80c320 support2=0x00000080 support2-query=0x00000000
+[02:22:26.007] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.007] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.007] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=103 result=0x00000000 support1=0xfa80c320 support2=0x00000080 support2-query=0x00000000
+[02:22:26.007] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.007] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.007] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=17 result=0x00000000 support1=0x027051fb support2=0x000003c0 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.008] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=17 result=0x00000000 support1=0x027051fb support2=0x000003c0 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.008] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=17 result=0x00000000 support1=0x027051fb support2=0x000003c0 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.008] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=17 result=0x00000000 support1=0x027051fb support2=0x000003c0 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.008] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=17 result=0x00000000 support1=0x027051fb support2=0x000003c0 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.008] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=61 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.008] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=61 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.008] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=61 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.008] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=61 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.008] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=61 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.008] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=86 result=0x00000000 support1=0x00e4d3f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.008] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=86 result=0x00000000 support1=0x00e4d3f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.008] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=86 result=0x00000000 support1=0x00e4d3f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.008] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=86 result=0x00000000 support1=0x00e4d3f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.008] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=86 result=0x00000000 support1=0x00e4d3f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.008] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=37 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.008] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=37 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.008] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.008] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.009] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=37 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.009] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.009] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.009] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=37 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.009] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.009] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.009] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=37 result=0x00000000 support1=0x02f4d3f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.009] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.009] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.009] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=50 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.009] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.009] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.009] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=50 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.009] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.009] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.009] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=50 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.009] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.009] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.009] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=50 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.009] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.009] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.009] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=50 result=0x00000000 support1=0x027051f3 support2=0x000003c0 support2-query=0x00000000
+[02:22:26.009] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.009] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.009] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=7 result=0x00000000 support1=0x005011fb support2=0x00000100 support2-query=0x00000000
+[02:22:26.009] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.009] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.009] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=7 result=0x00000000 support1=0x005011fb support2=0x00000100 support2-query=0x00000000
+[02:22:26.009] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.009] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.009] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=7 result=0x00000000 support1=0x005011fb support2=0x00000100 support2-query=0x00000000
+[02:22:26.009] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.009] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.009] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=7 result=0x00000000 support1=0x005011fb support2=0x00000100 support2-query=0x00000000
+[02:22:26.009] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.009] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.009] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=7 result=0x00000000 support1=0x005011fb support2=0x00000100 support2-query=0x00000000
+[02:22:26.009] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.009] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.009] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=8 result=0x00000000 support1=0x005011fb support2=0x00000000 support2-query=0x80004005
+[02:22:26.009] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.009] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.009] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=8 result=0x00000000 support1=0x005011fb support2=0x00000000 support2-query=0x80004005
+[02:22:26.009] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.009] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.009] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=8 result=0x00000000 support1=0x005011fb support2=0x00000000 support2-query=0x80004005
+[02:22:26.009] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.009] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=8 result=0x00000000 support1=0x005011fb support2=0x00000000 support2-query=0x80004005
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=8 result=0x00000000 support1=0x005011fb support2=0x00000000 support2-query=0x80004005
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=6 result=0x00000000 support1=0x005411fb support2=0x00000000 support2-query=0x80004005
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=6 result=0x00000000 support1=0x005411fb support2=0x00000000 support2-query=0x80004005
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=6 result=0x00000000 support1=0x005411fb support2=0x00000000 support2-query=0x80004005
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=6 result=0x00000000 support1=0x005411fb support2=0x00000000 support2-query=0x80004005
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=6 result=0x00000000 support1=0x005411fb support2=0x00000000 support2-query=0x80004005
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=64 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=64 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=64 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=64 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=64 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=67 result=0x00000000 support1=0x008013f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=67 result=0x00000000 support1=0x008013f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=67 result=0x00000000 support1=0x008013f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=67 result=0x00000000 support1=0x008013f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=67 result=0x00000000 support1=0x008013f0 support2=0x00000200 support2-query=0x00000000
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.010] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=104 result=0x00000000 support1=0x3a80c320 support2=0x00000080 support2-query=0x00000000
+[02:22:26.010] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.010] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.011] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=104 result=0x00000000 support1=0x3a80c320 support2=0x00000080 support2-query=0x00000000
+[02:22:26.011] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.011] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.011] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=104 result=0x00000000 support1=0x3a80c320 support2=0x00000080 support2-query=0x00000000
+[02:22:26.011] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.011] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.011] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=104 result=0x00000000 support1=0x3a80c320 support2=0x00000080 support2-query=0x00000000
+[02:22:26.011] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.011] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.011] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=104 result=0x00000000 support1=0x3a80c320 support2=0x00000080 support2-query=0x00000000
+[02:22:26.011] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb376d thread=419144
+[02:22:26.011] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.011] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=38 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.011] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3805 thread=419144
+[02:22:26.011] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.011] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=38 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.011] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3846 thread=419144
+[02:22:26.011] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.011] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=38 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.011] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3914 thread=419144
+[02:22:26.011] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.011] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=38 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.011] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2fb3961 thread=419144
+[02:22:26.011] [tid=419144] CheckFeatureSupport begin feature=FORMAT_SUPPORT(3) size=12 data=present
+[02:22:26.011] [tid=419144] CheckFeatureSupport end feature=FORMAT_SUPPORT format=38 result=0x00000000 support1=0x027051f3 support2=0x000002c0 support2-query=0x00000000
+[02:22:26.011] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=Hela-Win64-Shipping.exe+0x2fb3b3f thread=419144
+[02:22:26.011] [tid=419144] Device QueryInterface unsupported iid=a7aa6116-9c8d-4bba
+[02:22:26.011] [tid=419144] [d3d12on11] TRACE api=Device::QueryInterface caller=Hela-Win64-Shipping.exe+0x2fb3b7c thread=419144
+[02:22:26.011] [tid=419144] Device QueryInterface unsupported iid=ccffef16-7b69-468f
+[02:22:26.063] [tid=419144] CreateHeap request size=33554432 type=1 flags=0xc0 alignment=0
+[02:22:26.063] [tid=419144] CreateHeap result=0x00000000
+[02:22:26.074] [tid=419144] CreatePlacedResource request offset=0 dimension=1 width=512 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x8
+[02:22:26.156] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C0A9DBBF0 range=[0..65536) dim=1 size=512x1x1 mips=1 format=0 flags=0x4 live=1
+[02:22:26.156] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.163] [tid=419144] CreatePlacedResource request offset=65536 dimension=1 width=104 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x200
+[02:22:26.163] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C140F4C80 range=[65536..131072) dim=1 size=104x1x1 mips=1 format=0 flags=0x4 live=2
+[02:22:26.163] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.163] [tid=419144] CreatePlacedResource request offset=131072 dimension=1 width=104 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x200
+[02:22:26.163] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C140F4E40 range=[131072..196608) dim=1 size=104x1x1 mips=1 format=0 flags=0x4 live=3
+[02:22:26.163] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.163] [tid=419144] CreatePlacedResource request offset=196608 dimension=1 width=104 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x200
+[02:22:26.163] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C140F5E00 range=[196608..262144) dim=1 size=104x1x1 mips=1 format=0 flags=0x4 live=4
+[02:22:26.163] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.177] [tid=419144] CreateCommandSignature argument-type=2 stride=12 result=0x00000000
+[02:22:26.177] [tid=419144] CreateCommandSignature argument-type=2 stride=12 result=0x00000000
+[02:22:26.177] [tid=419144] CreateCommandSignature argument-type=0 stride=16 result=0x00000000
+[02:22:26.177] [tid=419144] CreateCommandSignature argument-type=1 stride=20 result=0x00000000
+[02:22:26.186] [tid=419144] [d3d12on11] TRACE api=GetPrivateData caller=nvapi64.dll+0x313df0 thread=419144
+[02:22:26.186] [tid=419144] GetPrivateData end guid=48596da1-814c-45bd requested=8 returned=0 has-data=1 result=0x887a0002
+[02:22:26.186] [tid=419144] [d3d12on11] TRACE api=GetPrivateData caller=nvapi64.dll+0x313e3f thread=419144
+[02:22:26.186] [tid=419144] GetPrivateData end guid=48596da1-814c-45bd requested=8 returned=0 has-data=1 result=0x887a0002
+[02:22:26.186] [tid=419144] [d3d12on11] TRACE api=Device::GetAdapterLuid caller=nvapi64.dll+0x314ef2 thread=419144
+[02:22:26.186] [tid=419144] [d3d12on11] TRACE api=Factory::EnumAdapters caller=nvapi64.dll+0x314fb6 thread=419144
+[02:22:26.186] [tid=419144] [d3d12on11] TRACE api=Device::CreateReservedResource caller=nvapi64.dll+0x315207 thread=419144
+[02:22:26.186] [tid=419144] CreateReservedResource request dimension=3 width=1 height=1 depth-or-array=1 mips=1 format=28 layout=2 flags=0x4 state=0x0 clear=none
+[02:22:26.186] [tid=419144] CreateReservedResource unavailable: D3D11 tiled resources tier=1 device2=1 context2=1
+[02:22:26.186] [tid=419144] [d3d12on11] TRACE api=GetPrivateData caller=nvapi64.dll+0x313df0 thread=419144
+[02:22:26.186] [tid=419144] GetPrivateData end guid=48596da1-814c-45bd requested=8 returned=0 has-data=1 result=0x887a0002
+[02:22:26.186] [tid=419144] [d3d12on11] TRACE api=GetPrivateData caller=nvapi64.dll+0x313e3f thread=419144
+[02:22:26.186] [tid=419144] GetPrivateData end guid=48596da1-814c-45bd requested=8 returned=0 has-data=1 result=0x887a0002
+[02:22:26.186] [tid=419144] [d3d12on11] TRACE api=Device::GetAdapterLuid caller=nvapi64.dll+0x314ef2 thread=419144
+[02:22:26.186] [tid=419144] [d3d12on11] TRACE api=Factory::EnumAdapters caller=nvapi64.dll+0x314fb6 thread=419144
+[02:22:26.186] [tid=419144] [d3d12on11] TRACE api=Device::CreateReservedResource caller=nvapi64.dll+0x315207 thread=419144
+[02:22:26.186] [tid=419144] CreateReservedResource request dimension=3 width=1 height=1 depth-or-array=1 mips=1 format=28 layout=2 flags=0x4 state=0x0 clear=none
+[02:22:26.186] [tid=419144] CreateReservedResource unavailable: D3D11 tiled resources tier=1 device2=1 context2=1
+[02:22:26.190] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff65e1 thread=419144
+[02:22:26.190] [tid=419144] CheckFeatureSupport begin feature=D3D12_OPTIONS(0) size=60 data=present
+[02:22:26.190] [tid=419144] CheckFeatureSupport end feature=D3D12_OPTIONS result=0x00000000 binding-tier=3 tiled-tier=3 conservative-raster=0 heap-tier=1 double-precision=0 logic-op=0 min-precision=0x0 typed-uav-load=0 ROV=0 stencil-ref=0 swizzle64k=0 cross-node=0 cross-adapter-row-major=0 rasterizer-array-index=0 max-gpu-va-bits=40 gpu-va-query=0x00000000
+[02:22:26.190] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff662f thread=419144
+[02:22:26.190] [tid=419144] CheckFeatureSupport begin feature=unknown(30) size=20 data=present
+[02:22:26.190] [tid=419144] CheckFeatureSupport end feature=unknown(30) result=0x80070057 reason=unimplemented
+[02:22:26.223] [tid=419144] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff67b8 thread=419144
+[02:22:26.223] [tid=419144] CheckFeatureSupport begin feature=unknown(41) size=12 data=present
+[02:22:26.223] [tid=419144] CheckFeatureSupport end feature=unknown(41) result=0x80070057 reason=unimplemented
+[02:22:26.284] [tid=421968] [d3d12on11] TRACE api=CommandQueue::GetClockCalibration caller=Hela-Win64-Shipping.exe+0x2fcd13c thread=421968
+[02:22:26.286] [tid=421968] GetClockCalibration result=S_OK gpu=1794273746291573600 cpu-qpc=15687369140125
+[02:22:26.287] [tid=421968] [d3d12on11] TRACE api=CommandQueue::GetTimestampFrequency caller=Hela-Win64-Shipping.exe+0x2fcd18a thread=421968
+[02:22:26.287] [tid=421968] GetTimestampFrequency result=0x00000000 frequency=1000000000
+[02:22:26.302] [tid=419144] CreateCommittedResource request dimension=1 width=33554432 height=1 depth-or-array=1 mips=1 format=0 heap=1 state=0xac3 clear=none
+[02:22:26.302] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.306] [tid=419144] CreateCommittedResource request dimension=1 width=4194304 height=1 depth-or-array=1 mips=1 format=0 heap=2 state=0xac3 clear=none
+[02:22:26.306] [tid=421968] [d3d12on11] TRACE api=CommandQueue::GetClockCalibration caller=Hela-Win64-Shipping.exe+0x2fcd13c thread=421968
+[02:22:26.306] [tid=421968] GetClockCalibration result=S_OK gpu=1794273746312363104 cpu-qpc=15687369357671
+[02:22:26.306] [tid=421968] [d3d12on11] TRACE api=CommandQueue::GetTimestampFrequency caller=Hela-Win64-Shipping.exe+0x2fcd18a thread=421968
+[02:22:26.306] [tid=421968] GetTimestampFrequency result=0x00000000 frequency=1000000000
+[02:22:26.322] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.345] [tid=419144] CreateCommittedResource request dimension=3 width=1 height=1 depth-or-array=1 mips=1 format=27 heap=1 state=0x400 clear=none
+[02:22:26.345] [tid=419144] CreateTexture2D begin width=1 height=1 mips=1 array=1 format=27 sample=1 bind=0x8 misc=0x0 tiled=0
+[02:22:26.346] [tid=419144] CreateTexture2D end result=0x00000000
+[02:22:26.346] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.361] [tid=419144] CreateShaderResourceView resource=0000020C140F6340 tiled=0 dimension=4 format=28
+[02:22:26.361] [tid=419144] CreateShaderResourceView result=0x00000000
+[02:22:26.371] [tid=419144] CreateCommittedResource request dimension=3 width=1 height=1 depth-or-array=1 mips=1 format=27 heap=1 state=0x400 clear=none
+[02:22:26.371] [tid=419144] CreateTexture2D begin width=1 height=1 mips=1 array=1 format=27 sample=1 bind=0x8 misc=0x0 tiled=0
+[02:22:26.372] [tid=419144] CreateTexture2D end result=0x00000000
+[02:22:26.372] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.372] [tid=419144] CreateShaderResourceView resource=0000020C140F6500 tiled=0 dimension=4 format=28
+[02:22:26.372] [tid=419144] CreateShaderResourceView result=0x00000000
+[02:22:26.372] [tid=419144] CreateCommittedResource request dimension=3 width=1 height=1 depth-or-array=1 mips=1 format=27 heap=1 state=0x400 clear=none
+[02:22:26.372] [tid=419144] CreateTexture2D begin width=1 height=1 mips=1 array=1 format=27 sample=1 bind=0x8 misc=0x0 tiled=0
+[02:22:26.372] [tid=419144] CreateTexture2D end result=0x00000000
+[02:22:26.372] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.372] [tid=419144] CreateShaderResourceView resource=0000020C140F58C0 tiled=0 dimension=4 format=28
+[02:22:26.372] [tid=419144] CreateShaderResourceView result=0x00000000
+[02:22:26.372] [tid=419144] CreatePlacedResource request offset=262144 dimension=1 width=16 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x8
+[02:22:26.372] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C140F66C0 range=[262144..327680) dim=1 size=16x1x1 mips=1 format=0 flags=0x4 live=5
+[02:22:26.372] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.372] [tid=419144] CreatePlacedResource request offset=327680 dimension=1 width=16 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x8
+[02:22:26.372] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C140F51C0 range=[327680..393216) dim=1 size=16x1x1 mips=1 format=0 flags=0x4 live=6
+[02:22:26.372] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.372] [tid=419144] CreatePlacedResource request offset=393216 dimension=1 width=16 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x400
+[02:22:26.372] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C140F5FC0 range=[393216..458752) dim=1 size=16x1x1 mips=1 format=0 flags=0x4 live=7
+[02:22:26.372] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.372] [tid=419144] CreatePlacedResource request offset=458752 dimension=1 width=16 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x400
+[02:22:26.372] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C140F5380 range=[458752..524288) dim=1 size=16x1x1 mips=1 format=0 flags=0x4 live=8
+[02:22:26.372] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.373] [tid=419144] CreatePlacedResource request offset=524288 dimension=1 width=65536 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x8
+[02:22:26.373] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C140F5540 range=[524288..589824) dim=1 size=65536x1x1 mips=1 format=0 flags=0x4 live=9
+[02:22:26.373] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.398] [tid=419144] CreateCommittedResource request dimension=1 width=4194304 height=1 depth-or-array=1 mips=1 format=0 heap=2 state=0xac3 clear=none
+[02:22:26.403] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.416] [tid=419144] CreateCommittedResource request dimension=4 width=1 height=1 depth-or-array=1 mips=1 format=90 heap=1 state=0x400 clear=none
+[02:22:26.416] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.416] [tid=419144] CreateShaderResourceView resource=0000020C140F4AC0 tiled=0 dimension=8 format=87
+[02:22:26.416] [tid=419144] CreateShaderResourceView result=0x00000000
+[02:22:26.416] [tid=419144] CreateCommittedResource request dimension=4 width=1 height=1 depth-or-array=1 mips=1 format=90 heap=1 state=0x400 clear=none
+[02:22:26.416] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.416] [tid=419144] CreateShaderResourceView resource=0000020C140F5700 tiled=0 dimension=8 format=87
+[02:22:26.416] [tid=419144] CreateShaderResourceView result=0x00000000
+[02:22:26.416] [tid=419144] CreateCommittedResource request dimension=4 width=1 height=1 depth-or-array=1 mips=1 format=30 heap=1 state=0x400 clear=none
+[02:22:26.417] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.417] [tid=419144] CreateShaderResourceView resource=0000020C140F5A80 tiled=0 dimension=8 format=30
+[02:22:26.417] [tid=419144] CreateShaderResourceView result=0x00000000
+[02:22:26.417] [tid=419144] CreateCommittedResource request dimension=3 width=1 height=1 depth-or-array=1 mips=1 format=90 heap=1 state=0x400 clear=none
+[02:22:26.417] [tid=419144] CreateTexture2D begin width=1 height=1 mips=1 array=1 format=90 sample=1 bind=0x8 misc=0x0 tiled=0
+[02:22:26.417] [tid=419144] CreateTexture2D end result=0x00000000
+[02:22:26.417] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.417] [tid=419144] CreateShaderResourceView resource=0000020C140F6180 tiled=0 dimension=5 format=87
+[02:22:26.417] [tid=419144] CreateShaderResourceView result=0x00000000
+[02:22:26.417] [tid=419144] CreateCommittedResource request dimension=3 width=1 height=1 depth-or-array=6 mips=1 format=90 heap=1 state=0xc0 clear=none
+[02:22:26.417] [tid=419144] CreateTexture2D begin width=1 height=1 mips=1 array=6 format=90 sample=1 bind=0x8 misc=0x4 tiled=0
+[02:22:26.417] [tid=419144] CreateTexture2D end result=0x00000000
+[02:22:26.417] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.417] [tid=419144] CreateShaderResourceView resource=0000020C1413D9C0 tiled=0 dimension=9 format=87
+[02:22:26.417] [tid=419144] CreateShaderResourceView result=0x00000000
+[02:22:26.417] [tid=419144] CreateCommittedResource request dimension=3 width=1 height=1 depth-or-array=6 mips=1 format=90 heap=1 state=0xc0 clear=none
+[02:22:26.417] [tid=419144] CreateTexture2D begin width=1 height=1 mips=1 array=6 format=90 sample=1 bind=0x8 misc=0x4 tiled=0
+[02:22:26.417] [tid=419144] CreateTexture2D end result=0x00000000
+[02:22:26.417] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.417] [tid=419144] CreateShaderResourceView resource=0000020C1413E280 tiled=0 dimension=9 format=87
+[02:22:26.417] [tid=419144] CreateShaderResourceView result=0x00000000
+[02:22:26.417] [tid=419144] CreateCommittedResource request dimension=3 width=1 height=1 depth-or-array=6 mips=1 format=53 heap=1 state=0xc0 clear=none
+[02:22:26.417] [tid=419144] CreateTexture2D begin width=1 height=1 mips=1 array=6 format=53 sample=1 bind=0x8 misc=0x4 tiled=0
+[02:22:26.418] [tid=419144] CreateTexture2D end result=0x00000000
+[02:22:26.418] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.418] [tid=419144] CreateShaderResourceView resource=0000020C1413DF00 tiled=0 dimension=9 format=56
+[02:22:26.418] [tid=419144] CreateShaderResourceView result=0x00000000
+[02:22:26.418] [tid=419144] CreateCommittedResource request dimension=3 width=1 height=1 depth-or-array=6 mips=1 format=90 heap=1 state=0xc0 clear=none
+[02:22:26.418] [tid=419144] CreateTexture2D begin width=1 height=1 mips=1 array=6 format=90 sample=1 bind=0x8 misc=0x4 tiled=0
+[02:22:26.418] [tid=419144] CreateTexture2D end result=0x00000000
+[02:22:26.418] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.418] [tid=419144] CreateShaderResourceView resource=0000020C1413E0C0 tiled=0 dimension=10 format=87
+[02:22:26.418] [tid=419144] CreateShaderResourceView result=0x00000000
+[02:22:26.418] [tid=419144] CreateCommittedResource request dimension=3 width=1 height=1 depth-or-array=1 mips=1 format=3 heap=1 state=0xc0 clear=none
+[02:22:26.418] [tid=419144] CreateTexture2D begin width=1 height=1 mips=1 array=1 format=3 sample=1 bind=0x8 misc=0x0 tiled=0
+[02:22:26.419] [tid=419144] CreateTexture2D end result=0x00000000
+[02:22:26.419] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.419] [tid=419144] CreateShaderResourceView resource=0000020C1413E440 tiled=0 dimension=4 format=3
+[02:22:26.419] [tid=419144] CreateShaderResourceView result=0x00000000
+[02:22:26.600] [tid=419144] CreateCommittedResource request dimension=1 width=8388608 height=1 depth-or-array=1 mips=1 format=0 heap=2 state=0xac3 clear=none
+[02:22:26.610] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.611] [tid=419144] CreatePlacedResource request offset=589824 dimension=1 width=65536 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x8
+[02:22:26.611] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C1413F080 range=[589824..655360) dim=1 size=65536x1x1 mips=1 format=0 flags=0x4 live=10
+[02:22:26.611] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.648] [tid=419144] CreatePlacedResource request offset=655360 dimension=1 width=65536 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x8
+[02:22:26.648] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C1413F240 range=[655360..720896) dim=1 size=65536x1x1 mips=1 format=0 flags=0x4 live=11
+[02:22:26.648] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.713] [tid=225224] [RENDER_TRACE] [HEARTBEAT] tid=225224 up=6047ms last-api=Device::CreatePlacedResource(tid=419144,ago=63ms) exec=0 sig=0 wait=0 wctx=0(fail=0,max-spin=0) swap=0 present=0 pso(G=0,C=0,last=0000000000000000) draw(ok=0,rtv=0,bb=0,nullrtv=0,skip-pso=0,skip-vs=0,skip-other=0,skip-vb=0,skip-ib=0,skip-map=0,missing-vb=0,missing-ib=0) disp(ok=0,skip-pso=0,skip-cs=0) placed(ok=11,ovl=0,rel=0,live=11)
+[02:22:26.717] [tid=419144] CreatePlacedResource request offset=720896 dimension=1 width=4096 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x8
+[02:22:26.717] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C1413DB80 range=[720896..786432) dim=1 size=4096x1x1 mips=1 format=0 flags=0x4 live=12
+[02:22:26.718] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.718] [tid=419144] CreatePlacedResource request offset=786432 dimension=1 width=4096 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x8
+[02:22:26.718] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C1413DD40 range=[786432..851968) dim=1 size=4096x1x1 mips=1 format=0 flags=0x4 live=13
+[02:22:26.718] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.718] [tid=419144] CreatePlacedResource request offset=851968 dimension=1 width=16 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x8
+[02:22:26.718] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C1413F400 range=[851968..917504) dim=1 size=16x1x1 mips=1 format=0 flags=0x4 live=14
+[02:22:26.718] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.718] [tid=419144] CreatePlacedResource request offset=917504 dimension=1 width=16 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x8
+[02:22:26.718] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C1413D640 range=[917504..983040) dim=1 size=16x1x1 mips=1 format=0 flags=0x4 live=15
+[02:22:26.718] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.718] [tid=419144] CreatePlacedResource request offset=983040 dimension=1 width=16 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x8
+[02:22:26.718] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C1413E600 range=[983040..1048576) dim=1 size=16x1x1 mips=1 format=0 flags=0x4 live=16
+[02:22:26.718] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.724] [tid=419144] CreateCommittedResource request dimension=3 width=512 height=512 depth-or-array=1 mips=1 format=90 heap=1 state=0xc0 clear=present
+[02:22:26.724] [tid=419144] CreateTexture2D begin width=512 height=512 mips=1 array=1 format=90 sample=1 bind=0x28 misc=0x0 tiled=0
+[02:22:26.725] [tid=419144] CreateTexture2D end result=0x00000000
+[02:22:26.725] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.738] [tid=419144] CreateShaderResourceView resource=0000020C1413EEC0 tiled=0 dimension=4 format=87
+[02:22:26.738] [tid=419144] CreateShaderResourceView result=0x00000000
+[02:22:26.744] [tid=419144] CreateCommittedResource request dimension=3 width=44 height=1 depth-or-array=1 mips=1 format=2 heap=1 state=0x8 clear=none
+[02:22:26.744] [tid=419144] CreateTexture2D begin width=44 height=1 mips=1 array=1 format=2 sample=1 bind=0x88 misc=0x0 tiled=0
+[02:22:26.746] [tid=419144] CreateTexture2D end result=0x00000000
+[02:22:26.746] [tid=419144] CreateCommittedResource result=0x00000000
+[02:22:26.746] [tid=419144] CreateShaderResourceView resource=0000020C1413E7C0 tiled=0 dimension=4 format=2
+[02:22:26.746] [tid=419144] CreateShaderResourceView result=0x00000000
+[02:22:26.755] [tid=419144] CreatePlacedResource request offset=1048576 dimension=1 width=65536 sample-count=1 alignment=65536 layout=1 resource-flags=0x4 heap-size=33554432 heap-type=1 heap-flags=0xc0 state=0x8
+[02:22:26.756] [tid=419144] [RENDER_TRACE] [tid=419144] CreatePlacedResource OK heap=0000020C0ACCEE50 res=0000020C1413E980 range=[1048576..1114112) dim=1 size=65536x1x1 mips=1 format=0 flags=0x4 live=17
+[02:22:26.756] [tid=419144] CreatePlacedResource result=0x00000000
+[02:22:26.756] [tid=419144] [d3d12on11] TRACE api=Device::CreateReservedResource caller=Hela-Win64-Shipping.exe+0x2fc8284 thread=419144
+[02:22:26.756] [tid=419144] CreateReservedResource request dimension=1 width=2147483648 height=1 depth-or-array=1 mips=1 format=0 layout=1 flags=0x4 state=0x8 clear=none
+[02:22:26.756] [tid=419144] CreateReservedResource unavailable: D3D11 tiled resources tier=1 device2=1 context2=1
+[02:22:28.713] [tid=225224] [RENDER_TRACE] [HEARTBEAT] tid=225224 up=8047ms last-api=Device::CreatePlacedResource(tid=419144,ago=1969ms) exec=0 sig=0 wait=0 wctx=0(fail=0,max-spin=0) swap=0 present=0 pso(G=0,C=0,last=0000000000000000) draw(ok=0,rtv=0,bb=0,nullrtv=0,skip-pso=0,skip-vs=0,skip-other=0,skip-vb=0,skip-ib=0,skip-map=0,missing-vb=0,missing-ib=0) disp(ok=0,skip-pso=0,skip-cs=0) placed(ok=17,ovl=0,rel=0,live=17)

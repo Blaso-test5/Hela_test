@@ -1,0 +1,105 @@
+{
+  "schema": "hela.pixel-inspector",
+  "schema_version": 1,
+  "images": [
+    {
+      "path": "D:\\SteamLibrary\\steamapps\\common\\Hela Demo\\Hela\\Binaries\\Win64\\D3D12On11Patch\\backups\\950m-source-pixel-readback-20261110-125639\\HelaReadback_Present100_source.bmp",
+      "width": 1280,
+      "height": 720,
+      "bits_per_pixel": 24,
+      "pixel_count": 921600,
+      "non_black_pixels": 0,
+      "non_black_percent": 0.0,
+      "unique_colors": 1,
+      "samples_rgb": {
+        "top_left": [
+          0,
+          0,
+          0
+        ],
+        "top_right": [
+          0,
+          0,
+          0
+        ],
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "bottom_left": [
+          0,
+          0,
+          0
+        ],
+        "bottom_right": [
+          0,
+          0,
+          0
+        ]
+      },
+      "most_common_colors": [
+        {
+          "rgb": [
+            0,
+            0,
+            0
+          ],
+          "pixels": 921600
+        }
+      ]
+    },
+    {
+      "path": "D:\\SteamLibrary\\steamapps\\common\\Hela Demo\\Hela\\Binaries\\Win64\\D3D12On11Patch\\backups\\950m-source-pixel-readback-20261110-125639\\HelaReadback_Present100_backbuffer.bmp",
+      "width": 1280,
+      "height": 720,
+      "bits_per_pixel": 24,
+      "pixel_count": 921600,
+      "non_black_pixels": 0,
+      "non_black_percent": 0.0,
+      "unique_colors": 1,
+      "samples_rgb": {
+        "top_left": [
+          0,
+          0,
+          0
+        ],
+        "top_right": [
+          0,
+          0,
+          0
+        ],
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "bottom_left": [
+          0,
+          0,
+          0
+        ],
+        "bottom_right": [
+          0,
+          0,
+          0
+        ]
+      },
+      "most_common_colors": [
+        {
+          "rgb": [
+            0,
+            0,
+            0
+          ],
+          "pixels": 921600
+        }
+      ]
+    }
+  ],
+  "comparison": {
+    "same_dimensions": true,
+    "both_fully_black": true,
+    "interpretation": "Both captured images contain only black RGB pixels; this does not establish whether the copy operation itself is correct."
+  }
+}

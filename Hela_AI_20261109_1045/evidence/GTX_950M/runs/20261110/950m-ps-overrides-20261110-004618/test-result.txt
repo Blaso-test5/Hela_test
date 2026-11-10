@@ -1,0 +1,15 @@
+﻿Run: 950m-ps-overrides-20261110-004618
+Exit code: 0
+Hela window observed: False
+Window observed duration seconds: 0
+Elapsed seconds: 21.1
+DRAW_SKIPPED records: 0
+
+Loaded target shaders:
+
+Target PS placeholder records:
+
+Final heartbeat:
+[00:46:35.739] [tid=409192] [RENDER_TRACE] [HEARTBEAT] tid=409192 up=2000ms last-api=init(tid=0,ago=2000ms) exec=0 sig=0 wait=0 wctx=0(fail=0,max-spin=0) swap=0 present=0 pso(G=0,C=0,last=0000000000000000) draw(ok=0,rtv=0,bb=0,nullrtv=0,skip-pso=0,skip-vs=0,skip-other=0,skip-vb=0,skip-ib=0,skip-map=0,missing-vb=0,missing-ib=0) disp(ok=0,skip-pso=0,skip-cs=0) placed(ok=0,ovl=0,rel=0,live=0)
+
+Restore errors:

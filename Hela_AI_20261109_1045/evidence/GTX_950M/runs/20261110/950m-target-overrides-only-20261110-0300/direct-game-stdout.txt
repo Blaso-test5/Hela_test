@@ -1,0 +1,1 @@
+Message dialog closed, result: Ok, title: Message, text: DirectX 12 is not supported on your system. Try running without the -dx12 or -d3d12 command line argument.

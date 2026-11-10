@@ -240,3 +240,18 @@ GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
   history run with the three target SM5 overrides loaded.
 - `Present100_source.bmp` and `Present100_backbuffer.bmp`: full 1280x720
   BMP readbacks from Present #100.
+
+## November 10 raw run artifacts
+
+- The non-empty `.log`, `.json`, and `.txt` outputs from the November 10
+  diagnostic runs are archived under `runs/20261110/`, preserving their
+  original backup-directory names. This includes the early Tier 0,
+  backbuffer/source readback and injection runs, the live-monitor attempt,
+  and the v001/v002/v003 override runs.
+- The archive contains 49 files (about 496 MB uncompressed). Copied
+  `previous-*` and `pre-run-*` log snapshots and empty stderr files are
+  omitted; the primary run logs, monitor output, and JSON reports are kept.
+- The v003 parser regression was verified against the archived v003 log:
+  Present #100's source history has 66 draws, zero skipped draws, and the
+  target VS/PS hashes. Source and backbuffer readbacks remain black, so the
+  rendering cause is still undetermined.

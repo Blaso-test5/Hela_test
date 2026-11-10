@@ -1,0 +1,94 @@
+﻿Run: 950m-backbuffer-trace-20261110-010458
+Exit code: 16384
+Window observed: True
+Window observed seconds: 102.6
+Elapsed seconds: 138.5
+Trace bytes: 59022433
+
+SWAPCHAIN lines:
+[01:05:23.496] [tid=411264] [SWAPCHAIN] GetBuffer called index=0 riid=696442be-a72e-4059-bc79-5b5c9804
+[01:05:23.496] [tid=411264] [SWAPCHAIN] GetBuffer acquired texture=000001EFBEF8E3B8
+[01:05:23.496] [tid=411264] [SWAPCHAIN] GetBuffer wrapping completed hr=0x00000000 resource=000001EFBEF93290
+[01:05:23.512] [tid=411264] [SWAPCHAIN] GetBuffer called index=0 riid=696442be-a72e-4059-bc79-5b5c9804
+[01:05:23.512] [tid=411264] [SWAPCHAIN] GetBuffer acquired texture=000001EFBEF8E3B8
+[01:05:23.512] [tid=411264] [SWAPCHAIN] GetBuffer wrapping completed hr=0x00000000 resource=000001EFBEF92650
+[01:05:23.513] [tid=411264] [SWAPCHAIN] GetBuffer called index=0 riid=696442be-a72e-4059-bc79-5b5c9804
+[01:05:23.513] [tid=411264] [SWAPCHAIN] GetBuffer acquired texture=000001EFBEF8E3B8
+[01:05:23.513] [tid=411264] [SWAPCHAIN] GetBuffer wrapping completed hr=0x00000000 resource=000001EFBEF91D90
+[01:05:24.569] [tid=250252] [SWAPCHAIN] GetBuffer called index=0 riid=696442be-a72e-4059-bc79-5b5c9804
+[01:05:24.569] [tid=250252] [SWAPCHAIN] GetBuffer acquired texture=000001EFBEF8E3B8
+[01:05:24.569] [tid=250252] [SWAPCHAIN] GetBuffer wrapping completed hr=0x00000000 resource=000001EFBEF92F10
+
+BACKBUFFER lines:
+[01:05:23.496] [tid=411264] [BACKBUFFER] WrapBackbuffer called source=000001EFBEF64D70 texture=000001EFBEF8E3B8 riid=696442be-a72e-4059-bc79-5b5c9804
+[01:05:23.496] [tid=411264] [BACKBUFFER] Native texture desc width=1536 height=864 format=24 bind-flags=0x28 array=1 mips=1 samples=1/0
+[01:05:23.496] [tid=411264] [BACKBUFFER] Resource flagged as backbuffer res=000001EFBEF93290 texture=000001EFBEF8E3B8
+[01:05:23.496] [tid=411264] [BACKBUFFER] WrapBackbuffer completed hr=0x00000000 resource=000001EFBEF93290
+[01:05:23.512] [tid=411264] [BACKBUFFER] WrapBackbuffer called source=000001EFBEF64D70 texture=000001EFBEF8E3B8 riid=696442be-a72e-4059-bc79-5b5c9804
+[01:05:23.512] [tid=411264] [BACKBUFFER] Native texture desc width=1536 height=864 format=24 bind-flags=0x28 array=1 mips=1 samples=1/0
+[01:05:23.512] [tid=411264] [BACKBUFFER] Resource flagged as backbuffer res=000001EFBEF92650 texture=000001EFBEF8E3B8
+[01:05:23.512] [tid=411264] [BACKBUFFER] WrapBackbuffer completed hr=0x00000000 resource=000001EFBEF92650
+[01:05:23.513] [tid=411264] [BACKBUFFER] WrapBackbuffer called source=000001EFBEF64D70 texture=000001EFBEF8E3B8 riid=696442be-a72e-4059-bc79-5b5c9804
+[01:05:23.513] [tid=411264] [BACKBUFFER] Native texture desc width=1536 height=864 format=24 bind-flags=0x28 array=1 mips=1 samples=1/0
+[01:05:23.513] [tid=411264] [BACKBUFFER] Resource flagged as backbuffer res=000001EFBEF91D90 texture=000001EFBEF8E3B8
+[01:05:23.513] [tid=411264] [BACKBUFFER] WrapBackbuffer completed hr=0x00000000 resource=000001EFBEF91D90
+[01:05:24.569] [tid=250252] [BACKBUFFER] WrapBackbuffer called source=000001EFBEF64D70 texture=000001EFBEF8E3B8 riid=696442be-a72e-4059-bc79-5b5c9804
+[01:05:24.569] [tid=250252] [BACKBUFFER] Native texture desc width=1536 height=864 format=24 bind-flags=0x28 array=1 mips=1 samples=1/0
+[01:05:24.569] [tid=250252] [BACKBUFFER] Resource flagged as backbuffer res=000001EFBEF92F10 texture=000001EFBEF8E3B8
+[01:05:24.569] [tid=250252] [BACKBUFFER] WrapBackbuffer completed hr=0x00000000 resource=000001EFBEF92F10
+[01:05:25.199] [tid=250252] [BACKBUFFER] Copy to backbuffer detected! api=CopyResource dst=000001EFBEF92F10 src=000001EFBEF93610
+[01:05:25.207] [tid=250252] [BACKBUFFER] WrapBackbuffer called source=000001EFBEF64D70 texture=000001EFBEF8E3B8 riid=696442be-a72e-4059-bc79-5b5c9804
+[01:05:25.207] [tid=250252] [BACKBUFFER] Native texture desc width=1536 height=864 format=24 bind-flags=0x28 array=1 mips=1 samples=1/0
+[01:05:25.207] [tid=250252] [BACKBUFFER] Resource flagged as backbuffer res=000001EFBEF93290 texture=000001EFBEF8E3B8
+[01:05:25.207] [tid=250252] [BACKBUFFER] WrapBackbuffer completed hr=0x00000000 resource=000001EFBEF93290
+[01:05:38.323] [tid=250252] [BACKBUFFER] WrapBackbuffer called source=000001EFBEF64D70 texture=000001EFBEF8E3B8 riid=696442be-a72e-4059-bc79-5b5c9804
+[01:05:38.323] [tid=250252] [BACKBUFFER] Native texture desc width=1536 height=864 format=24 bind-flags=0x28 array=1 mips=1 samples=1/0
+[01:05:38.323] [tid=250252] [BACKBUFFER] Resource flagged as backbuffer res=000001EFD3383090 texture=000001EFBEF8E3B8
+[01:05:38.323] [tid=250252] [BACKBUFFER] WrapBackbuffer completed hr=0x00000000 resource=000001EFD3383090
+[01:05:38.323] [tid=250252] [BACKBUFFER] Copy to backbuffer detected! api=CopyResource dst=000001EFD3383090 src=000001EFBEF937D0
+[01:05:38.331] [tid=250252] [BACKBUFFER] WrapBackbuffer called source=000001EFBEF64D70 texture=000001EFBEF8E3B8 riid=696442be-a72e-4059-bc79-5b5c9804
+[01:05:38.331] [tid=250252] [BACKBUFFER] Native texture desc width=1536 height=864 format=24 bind-flags=0x28 array=1 mips=1 samples=1/0
+[01:05:38.331] [tid=250252] [BACKBUFFER] Resource flagged as backbuffer res=000001EFD3383250 texture=000001EFBEF8E3B8
+[01:05:38.331] [tid=250252] [BACKBUFFER] WrapBackbuffer completed hr=0x00000000 resource=000001EFD3383250
+[01:05:38.350] [tid=250252] [BACKBUFFER] WrapBackbuffer called source=000001EFBEF64D70 texture=000001EFBEF8E3B8 riid=696442be-a72e-4059-bc79-5b5c9804
+[01:05:38.350] [tid=250252] [BACKBUFFER] Native texture desc width=1536 height=864 format=24 bind-flags=0x28 array=1 mips=1 samples=1/0
+[01:05:38.350] [tid=250252] [BACKBUFFER] Resource flagged as backbuffer res=000001EFD3381650 texture=000001EFBEF8E3B8
+[01:05:38.350] [tid=250252] [BACKBUFFER] WrapBackbuffer completed hr=0x00000000 resource=000001EFD3381650
+[01:05:38.350] [tid=250252] [BACKBUFFER] Copy to backbuffer detected! api=CopyResource dst=000001EFD3381650 src=000001EFBEF929D0
+
+Full-screen PSO/PS dump samples:
+[01:05:25.121] [tid=250252] PSO GRAPHICS #1 BEGIN VS=2872 PS=3704 GS=0 HS=0 DS=0 input-elements=0 RTVs=1 samples=1/0 topology=3 flags=0x0
+[01:05:25.196] [tid=250252] PSO GRAPHICS #2 BEGIN VS=2872 PS=3692 GS=0 HS=0 DS=0 input-elements=0 RTVs=1 samples=1/0 topology=3 flags=0x0
+[01:05:25.198] [tid=250252] SHADER DUMPED stage=PS hash=c5d251d673359098 path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\c5d251d673359098.dxil bytes=3692; SM5 override is missing
+[01:05:29.423] [tid=430836] SHADER DUMPED stage=PS hash=f181f6f09bbb3826 path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\f181f6f09bbb3826.dxil bytes=8232; SM5 override is missing
+[01:05:29.423] [tid=395916] SHADER DUMPED stage=PS hash=66b2d8cebb58b441 path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\66b2d8cebb58b441.dxil bytes=9592; SM5 override is missing
+[01:05:29.427] [tid=370276] SHADER DUMPED stage=PS hash=c28496dba1b23686 path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\c28496dba1b23686.dxil bytes=10932; SM5 override is missing
+[01:05:29.428] [tid=430836] SHADER DUMPED stage=PS hash=075543429aacc7c0 path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\075543429aacc7c0.dxil bytes=9700; SM5 override is missing
+[01:05:29.432] [tid=416064] SHADER DUMPED stage=PS hash=f5c09f04d4a6cb16 path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\f5c09f04d4a6cb16.dxil bytes=2336; SM5 override is missing
+[01:05:29.434] [tid=433972] SHADER DUMPED stage=PS hash=a3a40a4e9a20173b path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\a3a40a4e9a20173b.dxil bytes=5072; SM5 override is missing
+[01:05:29.434] [tid=395916] SHADER DUMPED stage=PS hash=7ce710d290b3c1d4 path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\7ce710d290b3c1d4.dxil bytes=6332; SM5 override is missing
+[01:05:29.435] [tid=416064] SHADER DUMPED stage=PS hash=1760010d320fd0cb path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\1760010d320fd0cb.dxil bytes=6412; SM5 override is missing
+[01:05:29.435] [tid=369572] SHADER DUMPED stage=PS hash=2b208af6db1c003e path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\2b208af6db1c003e.dxil bytes=3200; SM5 override is missing
+[01:05:29.436] [tid=370276] SHADER DUMPED stage=PS hash=17dc417f781ed2c8 path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\17dc417f781ed2c8.dxil bytes=4568; SM5 override is missing
+[01:05:29.437] [tid=430836] SHADER DUMPED stage=PS hash=585ffbed86e49708 path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\585ffbed86e49708.dxil bytes=3496; SM5 override is missing
+[01:05:29.438] [tid=395916] SHADER DUMPED stage=PS hash=8cd79bbbc4c444ad path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\8cd79bbbc4c444ad.dxil bytes=10280; SM5 override is missing
+[01:05:29.438] [tid=369572] SHADER DUMPED stage=PS hash=36c44889b09015ff path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\36c44889b09015ff.dxil bytes=9048; SM5 override is missing
+[01:05:29.443] [tid=369572] SHADER DUMPED stage=PS hash=f9208b1e9870acce path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\f9208b1e9870acce.dxil bytes=5748; SM5 override is missing
+[01:05:29.443] [tid=433972] SHADER DUMPED stage=PS hash=5fe381319bf23624 path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\5fe381319bf23624.dxil bytes=4432; SM5 override is missing
+[01:05:29.444] [tid=430836] SHADER DUMPED stage=PS hash=f1fb2667aa2adc57 path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\f1fb2667aa2adc57.dxil bytes=2736; SM5 override is missing
+[01:05:29.444] [tid=370276] SHADER DUMPED stage=PS hash=9f008df316595c9f path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\9f008df316595c9f.dxil bytes=5656; SM5 override is missing
+[01:05:29.445] [tid=416064] SHADER DUMPED stage=PS hash=93741c843eab36fc path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\93741c843eab36fc.dxil bytes=4104; SM5 override is missing
+[01:05:29.445] [tid=395916] SHADER DUMPED stage=PS hash=2ef2fcf93311f9f4 path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\2ef2fcf93311f9f4.dxil bytes=3032; SM5 override is missing
+[01:05:29.448] [tid=395916] SHADER DUMPED stage=PS hash=f3b7eefc8c62e01d path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\f3b7eefc8c62e01d.dxil bytes=3928; SM5 override is missing
+[01:05:29.449] [tid=369572] SHADER DUMPED stage=PS hash=7f296ab557e6cbdc path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\7f296ab557e6cbdc.dxil bytes=4952; SM5 override is missing
+[01:05:29.450] [tid=433972] SHADER DUMPED stage=PS hash=e49b78fa0cc57763 path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\e49b78fa0cc57763.dxil bytes=4868; SM5 override is missing
+[01:05:29.450] [tid=416064] SHADER DUMPED stage=PS hash=d5520eadc161f254 path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\d5520eadc161f254.dxil bytes=2380; SM5 override is missing
+[01:05:29.450] [tid=430836] SHADER DUMPED stage=PS hash=523a56d94ecec0a9 path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\523a56d94ecec0a9.dxil bytes=2072; SM5 override is missing
+[01:05:29.451] [tid=370276] SHADER DUMPED stage=PS hash=dcc9f2b8ed3ec71f path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\dcc9f2b8ed3ec71f.dxil bytes=3448; SM5 override is missing
+[01:05:29.455] [tid=395916] SHADER DUMPED stage=PS hash=9f8723852958e5ee path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\9f8723852958e5ee.dxil bytes=10120; SM5 override is missing
+[01:05:29.456] [tid=369572] SHADER DUMPED stage=PS hash=89a98246e6d8a077 path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump\89a98246e6d8a077.dxil bytes=8760; SM5 override is missing
+
+Final heartbeat:
+[01:07:10.198] [tid=423532] [RENDER_TRACE] [HEARTBEAT] tid=423532 up=116906ms last-api=Device::CreatePlacedResource(tid=409448,ago=2531ms) exec=20964 sig=59916 wait=28018 wctx=59916(fail=0,max-spin=26786) swap=1 present=3527 pso(G=2871,C=4022,last=d9159b3fde0c2ae7) draw(ok=3903,rtv=3903,bb=0,nullrtv=0,skip-pso=0,skip-vs=40381,skip-other=0,skip-vb=0,skip-ib=0,skip-map=0,missing-vb=0,missing-ib=0) disp(ok=0,skip-pso=0,skip-cs=21) placed(ok=334,ovl=6,rel=1,live=333)
+
+Restore errors:

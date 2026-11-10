@@ -1,0 +1,20 @@
+﻿Run: 950m-ps-overrides-sm67-20261110-004905
+Exit code: -1073741819
+Hela window observed: True
+Window observed duration seconds: 77.3
+Elapsed seconds: 115.7
+DRAW_SKIPPED records: 0
+
+Loaded target shaders:
+[00:50:04.166] [tid=245148] SHADER READY stage=VS hash=20e0826b236597a1 source=SM5-override path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\overrides\20e0826b236597a1.cso bytes=1768 model=5_0
+[00:50:04.168] [tid=245148] SHADER READY stage=PS hash=44b0a992c2304254 source=SM5-override path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\overrides\44b0a992c2304254.cso bytes=1560 model=5_0
+[00:50:04.192] [tid=429100] SHADER READY stage=PS hash=d77600bde0076c33 source=SM5-override path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\overrides\d77600bde0076c33.cso bytes=1560 model=5_0
+[00:50:05.535] [tid=417700] SHADER READY stage=VS hash=4ce363172cfd70be source=SM5-override path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\overrides\4ce363172cfd70be.cso bytes=596 model=5_0
+[00:50:05.547] [tid=417700] SHADER READY stage=PS hash=4c1bc8bf7e457acd source=SM5-override path=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\overrides\4c1bc8bf7e457acd.cso bytes=1996 model=5_0
+
+Target PS placeholder records:
+
+Final heartbeat:
+[00:50:59.439] [tid=420716] [RENDER_TRACE] [HEARTBEAT] tid=420716 up=98281ms last-api=Device::CreateComputePipelineState(tid=387968,ago=2375ms) exec=10926 sig=31352 wait=14640 wctx=31352(fail=0,max-spin=142687) swap=1 present=1857 pso(G=983,C=2158,last=c841c8d4ca9fb1f0) draw(ok=2505,rtv=2505,bb=0,nullrtv=0,skip-pso=0,skip-vs=0,skip-other=0,skip-vb=0,skip-ib=0,skip-map=0,missing-vb=0,missing-ib=0) disp(ok=0,skip-pso=0,skip-cs=0) placed(ok=179,ovl=0,rel=0,live=179)
+
+Restore errors:

@@ -1,0 +1,107 @@
+Log file: D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\d3d12on11.log [tid=387660]
+[00:48:26.837] [tid=387660] Loaded 1 register binding overrides from D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\binding-map.json
+[00:48:26.838] [tid=387660] === D3D12On11 diagnostic session ===
+[00:48:26.838] [tid=387660] Config ini=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\d3d12on11.ini log=1 debug-layer=0 advertised-shader-model=5_0
+[00:48:26.838] [tid=387660] Config diagnostic-capabilities=1 (UNSAFE: reports selected capabilities not fully implemented by D3D11 proxy)
+[00:48:26.838] [tid=387660] Config caller-trace=1
+[00:48:26.838] [tid=387660] Config diagnostic-render-trace=1
+[00:48:26.838] [tid=387660] Config shader-dump=1 dump-dir=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\dump overrides-dir=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\overrides binding-map=D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\binding-map.json entries=1
+[00:48:26.838] [tid=387660] Note: DXIL is not compiled by the proxy; a matching SM5 .cso override is required.
+[00:48:26.852] [tid=387660] [d3d12on11] TRACE api=Factory::EnumAdapters caller=Hela-Win64-Shipping.exe+0x1769544 thread=387660
+[00:48:26.852] [tid=387660] DIAGNOSTIC_MASK_NVIDIA: native-vendor=0x10de device=0x139a exposed-vendor=0xffff luid=00000000:0000f00e
+[00:48:26.852] [tid=387660] [d3d12on11] TRACE api=Adapter::GetDesc caller=Hela-Win64-Shipping.exe+0x176956b thread=387660
+[00:48:26.853] [tid=387660] [d3d12on11] TRACE api=Factory::EnumAdapters caller=Hela-Win64-Shipping.exe+0x1769544 thread=387660
+[00:48:26.853] [tid=387660] [d3d12on11] TRACE api=Factory::EnumAdapters caller=Hela-Win64-Shipping.exe+0x1769544 thread=387660
+[00:48:26.853] [tid=387660] [d3d12on11] TRACE api=Factory::EnumAdapters caller=Hela-Win64-Shipping.exe+0x1769544 thread=387660
+[00:48:26.894] [tid=387660] [d3d12on11] TRACE api=Factory::EnumAdapterByGpuPreference caller=Hela-Win64-Shipping.exe+0x2ff2cb7 thread=387660
+[00:48:26.895] [tid=387660] DIAGNOSTIC_MASK_NVIDIA: native-vendor=0x10de device=0x139a exposed-vendor=0xffff luid=00000000:0000f00e
+[00:48:26.895] [tid=387660] [d3d12on11] TRACE api=Adapter::GetDesc caller=Hela-Win64-Shipping.exe+0x2ff2cf4 thread=387660
+[00:48:26.909] [tid=387660] [d3d12on11] TRACE api=D3D12CreateDevice caller=Hela-Win64-Shipping.exe+0x2ffcd12 thread=387660
+[00:48:26.909] [tid=387660] D3D12CreateDevice minimum feature level 0xb000 iid=189819f1-1db6-4b57
+[00:48:26.910] [tid=387660] [d3d12on11] TRACE api=Adapter::GetNativeAdapter caller=d3d12.dll+0x1b761 thread=387660
+[00:48:26.910] [tid=387660] D3D12CreateDevice adapter source=proxy-unwrap native-vendor=0x10de device=0x139a luid=00000000:0000f00e
+[00:48:28.073] [tid=387660] Created D3D11 device at feature level b000
+[00:48:28.073] [tid=387660] D3D11 tiled resources tier=1 feature-query=0x00000000 device2=1 context2=1
+[00:48:28.073] [tid=387660] [d3d12on11] TRACE api=Device::QueryInterface caller=d3d12.dll+0x1b8b2 thread=387660
+[00:48:28.073] [tid=387660] Device QueryInterface ID3D12Device result=0x00000000
+[00:48:28.073] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffcd72 thread=387660
+[00:48:28.073] [tid=387660] CheckFeatureSupport begin feature=FEATURE_LEVELS(2) size=24 data=present
+[00:48:28.073] [tid=387660] CheckFeatureSupport end feature=FEATURE_LEVELS result=0x00000000 requested=[0xc200,0xc100,0xc000,0xb100,0xb000] returned=0xc000
+[00:48:28.073] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffcde3 thread=387660
+[00:48:28.073] [tid=387660] CheckFeatureSupport begin feature=SHADER_MODEL(7) size=4 data=present
+[00:48:28.073] [tid=387660] CheckFeatureSupport end feature=SHADER_MODEL result=0x00000000 requested=0x67 returned=0x50
+[00:48:28.087] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff47ef thread=387660
+[00:48:28.087] [tid=387660] CheckFeatureSupport begin feature=D3D12_OPTIONS(0) size=60 data=present
+[00:48:28.087] [tid=387660] CheckFeatureSupport end feature=D3D12_OPTIONS result=0x00000000 binding-tier=3 tiled-tier=0 conservative-raster=0 heap-tier=1 double-precision=0 logic-op=0 min-precision=0x0 typed-uav-load=0 ROV=0 stencil-ref=0 swizzle64k=0 cross-node=0 cross-adapter-row-major=0 rasterizer-array-index=0 max-gpu-va-bits=40 gpu-va-query=0x00000000
+[00:48:28.087] [tid=387660] [d3d12on11] TRACE api=GetNodeCount caller=Hela-Win64-Shipping.exe+0x2ffce1c thread=387660
+[00:48:28.087] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffce4b thread=387660
+[00:48:28.087] [tid=387660] CheckFeatureSupport begin feature=D3D12_OPTIONS1(8) size=24 data=present
+[00:48:28.087] [tid=387660] CheckFeatureSupport end feature=D3D12_OPTIONS1 result=0x00000000 wave-ops=1 wave-lanes=32..32 total-lanes=32 expanded-compute-states=0 int64-shader-ops=1
+[00:48:28.087] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff4f1a thread=387660
+[00:48:28.087] [tid=387660] CheckFeatureSupport begin feature=D3D12_OPTIONS9(37) size=24 data=present
+[00:48:28.087] [tid=387660] CheckFeatureSupport end feature=D3D12_OPTIONS9 result=0x00000000 mesh-stats=0 full-rt-array-index=0 atomic-int64-typed=1 atomic-int64-groupshared=0 mesh-derivatives=0 wave-mma-tier=0
+[00:48:28.087] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff72f0 thread=387660
+[00:48:28.087] [tid=387660] CheckFeatureSupport begin feature=ARCHITECTURE(1) size=16 data=present
+[00:48:28.087] [tid=387660] CheckFeatureSupport end feature=ARCHITECTURE result=0x00000000 node=0 tiled-renderer=0 UMA=0 coherent-UMA=0
+[00:48:28.087] [tid=387660] Device destroyed
+[00:48:28.119] [tid=387660] [d3d12on11] TRACE api=Adapter::EnumOutputs caller=Hela-Win64-Shipping.exe+0x2ff2dc5 thread=387660
+[00:48:28.120] [tid=387660] [d3d12on11] TRACE api=Adapter::EnumOutputs caller=Hela-Win64-Shipping.exe+0x2ff2dc5 thread=387660
+[00:48:28.141] [tid=387660] [d3d12on11] TRACE api=Factory::EnumAdapterByGpuPreference caller=Hela-Win64-Shipping.exe+0x2ff2cb7 thread=387660
+[00:48:28.162] [tid=387660] [d3d12on11] TRACE api=D3D12CreateDevice caller=Hela-Win64-Shipping.exe+0x2ffcd12 thread=387660
+[00:48:28.162] [tid=387660] D3D12CreateDevice minimum feature level 0xb000 iid=189819f1-1db6-4b57
+[00:48:28.162] [tid=387660] D3D12CreateDevice adapter source=direct native-vendor=0x8086 device=0x191b luid=00000000:0000ec00
+[00:48:28.301] [tid=387660] Created D3D11 device at feature level b100
+[00:48:28.301] [tid=387660] D3D11 tiled resources tier=2 feature-query=0x00000000 device2=1 context2=1
+[00:48:28.301] [tid=387660] [d3d12on11] TRACE api=Device::QueryInterface caller=d3d12.dll+0x1b8b2 thread=387660
+[00:48:28.301] [tid=387660] Device QueryInterface ID3D12Device result=0x00000000
+[00:48:28.301] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffcd72 thread=387660
+[00:48:28.301] [tid=387660] CheckFeatureSupport begin feature=FEATURE_LEVELS(2) size=24 data=present
+[00:48:28.301] [tid=387660] CheckFeatureSupport end feature=FEATURE_LEVELS result=0x00000000 requested=[0xc200,0xc100,0xc000,0xb100,0xb000] returned=0xc000
+[00:48:28.301] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffcde3 thread=387660
+[00:48:28.301] [tid=387660] CheckFeatureSupport begin feature=SHADER_MODEL(7) size=4 data=present
+[00:48:28.301] [tid=387660] CheckFeatureSupport end feature=SHADER_MODEL result=0x00000000 requested=0x67 returned=0x50
+[00:48:28.301] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff47ef thread=387660
+[00:48:28.301] [tid=387660] CheckFeatureSupport begin feature=D3D12_OPTIONS(0) size=60 data=present
+[00:48:28.301] [tid=387660] CheckFeatureSupport end feature=D3D12_OPTIONS result=0x00000000 binding-tier=3 tiled-tier=0 conservative-raster=0 heap-tier=1 double-precision=0 logic-op=0 min-precision=0x0 typed-uav-load=0 ROV=0 stencil-ref=0 swizzle64k=0 cross-node=0 cross-adapter-row-major=0 rasterizer-array-index=0 max-gpu-va-bits=38 gpu-va-query=0x00000000
+[00:48:28.301] [tid=387660] [d3d12on11] TRACE api=GetNodeCount caller=Hela-Win64-Shipping.exe+0x2ffce1c thread=387660
+[00:48:28.301] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffce4b thread=387660
+[00:48:28.301] [tid=387660] CheckFeatureSupport begin feature=D3D12_OPTIONS1(8) size=24 data=present
+[00:48:28.301] [tid=387660] CheckFeatureSupport end feature=D3D12_OPTIONS1 result=0x00000000 wave-ops=1 wave-lanes=32..32 total-lanes=32 expanded-compute-states=0 int64-shader-ops=1
+[00:48:28.301] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff4f1a thread=387660
+[00:48:28.301] [tid=387660] CheckFeatureSupport begin feature=D3D12_OPTIONS9(37) size=24 data=present
+[00:48:28.301] [tid=387660] CheckFeatureSupport end feature=D3D12_OPTIONS9 result=0x00000000 mesh-stats=0 full-rt-array-index=0 atomic-int64-typed=1 atomic-int64-groupshared=0 mesh-derivatives=0 wave-mma-tier=0
+[00:48:28.301] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff72f0 thread=387660
+[00:48:28.301] [tid=387660] CheckFeatureSupport begin feature=ARCHITECTURE(1) size=16 data=present
+[00:48:28.301] [tid=387660] CheckFeatureSupport end feature=ARCHITECTURE result=0x00000000 node=0 tiled-renderer=0 UMA=0 coherent-UMA=0
+[00:48:28.301] [tid=387660] Device destroyed
+[00:48:28.314] [tid=387660] [d3d12on11] TRACE api=Factory::EnumAdapterByGpuPreference caller=Hela-Win64-Shipping.exe+0x2ff2cb7 thread=387660
+[00:48:28.314] [tid=387660] [d3d12on11] TRACE api=D3D12CreateDevice caller=Hela-Win64-Shipping.exe+0x2ffcd12 thread=387660
+[00:48:28.314] [tid=387660] D3D12CreateDevice minimum feature level 0xb000 iid=189819f1-1db6-4b57
+[00:48:28.314] [tid=387660] D3D12CreateDevice adapter source=direct native-vendor=0x1414 device=0x008c luid=00000000:0000efe9
+[00:48:28.321] [tid=387660] Created D3D11 device at feature level b100
+[00:48:28.321] [tid=387660] D3D11 tiled resources tier=2 feature-query=0x00000000 device2=1 context2=1
+[00:48:28.321] [tid=387660] [d3d12on11] TRACE api=Device::QueryInterface caller=d3d12.dll+0x1b8b2 thread=387660
+[00:48:28.321] [tid=387660] Device QueryInterface ID3D12Device result=0x00000000
+[00:48:28.321] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffcd72 thread=387660
+[00:48:28.321] [tid=387660] CheckFeatureSupport begin feature=FEATURE_LEVELS(2) size=24 data=present
+[00:48:28.321] [tid=387660] CheckFeatureSupport end feature=FEATURE_LEVELS result=0x00000000 requested=[0xc200,0xc100,0xc000,0xb100,0xb000] returned=0xc000
+[00:48:28.321] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffcde3 thread=387660
+[00:48:28.321] [tid=387660] CheckFeatureSupport begin feature=SHADER_MODEL(7) size=4 data=present
+[00:48:28.321] [tid=387660] CheckFeatureSupport end feature=SHADER_MODEL result=0x00000000 requested=0x67 returned=0x50
+[00:48:28.321] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff47ef thread=387660
+[00:48:28.321] [tid=387660] CheckFeatureSupport begin feature=D3D12_OPTIONS(0) size=60 data=present
+[00:48:28.321] [tid=387660] CheckFeatureSupport end feature=D3D12_OPTIONS result=0x00000000 binding-tier=3 tiled-tier=0 conservative-raster=0 heap-tier=1 double-precision=0 logic-op=0 min-precision=0x0 typed-uav-load=0 ROV=0 stencil-ref=0 swizzle64k=0 cross-node=0 cross-adapter-row-major=0 rasterizer-array-index=0 max-gpu-va-bits=32 gpu-va-query=0x00000000
+[00:48:28.321] [tid=387660] [d3d12on11] TRACE api=GetNodeCount caller=Hela-Win64-Shipping.exe+0x2ffce1c thread=387660
+[00:48:28.321] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ffce4b thread=387660
+[00:48:28.322] [tid=387660] CheckFeatureSupport begin feature=D3D12_OPTIONS1(8) size=24 data=present
+[00:48:28.322] [tid=387660] CheckFeatureSupport end feature=D3D12_OPTIONS1 result=0x00000000 wave-ops=1 wave-lanes=32..32 total-lanes=32 expanded-compute-states=0 int64-shader-ops=1
+[00:48:28.322] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff4f1a thread=387660
+[00:48:28.322] [tid=387660] CheckFeatureSupport begin feature=D3D12_OPTIONS9(37) size=24 data=present
+[00:48:28.322] [tid=387660] CheckFeatureSupport end feature=D3D12_OPTIONS9 result=0x00000000 mesh-stats=0 full-rt-array-index=0 atomic-int64-typed=1 atomic-int64-groupshared=0 mesh-derivatives=0 wave-mma-tier=0
+[00:48:28.322] [tid=387660] [d3d12on11] TRACE api=Device::CheckFeatureSupport caller=Hela-Win64-Shipping.exe+0x2ff72f0 thread=387660
+[00:48:28.322] [tid=387660] CheckFeatureSupport begin feature=ARCHITECTURE(1) size=16 data=present
+[00:48:28.322] [tid=387660] CheckFeatureSupport end feature=ARCHITECTURE result=0x00000000 node=0 tiled-renderer=0 UMA=0 coherent-UMA=0
+[00:48:28.322] [tid=387660] Device destroyed
+[00:48:28.323] [tid=387660] [d3d12on11] TRACE api=Factory::EnumAdapterByGpuPreference caller=Hela-Win64-Shipping.exe+0x2ff2cb7 thread=387660
+[00:48:28.862] [tid=399504] [RENDER_TRACE] [HEARTBEAT] tid=399504 up=2016ms last-api=init(tid=0,ago=2016ms) exec=0 sig=0 wait=0 wctx=0(fail=0,max-spin=0) swap=0 present=0 pso(G=0,C=0,last=0000000000000000) draw(ok=0,rtv=0,bb=0,nullrtv=0,skip-pso=0,skip-vs=0,skip-other=0,skip-vb=0,skip-ib=0,skip-map=0,missing-vb=0,missing-ib=0) disp(ok=0,skip-pso=0,skip-cs=0) placed(ok=0,ovl=0,rel=0,live=0)
+[00:48:30.882] [tid=399504] [RENDER_TRACE] [HEARTBEAT] tid=399504 up=4047ms last-api=init(tid=0,ago=4047ms) exec=0 sig=0 wait=0 wctx=0(fail=0,max-spin=0) swap=0 present=0 pso(G=0,C=0,last=0000000000000000) draw(ok=0,rtv=0,bb=0,nullrtv=0,skip-pso=0,skip-vs=0,skip-other=0,skip-vb=0,skip-ib=0,skip-map=0,missing-vb=0,missing-ib=0) disp(ok=0,skip-pso=0,skip-cs=0) placed(ok=0,ovl=0,rel=0,live=0)
