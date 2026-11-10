@@ -157,6 +157,39 @@ GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
   trace remains local at
   `D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\950m-windowed-source-readback-20261110-015307\windowed-source-readback-test.log`.
 
+## Red backbuffer injection and full readback
+
+- Enabled `D3D12ON11_INJECTION_TEST=1` to clear the swapchain backbuffer to
+  red after the proxy flush and immediately before the native Present.
+  The run also enabled the sampled and full texture readbacks.
+- Launched with `Hela -graphicsadapter=0 -windowed -ResX=1280 -ResY=720`.
+  The live HWND style was `0x14CF0000` (`WS_OVERLAPPEDWINDOW`), with outer
+  bounds 1296x759; this was a normal window rather than borderless fullscreen.
+- The game completed 2,159 Presents and exited naturally with code 16384
+  (`0x4000`) after about 97 seconds. Twenty-one source/destination samples
+  were captured from Present #100 through #2100. Every source sample was
+  black (`0/100` non-black pixels); every injected backbuffer sample was
+  red (`100/100`).
+- The full 1280x720, format-24 (`R10G10B10A2_UNORM`) BMPs from Present #100
+  confirm the complete image contents: all 921,600 source pixels are black,
+  and all 921,600 backbuffer pixels are red. The user had already confirmed
+  the red window visually in the preceding injection run.
+- This confirms the red clear reaches the backbuffer before Present and the
+  swapchain can display the injected frame. The CopyResource source is
+  already black, so the missing game image is upstream of the final
+  backbuffer/Present step; the exact upstream cause remains unproven.
+- The proxy DLLs and INI were restored and verified against their original
+  SHA-256 hashes. UE5 settings remain windowed at 1280x720.
+- `Present100_source.bmp` and `Present100_backbuffer.bmp` contain the full
+  readbacks. The 28.6 MB raw trace remains local at
+  `D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\950m-full-readback-20261110-022941\full-readback-test.log`.
+- Added opt-in `[CMDLIST_SUMMARY]` counters for each submitted command list
+  when diagnostic render tracing is enabled. The summary counts draw
+  executions, skipped draws, executions with an RTV, backbuffer draws, and
+  CopyResource operations to the backbuffer. This instrumentation was added
+  after this run; it compiled and passed the targeted smoke tests but has not
+  yet been captured in a game trace.
+
 ## Files
 
 - `d3d12on11-before.log`: baseline launch log from the conservative setup.
@@ -176,3 +209,8 @@ GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
   verified.
 - `verified-windowed-source-readback-test-summary.txt`: results from the
   run whose window style and dimensions were explicitly verified.
+- `full-red-backbuffer-readback-test-summary.txt`: results from the verified
+  windowed red-injection run, including complete source and destination
+  BMP analysis.
+- `Present100_source.bmp` and `Present100_backbuffer.bmp`: full 1280x720
+  BMP readbacks from Present #100.

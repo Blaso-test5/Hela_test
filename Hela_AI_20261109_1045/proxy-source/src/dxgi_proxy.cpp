@@ -36,6 +36,18 @@ bool BackbufferReadbackEnabled() {
         value, ARRAYSIZE(value)) == 1 && value[0] == L'1';
 }
 
+bool BackbufferInjectionEnabled() {
+    wchar_t value[2]{};
+    return GetEnvironmentVariableW(L"D3D12ON11_INJECTION_TEST",
+        value, ARRAYSIZE(value)) == 1 && value[0] == L'1';
+}
+
+bool FullReadbackEnabled() {
+    wchar_t value[2]{};
+    return GetEnvironmentVariableW(L"D3D12ON11_FULL_READBACK",
+        value, ARRAYSIZE(value)) == 1 && value[0] == L'1';
+}
+
 struct ReadbackPixel {
     uint8_t r;
     uint8_t g;
@@ -72,8 +84,83 @@ bool ReadbackPixelAt(const D3D11_MAPPED_SUBRESOURCE& mapped,
     return true;
 }
 
+bool SaveMappedTextureAsBmp(const D3D11_MAPPED_SUBRESOURCE& mapped,
+    const D3D11_TEXTURE2D_DESC& desc, const wchar_t* filename,
+    uint64_t presentCount, const char* label) {
+    if (!filename || !desc.Width || !desc.Height ||
+        desc.Width > LONG_MAX || desc.Height > LONG_MAX) {
+        LogDxgi("[READBACK_FULL] Present #%llu %s invalid BMP dimensions=%ux%u",
+            static_cast<unsigned long long>(presentCount), label, desc.Width, desc.Height);
+        return false;
+    }
+
+    const uint64_t rowBytes = static_cast<uint64_t>(desc.Width) * 3;
+    const uint64_t paddedRowBytes = (rowBytes + 3u) & ~uint64_t(3u);
+    constexpr uint64_t headerBytes = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+    if (paddedRowBytes > SIZE_MAX || paddedRowBytes > MAXDWORD - headerBytes ||
+        desc.Height > (MAXDWORD - headerBytes) / paddedRowBytes) {
+        LogDxgi("[READBACK_FULL] Present #%llu %s BMP dimensions exceed file limits=%ux%u",
+            static_cast<unsigned long long>(presentCount), label, desc.Width, desc.Height);
+        return false;
+    }
+    const uint64_t imageBytes = paddedRowBytes * desc.Height;
+
+    BITMAPFILEHEADER fileHeader{};
+    fileHeader.bfType = 0x4D42;
+    fileHeader.bfSize = static_cast<DWORD>(headerBytes + imageBytes);
+    fileHeader.bfOffBits = static_cast<DWORD>(headerBytes);
+    BITMAPINFOHEADER infoHeader{};
+    infoHeader.biSize = sizeof(infoHeader);
+    infoHeader.biWidth = static_cast<LONG>(desc.Width);
+    infoHeader.biHeight = -static_cast<LONG>(desc.Height);
+    infoHeader.biPlanes = 1;
+    infoHeader.biBitCount = 24;
+    infoHeader.biCompression = BI_RGB;
+    infoHeader.biSizeImage = static_cast<DWORD>(imageBytes);
+
+    FILE* file = nullptr;
+    const errno_t openResult = _wfopen_s(&file, filename, L"wb");
+    if (openResult != 0 || !file) {
+        LogDxgi("[READBACK_FULL] Present #%llu %s could not open %ls errno=%d",
+            static_cast<unsigned long long>(presentCount), label, filename, openResult);
+        return false;
+    }
+
+    bool succeeded = fwrite(&fileHeader, sizeof(fileHeader), 1, file) == 1 &&
+        fwrite(&infoHeader, sizeof(infoHeader), 1, file) == 1;
+    std::vector<uint8_t> row(static_cast<size_t>(paddedRowBytes));
+    for (UINT y = 0; succeeded && y < desc.Height; ++y) {
+        for (UINT x = 0; x < desc.Width; ++x) {
+            ReadbackPixel pixel{};
+            if (!ReadbackPixelAt(mapped, desc, x, y, pixel)) {
+                succeeded = false;
+                break;
+            }
+            const size_t offset = static_cast<size_t>(x) * 3;
+            row[offset] = pixel.b;
+            row[offset + 1] = pixel.g;
+            row[offset + 2] = pixel.r;
+        }
+        if (succeeded)
+            succeeded = fwrite(row.data(), 1, row.size(), file) == row.size();
+    }
+    if (fclose(file) != 0) succeeded = false;
+    if (!succeeded) {
+        LogDxgi("[READBACK_FULL] Present #%llu %s BMP write failed path=%ls",
+            static_cast<unsigned long long>(presentCount), label, filename);
+        return false;
+    }
+
+    LogDxgi("[READBACK_FULL] Present #%llu saved %s path=%ls size=%ux%u format=%u bytes=%llu",
+        static_cast<unsigned long long>(presentCount), label, filename,
+        desc.Width, desc.Height, desc.Format,
+        static_cast<unsigned long long>(headerBytes + imageBytes));
+    return true;
+}
+
 HRESULT ReadbackTextureSamples(Device* device, ID3D11Texture2D* texture,
-    const char* label, uint64_t presentCount, UINT bufferIndex) {
+    const char* label, uint64_t presentCount, UINT bufferIndex,
+    const wchar_t* fullReadbackFilename = nullptr) {
     D3D11_TEXTURE2D_DESC desc{};
     texture->GetDesc(&desc);
     if (!desc.Width || !desc.Height || desc.SampleDesc.Count != 1) {
@@ -141,6 +228,8 @@ HRESULT ReadbackTextureSamples(Device* device, ID3D11Texture2D* texture,
     }
     LogDxgi("[%s]   Non-black pixels: %u/%u (%.1f%%)",
         label, nonBlackCount, sampleCount, 100.0f * nonBlackCount / sampleCount);
+    if (fullReadbackFilename)
+        SaveMappedTextureAsBmp(mapped, desc, fullReadbackFilename, presentCount, label);
     device->ctx->Unmap(staging.Get(), 0);
     return S_OK;
 }
@@ -148,6 +237,8 @@ HRESULT ReadbackTextureSamples(Device* device, ID3D11Texture2D* texture,
 void CaptureBackbufferReadback(IDXGISwapChain4* swapChain, IUnknown* source) {
     static std::atomic<uint64_t> presentCount{0};
     static const bool enabled = BackbufferReadbackEnabled();
+    static const bool fullReadbackEnabled = FullReadbackEnabled();
+    static std::atomic<bool> fullReadbackAttempted{false};
     Device* device = nullptr;
     if (auto* queue = dynamic_cast<CommandQueue*>(source)) {
         device = queue->dev;
@@ -169,6 +260,19 @@ void CaptureBackbufferReadback(IDXGISwapChain4* swapChain, IUnknown* source) {
         LogDxgi("[READBACK] Present #%llu skipped: wrapped D3D11 device unavailable",
             static_cast<unsigned long long>(count));
         return;
+    }
+
+    const bool saveFullReadback = fullReadbackEnabled && count == 100 &&
+        !fullReadbackAttempted.exchange(true, std::memory_order_relaxed);
+    wchar_t sourceFilename[MAX_PATH]{};
+    wchar_t backbufferFilename[MAX_PATH]{};
+    if (saveFullReadback) {
+        swprintf_s(sourceFilename, ARRAYSIZE(sourceFilename),
+            L"D:\\HelaReadback_Present%llu_source.bmp",
+            static_cast<unsigned long long>(count));
+        swprintf_s(backbufferFilename, ARRAYSIZE(backbufferFilename),
+            L"D:\\HelaReadback_Present%llu_backbuffer.bmp",
+            static_cast<unsigned long long>(count));
     }
 
     const UINT bufferIndex = swapChain->GetCurrentBackBufferIndex();
@@ -226,11 +330,61 @@ void CaptureBackbufferReadback(IDXGISwapChain4* swapChain, IUnknown* source) {
                     sourceTextureDesc.Format);
             }
             ReadbackTextureSamples(device, sourceTexture.Get(), "READBACK_SRC",
-                count, bufferIndex);
+                count, bufferIndex, saveFullReadback ? sourceFilename : nullptr);
         }
     }
 
-    ReadbackTextureSamples(device, backbuffer.Get(), "READBACK", count, bufferIndex);
+    ReadbackTextureSamples(device, backbuffer.Get(), "READBACK", count, bufferIndex,
+        saveFullReadback ? backbufferFilename : nullptr);
+}
+
+void InjectRedBackbuffer(IDXGISwapChain4* swapChain, IUnknown* source) {
+    static const bool enabled = [] {
+        const bool requested = BackbufferInjectionEnabled();
+        if (requested) LogDxgi("[INJECTION_TEST] Enabled");
+        return requested;
+    }();
+    if (!enabled) return;
+
+    static std::atomic<bool> resultLogged{false};
+    Device* device = nullptr;
+    if (auto* queue = dynamic_cast<CommandQueue*>(source)) {
+        device = queue->dev;
+    } else {
+        device = dynamic_cast<Device*>(source);
+    }
+    if (!device || !device->d11 || !device->ctx) {
+        if (!resultLogged.exchange(true, std::memory_order_relaxed))
+            LogDxgi("[INJECTION_TEST] Failed: wrapped D3D11 device/context unavailable");
+        return;
+    }
+
+    std::lock_guard<std::recursive_mutex> contextLock(device->ctxLock);
+    const UINT bufferIndex = swapChain->GetCurrentBackBufferIndex();
+    Ptr<ID3D11Texture2D> backbuffer;
+    HRESULT result = swapChain->GetBuffer(bufferIndex, __uuidof(ID3D11Texture2D),
+        reinterpret_cast<void**>(backbuffer.Put()));
+    if (FAILED(result) || !backbuffer) {
+        if (!resultLogged.exchange(true, std::memory_order_relaxed))
+            LogDxgi("[INJECTION_TEST] GetBuffer(%u) failed hr=0x%08lx",
+                bufferIndex, result);
+        return;
+    }
+
+    Ptr<ID3D11RenderTargetView> rtv;
+    result = device->d11->CreateRenderTargetView(backbuffer.Get(), nullptr, rtv.Put());
+    if (FAILED(result) || !rtv) {
+        if (!resultLogged.exchange(true, std::memory_order_relaxed))
+            LogDxgi("[INJECTION_TEST] CreateRenderTargetView failed "
+                "hr=0x%08lx format/buffer=%u", result, bufferIndex);
+        return;
+    }
+
+    constexpr float red[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
+    device->ctx->ClearRenderTargetView(rtv.Get(), red);
+    device->ctx->Flush();
+    if (!resultLogged.exchange(true, std::memory_order_relaxed))
+        LogDxgi("[INJECTION_TEST] Backbuffer %u cleared to RED", bufferIndex);
 }
 
 UINT DiagnosticMaskedVendorId() {
@@ -707,6 +861,7 @@ HRESULT STDMETHODCALLTYPE SwapChain::GetBuffer(UINT index, REFIID riid, void** o
 
 HRESULT STDMETHODCALLTYPE SwapChain::Present(UINT interval, UINT flags) {
     D3D12On11TraceApi("IDXGISwapChain::Present");
+    InjectRedBackbuffer(real, source);
     CaptureBackbufferReadback(real, source);
     const HRESULT result = real->Present(interval, flags);
     D3D12On11TracePresent("IDXGISwapChain::Present", result);
@@ -716,6 +871,7 @@ HRESULT STDMETHODCALLTYPE SwapChain::Present(UINT interval, UINT flags) {
 HRESULT STDMETHODCALLTYPE SwapChain::Present1(UINT interval, UINT flags,
     const DXGI_PRESENT_PARAMETERS* parameters) {
     D3D12On11TraceApi("IDXGISwapChain1::Present1");
+    InjectRedBackbuffer(real, source);
     CaptureBackbufferReadback(real, source);
     const HRESULT result = real->Present1(interval, flags, parameters);
     D3D12On11TracePresent("IDXGISwapChain1::Present1", result);

@@ -216,6 +216,11 @@ struct CommandAllocator : Stub_ID3D12CommandAllocator {
 struct ExecState {
     Device* dev = nullptr;
     ID3D11DeviceContext* c = nullptr;
+    uint64_t drawsExecuted = 0;
+    uint64_t drawsSkipped = 0;
+    uint64_t rtvBound = 0;
+    uint64_t backbufferDraws = 0;
+    uint64_t copyToBackbuffer = 0;
     bool skipDraws = false;
     bool skipDispatches = false;
     bool hasGraphicsPipeline = false;

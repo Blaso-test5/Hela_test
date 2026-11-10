@@ -1,0 +1,47 @@
+HELA GTX 950M RED BACKBUFFER INJECTION AND FULL READBACK
+Date: 2026-11-10
+
+Setup
+- Built the DXGI proxy with the opt-in red backbuffer injection and full BMP
+  readback enabled.
+- Used `D3D12ON11_INJECTION_TEST=1`,
+  `D3D12ON11_BACKBUFFER_READBACK=1`, and
+  `D3D12ON11_FULL_READBACK=1`. The diagnostic run also reported Shader Model
+  6.7 and Tiled Resources Tier 0 to reach the swapchain on the GTX 950M.
+- Launched with `Hela -graphicsadapter=0 -windowed -ResX=1280 -ResY=720`.
+- Verified the live HWND style as `0x14CF0000` (`WS_OVERLAPPEDWINDOW`) and
+  outer bounds as 1296x759 on the 1536x864 monitor.
+
+Result
+- Hela exited naturally with code 16384 (`0x4000`) after about 97 seconds.
+  The trace recorded 2,159 Presents.
+- Twenty-one sampled source/destination pairs were captured at Presents
+  #100 through #2100. The source texture and backbuffer were 1280x720,
+  DXGI format 24 (`R10G10B10A2_UNORM`).
+- Every source sample had `0/100` non-black pixels. Every injected
+  backbuffer sample had `100/100` non-black pixels.
+- Full BMPs from Present #100 were written to
+  `Present100_source.bmp` and `Present100_backbuffer.bmp`. A complete
+  pixel scan confirmed 921,600 black source pixels and 921,600 red
+  destination pixels (RGB `(255,0,0)`).
+- The user visually confirmed the red window during the preceding
+  injection run. The matching readback in this run confirms the red clear
+  is present in the backbuffer before Present.
+
+Interpretation
+The final backbuffer and Present path can display an injected red frame.
+The source texture copied to the backbuffer is already black, so the
+missing game image is upstream of the final backbuffer/Present step. This
+does not identify whether the cause is an offscreen clear, draw, shader,
+binding, or resource-lifetime problem.
+
+The original `d3d12.dll`, `dxgi.dll`, and `d3d12on11.ini` were restored and
+verified against their saved originals. UE5 settings remain windowed at
+1280x720. The 28.6 MB raw log remains only in the local test backup; no
+minidump or process-memory dump is included.
+
+After this run, `[CMDLIST_SUMMARY]` per-command-list counters were added
+under `diagnostic_render_trace`. They report executed/skipped draws, draws
+with an RTV, backbuffer draws, and CopyResource calls to the backbuffer.
+The implementation built successfully and both targeted DXGI smoke tests
+passed; the new summary has not yet been captured in a game run.

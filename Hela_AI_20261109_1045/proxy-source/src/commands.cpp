@@ -53,13 +53,16 @@ void RecordDrawExecution(ExecState& state, bool indexed) {
     if (!Cfg().diagnosticRenderTrace) return;
     auto& stats = TraceStats();
     stats.drawExec.fetch_add(1, std::memory_order_relaxed);
+    ++state.drawsExecuted;
     bool hasRtv = false;
     for (UINT i = 0; i < state.numRtv && i < ARRAYSIZE(state.rtvs); ++i)
         hasRtv = hasRtv || static_cast<bool>(state.rtvs[i]);
     if (hasRtv) {
         stats.drawWithRtv.fetch_add(1, std::memory_order_relaxed);
+        ++state.rtvBound;
         if (state.rtvBackbuffer) {
             stats.drawWithBackbuffer.fetch_add(1, std::memory_order_relaxed);
+            ++state.backbufferDraws;
             Log("[BACKBUFFER] Draw to backbuffer detected! api=%s vs-hash=%016llx ps-hash=%016llx",
                 indexed ? "DrawIndexed" : "Draw",
                 static_cast<unsigned long long>(state.graphicsShaderHash),
@@ -79,9 +82,10 @@ void LogBackbufferCopy(const char* operation, const Resource* destination,
         operation, destination, source);
 }
 
-void LogSkippedDraw(const ExecState& state, const char* operation,
+void LogSkippedDraw(ExecState& state, const char* operation,
     UINT arg0, UINT arg1) {
     if (!Cfg().diagnosticRenderTrace) return;
+    ++state.drawsSkipped;
     Log("[RENDER_TRACE] [DRAW_SKIPPED] api=%s pipeline=%p vs-hash=%016llx ps-hash=%016llx "
         "missing-vs=%u missing-shader=%u arg0=%u arg1=%u rtvs=%u backbuffer=%u",
         operation, reinterpret_cast<void*>(state.graphicsPipelineIdentity),
@@ -1190,6 +1194,8 @@ void STDMETHODCALLTYPE CommandList::CopyResource(ID3D12Resource* destination, ID
         auto* srcResource = dynamic_cast<Resource*>(keepSrc.Get());
         if (dstResource && srcResource) {
             LogBackbufferCopy("CopyResource", dstResource, srcResource);
+            if (dstResource->backbuffer && Cfg().diagnosticRenderTrace)
+                ++state.copyToBackbuffer;
             state.c->CopyResource(dstResource->Raw(), srcResource->Raw());
             if (dstResource->backbuffer && srcResource->tex && state.dev) {
                 std::lock_guard<std::mutex> lock(state.dev->backbufferCopyLock);
@@ -1723,7 +1729,8 @@ void STDMETHODCALLTYPE CommandList::ResolveQueryData(ID3D12QueryHeap* heapIn, D3
 
 void STDMETHODCALLTYPE CommandQueue::ExecuteCommandLists(UINT count, ID3D12CommandList* const* lists) {
     TraceApi("CommandQueue::ExecuteCommandLists");
-    if (Cfg().diagnosticRenderTrace)
+    const bool trace = Cfg().diagnosticRenderTrace;
+    if (trace)
         TraceStats().execCmdLists.fetch_add(1, std::memory_order_relaxed);
     if (!lists || !count) return;
     std::lock_guard<std::recursive_mutex> lock(dev->ctxLock);
@@ -1736,7 +1743,24 @@ void STDMETHODCALLTYPE CommandQueue::ExecuteCommandLists(UINT count, ID3D12Comma
             Log("Ignored invalid or open command list at queue submission");
             continue;
         }
+        if (trace) {
+            state.drawsExecuted = 0;
+            state.drawsSkipped = 0;
+            state.rtvBound = 0;
+            state.backbufferDraws = 0;
+            state.copyToBackbuffer = 0;
+        }
         commandList->Run(state);
+        if (trace) {
+            Log("[CMDLIST_SUMMARY] list=%u draws_executed=%llu draws_skipped=%llu "
+                "rtv_bound=%llu backbuffer_draws=%llu copy_to_bb=%llu",
+                i,
+                static_cast<unsigned long long>(state.drawsExecuted),
+                static_cast<unsigned long long>(state.drawsSkipped),
+                static_cast<unsigned long long>(state.rtvBound),
+                static_cast<unsigned long long>(state.backbufferDraws),
+                static_cast<unsigned long long>(state.copyToBackbuffer));
+        }
     }
 }
 
