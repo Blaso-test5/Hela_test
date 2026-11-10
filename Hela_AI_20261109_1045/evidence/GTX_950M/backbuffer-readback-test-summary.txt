@@ -1,0 +1,41 @@
+HELA GTX 950M BACKBUFFER READBACK TEST
+Date: 2026-11-10
+
+Setup
+- Built with Visual Studio 18 / CMake using the readback-enabled DXGI proxy.
+- Temporarily installed the two test DLLs, set shader_model=6_7 and
+  diagnostic tracing, forced Tiled Resources Tier 0, and staged the seven
+  shader overrides from the package.
+- Enabled `D3D12ON11_BACKBUFFER_READBACK=1`. Readback ran before the native
+  Present and Present1 calls, once every 100 presents.
+- The game was launched without explicit window-mode arguments; a Hela
+  window title was observed. The next run should pass `-windowed`.
+
+Result
+- Process ID 422624 exited naturally with code 16384 (`0x4000`) after
+  about 134 seconds. The final heartbeat recorded 2,068 successful
+  Presents, 2,068 `CopyResource` calls targeting the backbuffer,
+  `draw(ok)=2367`, `bb=0`, `skip-vs=0`, and `overlap=6`.
+- Twenty readbacks were logged at Presents #100 through #2000. The
+  backbuffer was 1536x864, DXGI format 24
+  (`R10G10B10A2_UNORM`), current buffer index 0.
+- At all 20 readbacks, each of the five points (four corners and center)
+  decoded to R=0, G=0, B=0, A=0. Each 100-point non-black sample counted
+  0/100. No GetBuffer, staging-texture creation, or Map failures were
+  reported.
+- All 2,068 backbuffer-targeted copy calls were recorded, but the
+  instrumentation logs the copy before submission; the pixel readback
+  verifies the destination's sampled contents, not the source texture.
+
+Interpretation
+The sampled destination pixels are zero, consistent with an empty/cleared
+backbuffer at those positions. This does not prove every pixel in every
+frame is black or identify whether the source texture was already empty.
+The next targeted test should capture a bounded sample from the
+`CopyResource` source and destination in the same run. No screenshot was
+captured.
+
+The original game DLLs, INI, and three pre-existing override files were
+restored and hash-verified. The seven staged overrides were removed or
+restored to their original contents. The 31 MB full trace remains only in
+the local test backup; no minidump is included.

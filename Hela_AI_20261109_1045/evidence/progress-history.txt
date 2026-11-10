@@ -636,20 +636,98 @@ TRACE GETBUFFER E COPY DEL BACKBUFFER - GTX 950M - 10/11/2026
   `evidence\GTX_950M\backbuffer-copy-test-summary.txt`; trace integrale
   da 59 MB mantenuto solo nel backup locale.
 
+READBACK BACKBUFFER - GTX 950M - 10/11/2026
+-------------------------------------------
+- Aggiunto readback opt-in in `Present` e `Present1`, prima della chiamata
+  DXGI nativa, ogni 100 Present (`D3D12ON11_BACKBUFFER_READBACK=1`).
+  Decode pixel corretto per R10G10B10A2 e formati comuni RGBA/BGRA 8 bit.
+- Build Visual Studio 18 riuscita; `dxgi_proxy_smoke` e
+  `dxgi_swapchain_smoke` passati (2/2).
+- Il run ha registrato 2.068 Present e 2.068 CopyResource verso il
+  backbuffer. Venti readback (Present #100-#2000): formato 24,
+  1536x864; tutti i cinque punti letti per campione erano
+  `(R,G,B,A)=(0,0,0,0)` e il campione non-nero era 0/100.
+- Nessun errore di GetBuffer, creazione staging o Map. Il dato prova che i
+  punti campionati sul backbuffer erano zero, ma non stabilisce lo stato
+  dell'intera immagine né quello della texture sorgente.
+- Finestra Hela rilevata; il processo e' uscito naturalmente con codice
+  16384 (`0x4000`) dopo circa 134 secondi. Il run non ha passato flag
+  espliciti di modalita' finestra: per i prossimi test usare `-windowed`.
+- DLL, INI e override originali ripristinati e verificati. Riepilogo:
+  `evidence\GTX_950M\backbuffer-readback-test-summary.txt`; trace completo
+  da 31 MB solo nel backup locale.
+
+READBACK SORGENTE COPYRESOURCE - GTX 950M - 10/11/2026
+-------------------------------------------------------
+- `CopyResource` verso il backbuffer ora salva sul Device un riferimento
+  alla texture sorgente effettiva, con protezione mutex e contatore di
+  sequenza. Prima di Present/Present1 il readback campiona la sorgente
+  registrata e il backbuffer sotto il lock del contesto.
+- Il run passava `-windowed`, ma `GameUserSettings.ini` UE5 era ancora su
+  `FullscreenMode=1` (borderless); la modalita' finestra effettiva non era
+  stata verificata. Registrati 2.357 CopyResource al backbuffer e 23
+  coppie readback ai Present #100-#2300.
+- La sorgente cicla fra tre texture 1536x864, formato 24
+  (`R10G10B10A2_UNORM`). Tutti i 5 punti in tutte le 23 letture sorgente
+  erano `(0,0,0,0)`; campione non-nero `0/100`. Destinazione backbuffer
+  anch'essa zero negli stessi campioni.
+- Nessun errore QueryInterface, creazione staging, Map o formato. Heartbeat
+  finale: present=2357, draw(ok)=2948, skip-vs=0, skip-other=0,
+  placed(ok)=334, overlap=6. Uscita naturale `0x4000` dopo circa 128 s.
+- Il test conferma solo i valori zero dei punti campionati; non identifica
+  la draw/clear/binding responsabile. Prossimo passo: correlare draw e
+  clear diretti alle tre texture sorgente prima della copia.
+- DLL, INI e override originali ripristinati e verificati. Riepilogo in
+  `evidence\GTX_950M\copy-source-readback-test-summary.txt`; log da 34,9 MB
+  mantenuto solo nel backup locale.
+
+READBACK SORGENTE COPYRESOURCE - GTX 950M - 10/11/2026
+-------------------------------------------------------
+- `CopyResource` al backbuffer salva sul Device il riferimento alla texture
+  sorgente, protetto da mutex. Prima di Present/Present1 si campionano
+  sorgente e backbuffer sotto lock del contesto.
+- Il run passava `-windowed`, ma `GameUserSettings.ini` UE5 era ancora su
+  `FullscreenMode=1` (borderless); la modalita' finestra effettiva non era
+  stata verificata. Registrati 2.357 CopyResource al backbuffer e 23
+  coppie readback ai Present #100-#2300.
+- Tre texture sorgente alternate, ciascuna 1536x864, formato 24
+  (`R10G10B10A2_UNORM`). Tutti i cinque punti in tutte le 23 letture erano
+  `(0,0,0,0)`; campione non-nero `0/100`. Destinazione anch'essa zero.
+- Nessun errore QueryInterface, staging, Map o formato. Heartbeat:
+  present=2357, draw(ok)=2948, skip-vs=0, skip-other=0, placed(ok)=334,
+  overlap=6. Uscita naturale `0x4000` dopo circa 128 secondi.
+- Il dato non identifica draw, clear o binding responsabile. Prossimo
+  passo: correlare le scritture sulle tre sorgenti prima della copia.
+- DLL, INI e override originali ripristinati e verificati. Riepilogo in
+  `evidence\GTX_950M\copy-source-readback-test-summary.txt`; trace da
+  34,9 MB solo nel backup locale.
+
+FINESTRA UE5 VERIFICATA - GTX 950M - 10/11/2026
+------------------------------------------------
+- Impostati `FullscreenMode=2`, `LastConfirmedFullscreenMode=2` e
+  `PreferredFullscreenMode=2` nel `GameUserSettings.ini` locale; avvio con
+  `-windowed -ResX=1280 -ResY=720`.
+- Verificato HWND Win32: style `0x14CF0000` (WS_OVERLAPPEDWINDOW), bounds
+  esterni 1296x759 su monitor 1536x864. Modalita' windowed realmente
+  confermata; configurazione UE5 locale mantenuta su windowed 1280x720.
+- Run: 2.056 Present/copie e 20 coppie readback (#100-#2000). Sorgente e
+  destinazione 1280x720 formato 24; tutti i cinque punti sorgente per
+  campione erano `(0,0,0,0)`, conteggio non-nero `0/100`; destinazione
+  anch'essa zero.
+- Uscita naturale `0x4000` dopo circa 92 secondi. DLL proxy, INI proxy e
+  override shader originali ripristinati e verificati.
+- Riepilogo in
+  `evidence\GTX_950M\verified-windowed-source-readback-test-summary.txt`;
+  trace da 31,2 MB solo nel backup locale.
+
 PROSSIMI PASSI
 --------------
-1. Verificare i pixel del backbuffer dopo il `CopyResource` e prima del
-   Present con un readback limitato o screenshot controllato.
-2. Verificare firma semantica, binding e output dei candidati shader; il
-   caricamento e l'assenza di skip non provano equivalenza visiva.
-3. Analizzare i 40.381 skip VS rimasti e i 6 overlap placed-resource senza
-   rimuovere i controlli di sicurezza.
-4. Indagare l'uscita `16384` solo con evidenza di fault/module/stack.
-5. Sulla GTX 1050 Ti, diagnosticare perche' i run precedenti avevano
-   `swap=0` e `present=0`, oltre agli errori placed-resource overlap.
-6. Proseguire la verifica in-game del percorso staging BC con un run
-   riproducibile e di durata sufficiente, registrando l'esito visivo.
-7. Non simulare l'aliasing D3D12 senza
-   una corretta implementazione.
+1. Correlare draw e clear che scrivono nelle tre texture sorgenti ai
+   rispettivi binding RTV prima di `CopyResource`.
+2. Verificare firma semantica, binding e output dei candidati shader.
+3. Analizzare gli overlap placed-resource senza rimuovere i controlli di
+   sicurezza.
+4. Proseguire la verifica in-game del percorso staging BC con un run
+   riproducibile e registrare l'esito visivo.
 
 FINE DEL RICORDO

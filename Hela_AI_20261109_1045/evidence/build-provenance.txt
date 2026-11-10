@@ -81,3 +81,38 @@ rebuilt `dxgi.dll` SHA-256 is
 After that format-only change, `dxgi_proxy_smoke` and
 `dxgi_swapchain_smoke` passed (2/2). The game DLLs were restored after the
 run; see `evidence\GTX_950M\backbuffer-copy-test-summary.txt`.
+
+Copy-source readback build and initial GTX 950M test, 2026-11-10:
+Added per-device tracking of the last executed CopyResource source targeting
+a backbuffer and sampled source plus destination before Present. The
+rebuilt `d3d12.dll` SHA-256 is
+`E52AD4B7B373A229F37B6CEE2DB2CC846BCAE384CF5623B44B6AF0C2CB2413EA`;
+`dxgi.dll` SHA-256 is
+`606AC3AFE366DF99C7BB5CAAA7D017CDDA7E67104F8E19F098E1A153B0736130`.
+`dxgi_proxy_smoke` and `dxgi_swapchain_smoke` passed (2/2). The game was
+launched with `-windowed`, but UE5 `FullscreenMode=1` meant the actual
+window mode was not verified; see
+`evidence\GTX_950M\copy-source-readback-test-summary.txt`.
+
+Verified windowed source readback, GTX 950M, 2026-11-10:
+Used the same source-readback binaries listed above. Set UE5
+`FullscreenMode`, `LastConfirmedFullscreenMode`, and
+`PreferredFullscreenMode` to 2, then launched with
+`-windowed -ResX=1280 -ResY=720`. Confirmed the live HWND style was
+`0x14CF0000` (`WS_OVERLAPPEDWINDOW`) and its outer bounds were 1296x759 on
+a 1536x864 monitor. The run logged 2,056 presents/copies and 20
+source/destination readback pairs; source and destination samples were
+zero. The UE5 user configuration remains windowed at 1280x720. See
+`evidence\GTX_950M\verified-windowed-source-readback-test-summary.txt`.
+
+Backbuffer readback build and GTX 950M test, 2026-11-10:
+Built with the installed Visual Studio 18 / CMake toolchain in a new,
+separate build directory because the prior CMake cache referred to a
+different machine path. The resulting `d3d12.dll` SHA-256 is
+`7A522EB29B2EC978548BF74458A07C13CA1D9F834361E177FA01307DAC9A22A8`;
+`dxgi.dll` SHA-256 is
+`F9199F22AC45997C766961F1EEB0BC8CBE75F7870C9F2B619C196255FF927ACB`.
+`dxgi_proxy_smoke` and `dxgi_swapchain_smoke` passed (2/2). The instrumented
+run enabled opt-in sampled backbuffer readback; test results and limitations
+are recorded in `evidence\GTX_950M\backbuffer-readback-test-summary.txt`.
+The original game DLLs, INI, and override files were restored and verified.

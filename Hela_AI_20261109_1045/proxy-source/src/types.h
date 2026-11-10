@@ -384,6 +384,10 @@ struct Device : Stub_ID3D12Device2 {
     std::atomic<UINT> rootSigCounter{0};
     std::mutex swapLock;
     std::set<Resource*> backbuffers;   // wrapper dei backbuffer attivi (identita')
+    std::mutex backbufferCopyLock;
+    Ptr<ID3D11Resource> lastBackbufferCopySource;
+    D3D12_RESOURCE_DESC lastBackbufferCopySourceDesc{};
+    uint64_t lastBackbufferCopySequence = 0;
 
     explicit Device(IDXGIAdapter* a) : Stub_ID3D12Device2(this), adapter(a) {}
     ~Device() override;

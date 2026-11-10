@@ -90,6 +90,73 @@ GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
   remains in the local test backup; only the sanitized summary is included
   in this evidence directory.
 
+## Backbuffer readback
+
+- Added opt-in readback before `Present` and `Present1` using
+  `D3D12ON11_BACKBUFFER_READBACK=1`, sampled every 100th present. The
+  sampler decodes `R10G10B10A2_UNORM` correctly and also supports common
+  8-bit RGBA/BGRA formats.
+- The GTX 950M run recorded 2,068 Presents and 2,068 `CopyResource`
+  operations targeting the backbuffer. Twenty samples were captured, from
+  Present #100 through #2000. All five reported points in every sample
+  were `(R,G,B,A)=(0,0,0,0)`; all 100-point non-black counts were `0/100`.
+- The window title was observed. The process exited with code `16384`
+  (`0x4000`) after about 134 seconds. All game DLLs, INI settings, and
+  staged overrides were restored and verified against their backups.
+- This establishes that the sampled backbuffer pixels were zero at those
+  points; it does not prove every pixel in every frame was black. The next
+  diagnostic should sample the source texture of the backbuffer copy to
+  distinguish empty source content from a copy-path problem. The next run
+  should explicitly use windowed mode (`-windowed`).
+- The 31 MB raw run log is retained locally at
+  `D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\950m-backbuffer-readback-20261110-013458\backbuffer-readback-test.log`;
+  see `backbuffer-readback-test-summary.txt` for the sanitized findings.
+
+## Copy-source readback (initial attempt; window mode not verified)
+
+- The run passed `-windowed`, but the UE5 `GameUserSettings.ini` still had
+  `FullscreenMode=1` (borderless fullscreen). A visible Hela window title
+  did not prove that the window was actually windowed; treat that launch
+  mode as unverified.
+- Source-resource tracking showed three textures, each 1536x864, format 24
+  (`R10G10B10A2_UNORM`), and sampled them alongside the destination before
+  Present. The run logged
+  2,357 backbuffer-targeted `CopyResource` calls and 23 source/destination
+  readback pairs (#100 through #2300). Every source sample had all five
+  reported points at `(0,0,0,0)` and `0/100` non-black pixels; every
+  destination sample was likewise zero.
+- No source-query, staging-creation, Map, or format errors were recorded.
+  The process exited naturally with `0x4000` after about 128 seconds.
+  Original DLLs, INI, and overrides were restored and verified.
+- The source and destination samples confirm zero-valued pixels at the
+  sampled locations and times. They do not identify which upstream draw,
+  clear, binding, or resource-lifetime issue caused this. Next, trace
+  writes/clears to the three source resources and inspect the render-target
+  bindings before their copies.
+- Sanitized results are in `copy-source-readback-test-summary.txt`. The
+  34.9 MB raw log remains local at
+  `D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\950m-copy-source-readback-20261110-014625\copy-source-readback-test.log`.
+
+## Verified windowed source readback
+
+- Set UE5 `FullscreenMode`, `LastConfirmedFullscreenMode`, and
+  `PreferredFullscreenMode` to `2` in the local user settings and launched
+  with `-windowed -ResX=1280 -ResY=720`.
+- Verified the actual HWND style was `0x14CF0000` (standard overlapped
+  window). Its outer bounds were 1296x759 on a 1536x864 monitor, confirming
+  it was not borderless fullscreen. The persistent UE5 config now remains
+  in windowed mode at 1280x720.
+- The run recorded 2,056 Presents and backbuffer copies, with 20 sampled
+  source/destination pairs (#100 through #2000). Source and destination
+  were 1280x720, format 24. All five points in all source samples were
+  `(0,0,0,0)`, with `0/100` non-black pixels; destination samples were
+  also zero.
+- Hela exited naturally with `0x4000` after about 92 seconds. Proxy DLLs,
+  proxy INI, and shader overrides were restored and verified.
+- See `verified-windowed-source-readback-test-summary.txt`; the 31.2 MB
+  trace remains local at
+  `D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\backups\950m-windowed-source-readback-20261110-015307\windowed-source-readback-test.log`.
+
 ## Files
 
 - `d3d12on11-before.log`: baseline launch log from the conservative setup.
@@ -102,3 +169,10 @@ GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
 - `pixel-shader-test-summary.txt`: results and interpretation of the PS test.
 - `backbuffer-copy-test-summary.txt`: sanitized GetBuffer, resource-wrap,
   backbuffer-copy, and Present counts from the instrumented run.
+- `backbuffer-readback-test-summary.txt`: sampled backbuffer pixel values
+  and the bounded GTX 950M readback test result.
+- `copy-source-readback-test-summary.txt`: source and destination
+  measurements from the initial follow-up run; actual window mode was not
+  verified.
+- `verified-windowed-source-readback-test-summary.txt`: results from the
+  run whose window style and dimensions were explicitly verified.

@@ -1,0 +1,48 @@
+HELA GTX 950M COPY-SOURCE READBACK TEST
+Date: 2026-11-10
+
+Setup
+- Built the proxy with per-device tracking of the most recently executed
+  `CopyResource` source whose destination is a backbuffer. The tracked COM
+  reference and source descriptor are protected by a mutex.
+- Before Present/Present1, the diagnostic readback sampled the tracked
+  source and native swapchain destination while holding the D3D11 context
+  lock. Readback remained opt-in and sampled every 100th present.
+- Passed `-windowed` and observed a Hela window, but the UE5 user settings
+  still had `FullscreenMode=1` (borderless fullscreen). The actual mode was
+  not verified, so this run must not be described as a confirmed windowed
+  launch. A subsequent run explicitly changed the UE5 setting to mode 2
+  and verified the HWND style; see
+  `verified-windowed-source-readback-test-summary.txt`.
+- Temporarily enabled Tier 0, shader_model=6_7, diagnostics, and the same
+  seven SM5 shader overrides as the prior controlled run.
+
+Result
+- Process ID 405072 exited naturally with code 16384 (`0x4000`) after
+  about 128 seconds.
+- Final heartbeat: present=2357, graphics PSOs=2863, compute PSOs=4022,
+  draw(ok)=2948, bb=0, skip-vs=0, skip-other=0, placed(ok)=334,
+  overlap=6. The log recorded 2,357 backbuffer-targeted CopyResource calls.
+- Twenty-three source/destination readback pairs were captured at
+  Presents #100 through #2300. The source cycled among three textures;
+  each was 1536x864, DXGI format 24 (`R10G10B10A2_UNORM`).
+- For each of the 23 source samples, all five points (four corners and
+  center) decoded to R=0, G=0, B=0, A=0, and the 100-point non-black
+  sample counted 0/100. The same sampled values/counts were zero on the
+  destination backbuffer.
+- No source QueryInterface, staging-texture creation, Map, or format
+  errors were recorded.
+
+Interpretation
+The sampled source and destination pixels were all zero at the sampled
+points and times. This supports that non-black content was not present in
+the source when inspected, but does not identify whether rendering,
+clearing, bindings, or resource reuse/lifetime caused the source content.
+The next targeted trace should correlate writes and clears to the three
+source resources and the render-target bindings immediately before their
+copies. No screenshot was captured.
+
+The original game DLLs, INI, and three pre-existing override files were
+restored and hash-verified; temporary shader overrides were removed or
+restored. The 34.9 MB raw log remains only in the local test backup. No
+minidump is included.

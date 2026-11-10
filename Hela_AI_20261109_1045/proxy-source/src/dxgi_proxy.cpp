@@ -6,6 +6,7 @@
 #undef CreateDXGIFactory1
 #undef CreateDXGIFactory2
 
+#include "types.h"
 #include "bridge.h"
 #include "dxgi_factory_fwd.inc"
 #include "dxgi_swapchain_fwd.inc"
@@ -27,6 +28,209 @@ bool DiagnosticMaskNvidiaAdapter() {
     wchar_t value[2]{};
     return GetEnvironmentVariableW(L"D3D12ON11_DIAGNOSTIC_MASK_NVIDIA",
         value, ARRAYSIZE(value)) == 1 && value[0] == L'1';
+}
+
+bool BackbufferReadbackEnabled() {
+    wchar_t value[2]{};
+    return GetEnvironmentVariableW(L"D3D12ON11_BACKBUFFER_READBACK",
+        value, ARRAYSIZE(value)) == 1 && value[0] == L'1';
+}
+
+struct ReadbackPixel {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+    uint8_t a;
+};
+
+bool ReadbackPixelAt(const D3D11_MAPPED_SUBRESOURCE& mapped,
+    const D3D11_TEXTURE2D_DESC& desc, UINT x, UINT y, ReadbackPixel& pixel) {
+    if (x >= desc.Width || y >= desc.Height || !mapped.pData) return false;
+    const auto* row = static_cast<const uint8_t*>(mapped.pData) +
+        static_cast<size_t>(y) * mapped.RowPitch;
+    if (desc.Format == DXGI_FORMAT_R10G10B10A2_UNORM) {
+        uint32_t packed = 0;
+        std::memcpy(&packed, row + static_cast<size_t>(x) * sizeof(packed), sizeof(packed));
+        pixel.r = static_cast<uint8_t>((((packed & 0x3ffu) * 255u) + 511u) / 1023u);
+        pixel.g = static_cast<uint8_t>(((((packed >> 10) & 0x3ffu) * 255u) + 511u) / 1023u);
+        pixel.b = static_cast<uint8_t>(((((packed >> 20) & 0x3ffu) * 255u) + 511u) / 1023u);
+        pixel.a = static_cast<uint8_t>(((packed >> 30) & 0x3u) * 85u);
+        return true;
+    }
+
+    const bool bgra = desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM ||
+        desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    const bool rgba = desc.Format == DXGI_FORMAT_R8G8B8A8_UNORM ||
+        desc.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    if (!bgra && !rgba) return false;
+
+    const uint8_t* value = row + static_cast<size_t>(x) * 4;
+    pixel.r = value[bgra ? 2 : 0];
+    pixel.g = value[1];
+    pixel.b = value[bgra ? 0 : 2];
+    pixel.a = value[3];
+    return true;
+}
+
+HRESULT ReadbackTextureSamples(Device* device, ID3D11Texture2D* texture,
+    const char* label, uint64_t presentCount, UINT bufferIndex) {
+    D3D11_TEXTURE2D_DESC desc{};
+    texture->GetDesc(&desc);
+    if (!desc.Width || !desc.Height || desc.SampleDesc.Count != 1) {
+        LogDxgi("[%s] Present #%llu unsupported texture size=%ux%u samples=%u",
+            label, static_cast<unsigned long long>(presentCount), desc.Width,
+            desc.Height, desc.SampleDesc.Count);
+        return E_NOTIMPL;
+    }
+
+    Ptr<ID3D11Texture2D> staging;
+    D3D11_TEXTURE2D_DESC stagingDesc = desc;
+    stagingDesc.Usage = D3D11_USAGE_STAGING;
+    stagingDesc.BindFlags = 0;
+    stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    stagingDesc.MiscFlags = 0;
+    HRESULT result = device->d11->CreateTexture2D(&stagingDesc, nullptr, staging.Put());
+    if (FAILED(result) || !staging) {
+        LogDxgi("[%s] Present #%llu staging texture creation failed hr=0x%08lx format=%u",
+            label, static_cast<unsigned long long>(presentCount), result, desc.Format);
+        return FAILED(result) ? result : E_FAIL;
+    }
+
+    device->ctx->CopyResource(staging.Get(), texture);
+    device->ctx->Flush();
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    result = device->ctx->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+    if (FAILED(result)) {
+        LogDxgi("[%s] Present #%llu Map failed hr=0x%08lx format=%u",
+            label, static_cast<unsigned long long>(presentCount), result, desc.Format);
+        return result;
+    }
+
+    ReadbackPixel pixel{};
+    if (!ReadbackPixelAt(mapped, desc, 0, 0, pixel)) {
+        device->ctx->Unmap(staging.Get(), 0);
+        LogDxgi("[%s] Present #%llu unsupported pixel format=%u",
+            label, static_cast<unsigned long long>(presentCount), desc.Format);
+        return E_NOTIMPL;
+    }
+
+    const UINT sampleXs[] = { 0, desc.Width - 1, desc.Width / 2, 0, desc.Width - 1 };
+    const UINT sampleYs[] = { 0, 0, desc.Height / 2, desc.Height - 1, desc.Height - 1 };
+    const char* sampleNames[] = {
+        "Top-left", "Top-right", "Center", "Bottom-left", "Bottom-right"
+    };
+    LogDxgi("[%s] Present #%llu size=%ux%u format=%u buffer=%u",
+        label, static_cast<unsigned long long>(presentCount), desc.Width,
+        desc.Height, desc.Format, bufferIndex);
+    for (size_t i = 0; i < ARRAYSIZE(sampleXs); ++i) {
+        if (ReadbackPixelAt(mapped, desc, sampleXs[i], sampleYs[i], pixel)) {
+            LogDxgi("[%s]   %s: R=%u G=%u B=%u A=%u",
+                label, sampleNames[i], pixel.r, pixel.g, pixel.b, pixel.a);
+        }
+    }
+
+    UINT nonBlackCount = 0;
+    constexpr UINT sampleCount = 100;
+    for (UINT i = 0; i < sampleCount; ++i) {
+        const UINT x = static_cast<UINT>((static_cast<uint64_t>(i) * 7) % desc.Width);
+        const UINT y = static_cast<UINT>((static_cast<uint64_t>(i) * 13) % desc.Height);
+        if (ReadbackPixelAt(mapped, desc, x, y, pixel) &&
+            (pixel.r > 5 || pixel.g > 5 || pixel.b > 5)) {
+            ++nonBlackCount;
+        }
+    }
+    LogDxgi("[%s]   Non-black pixels: %u/%u (%.1f%%)",
+        label, nonBlackCount, sampleCount, 100.0f * nonBlackCount / sampleCount);
+    device->ctx->Unmap(staging.Get(), 0);
+    return S_OK;
+}
+
+void CaptureBackbufferReadback(IDXGISwapChain4* swapChain, IUnknown* source) {
+    static std::atomic<uint64_t> presentCount{0};
+    static const bool enabled = BackbufferReadbackEnabled();
+    Device* device = nullptr;
+    if (auto* queue = dynamic_cast<CommandQueue*>(source)) {
+        device = queue->dev;
+    } else {
+        device = dynamic_cast<Device*>(source);
+    }
+    if (!device || !device->ctx) {
+        D3D12On11Flush(source);
+        if (enabled)
+            LogDxgi("[READBACK] Skipped: wrapped D3D11 device/context unavailable");
+        return;
+    }
+
+    std::lock_guard<std::recursive_mutex> contextLock(device->ctxLock);
+    device->ctx->Flush();
+    const uint64_t count = presentCount.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (!enabled || count % 100 != 0) return;
+    if (!device->d11) {
+        LogDxgi("[READBACK] Present #%llu skipped: wrapped D3D11 device unavailable",
+            static_cast<unsigned long long>(count));
+        return;
+    }
+
+    const UINT bufferIndex = swapChain->GetCurrentBackBufferIndex();
+    Ptr<ID3D11Texture2D> backbuffer;
+    HRESULT result = swapChain->GetBuffer(bufferIndex, __uuidof(ID3D11Texture2D),
+        reinterpret_cast<void**>(backbuffer.Put()));
+    if (FAILED(result) || !backbuffer) {
+        LogDxgi("[READBACK] Present #%llu GetBuffer(%u) failed hr=0x%08lx",
+            static_cast<unsigned long long>(count), bufferIndex, result);
+        return;
+    }
+
+    Ptr<ID3D11Resource> sourceResource;
+    D3D12_RESOURCE_DESC sourceDesc{};
+    uint64_t sourceSequence = 0;
+    {
+        std::lock_guard<std::mutex> sourceLock(device->backbufferCopyLock);
+        sourceResource = device->lastBackbufferCopySource;
+        sourceDesc = device->lastBackbufferCopySourceDesc;
+        sourceSequence = device->lastBackbufferCopySequence;
+    }
+    if (!sourceSequence) {
+        LogDxgi("[READBACK_SRC] Present #%llu no CopyResource-to-backbuffer source recorded",
+            static_cast<unsigned long long>(count));
+    } else if (!sourceResource) {
+        LogDxgi("[READBACK_SRC] Present #%llu last source is not a texture "
+            "dimension=%u width=%llu height=%u format=%u sequence=%llu",
+            static_cast<unsigned long long>(count), sourceDesc.Dimension,
+            static_cast<unsigned long long>(sourceDesc.Width), sourceDesc.Height,
+            sourceDesc.Format, static_cast<unsigned long long>(sourceSequence));
+    } else {
+        Ptr<ID3D11Texture2D> sourceTexture;
+        result = sourceResource->QueryInterface(__uuidof(ID3D11Texture2D),
+            reinterpret_cast<void**>(sourceTexture.Put()));
+        if (FAILED(result) || !sourceTexture) {
+            LogDxgi("[READBACK_SRC] Present #%llu source QueryInterface failed "
+                "hr=0x%08lx sequence=%llu",
+                static_cast<unsigned long long>(count), result,
+                static_cast<unsigned long long>(sourceSequence));
+        } else {
+            D3D11_TEXTURE2D_DESC sourceTextureDesc{};
+            sourceTexture->GetDesc(&sourceTextureDesc);
+            LogDxgi("[READBACK_SRC] Present #%llu CopyResource source=%p "
+                "dimension=%u width=%llu height=%u format=%u sequence=%llu",
+                static_cast<unsigned long long>(count), sourceTexture.Get(),
+                sourceDesc.Dimension, static_cast<unsigned long long>(sourceDesc.Width),
+                sourceDesc.Height, sourceDesc.Format,
+                static_cast<unsigned long long>(sourceSequence));
+            if (sourceTextureDesc.Width != sourceDesc.Width ||
+                sourceTextureDesc.Height != sourceDesc.Height ||
+                sourceTextureDesc.Format != sourceDesc.Format) {
+                LogDxgi("[READBACK_SRC] Native texture desc differs: "
+                    "width=%u height=%u format=%u",
+                    sourceTextureDesc.Width, sourceTextureDesc.Height,
+                    sourceTextureDesc.Format);
+            }
+            ReadbackTextureSamples(device, sourceTexture.Get(), "READBACK_SRC",
+                count, bufferIndex);
+        }
+    }
+
+    ReadbackTextureSamples(device, backbuffer.Get(), "READBACK", count, bufferIndex);
 }
 
 UINT DiagnosticMaskedVendorId() {
@@ -503,7 +707,7 @@ HRESULT STDMETHODCALLTYPE SwapChain::GetBuffer(UINT index, REFIID riid, void** o
 
 HRESULT STDMETHODCALLTYPE SwapChain::Present(UINT interval, UINT flags) {
     D3D12On11TraceApi("IDXGISwapChain::Present");
-    D3D12On11Flush(source);
+    CaptureBackbufferReadback(real, source);
     const HRESULT result = real->Present(interval, flags);
     D3D12On11TracePresent("IDXGISwapChain::Present", result);
     return result;
@@ -512,7 +716,7 @@ HRESULT STDMETHODCALLTYPE SwapChain::Present(UINT interval, UINT flags) {
 HRESULT STDMETHODCALLTYPE SwapChain::Present1(UINT interval, UINT flags,
     const DXGI_PRESENT_PARAMETERS* parameters) {
     D3D12On11TraceApi("IDXGISwapChain1::Present1");
-    D3D12On11Flush(source);
+    CaptureBackbufferReadback(real, source);
     const HRESULT result = real->Present1(interval, flags, parameters);
     D3D12On11TracePresent("IDXGISwapChain1::Present1", result);
     return result;

@@ -1191,6 +1191,29 @@ void STDMETHODCALLTYPE CommandList::CopyResource(ID3D12Resource* destination, ID
         if (dstResource && srcResource) {
             LogBackbufferCopy("CopyResource", dstResource, srcResource);
             state.c->CopyResource(dstResource->Raw(), srcResource->Raw());
+            if (dstResource->backbuffer && srcResource->tex && state.dev) {
+                std::lock_guard<std::mutex> lock(state.dev->backbufferCopyLock);
+                state.dev->lastBackbufferCopySource = srcResource->tex;
+                state.dev->lastBackbufferCopySourceDesc = srcResource->desc;
+                ++state.dev->lastBackbufferCopySequence;
+                Log("[COPY_TO_BB] CopyResource source=%p dimension=%u width=%llu height=%u "
+                    "format=%u sequence=%llu",
+                    srcResource, srcResource->desc.Dimension,
+                    static_cast<unsigned long long>(srcResource->desc.Width),
+                    srcResource->desc.Height, srcResource->desc.Format,
+                    static_cast<unsigned long long>(state.dev->lastBackbufferCopySequence));
+            } else if (dstResource->backbuffer && state.dev) {
+                std::lock_guard<std::mutex> lock(state.dev->backbufferCopyLock);
+                state.dev->lastBackbufferCopySource.Reset();
+                state.dev->lastBackbufferCopySourceDesc = srcResource->desc;
+                ++state.dev->lastBackbufferCopySequence;
+                Log("[COPY_TO_BB] CopyResource source is not a texture resource=%p "
+                    "dimension=%u width=%llu height=%u format=%u sequence=%llu",
+                    srcResource, srcResource->desc.Dimension,
+                    static_cast<unsigned long long>(srcResource->desc.Width),
+                    srcResource->desc.Height, srcResource->desc.Format,
+                    static_cast<unsigned long long>(state.dev->lastBackbufferCopySequence));
+            }
         }
     });
 }

@@ -1,0 +1,43 @@
+HELA GTX 950M VERIFIED WINDOWED SOURCE READBACK
+Date: 2026-11-10
+
+Window-mode setup and verification
+- The preceding source-readback attempt passed `-windowed` but left the
+  UE5 user setting `FullscreenMode=1` (borderless fullscreen). That run's
+  actual display mode had not been verified.
+- Set `FullscreenMode=2`, `LastConfirmedFullscreenMode=2`, and
+  `PreferredFullscreenMode=2` in
+  `%LOCALAPPDATA%\Hela\Saved\Config\Windows\GameUserSettings.ini`.
+- Launched with `-windowed -ResX=1280 -ResY=720`.
+- Inspected the running HWND with Win32 APIs: style `0x14CF0000`
+  (`WS_OVERLAPPEDWINDOW`); outer bounds 1296x759 on a 1536x864 monitor.
+  The windowed style and smaller-than-monitor bounds confirm this was a
+  normal window, not borderless fullscreen. The UE5 user config remains
+  set to windowed mode and 1280x720.
+
+Run and readback
+- Hela exited naturally with code 16384 (`0x4000`) after about 92 seconds.
+- Final heartbeat: present=2056, graphics PSOs=2863, compute PSOs=4022,
+  draw(ok)=2643, bb=0, skip-vs=0, skip-other=0, placed(ok)=334,
+  overlap=6.
+- The run logged 2,056 backbuffer-targeted `CopyResource` calls and
+  twenty source/destination readback pairs at Presents #100 through #2000.
+- Both source and destination textures were 1280x720, DXGI format 24
+  (`R10G10B10A2_UNORM`). At all 20 source readbacks, each of the five
+  points decoded to R=0, G=0, B=0, A=0; each 100-point non-black sample
+  counted 0/100. Destination samples were also zero.
+- No source-query, staging-creation, Map, or pixel-format errors were
+  reported.
+
+Interpretation
+This is the first run in which the actual top-level HWND style and window
+bounds were checked and confirmed windowed. The sampled source and
+destination points were zero; this does not establish a cause for the
+missing image or prove every pixel in every frame was zero. Continue by
+tracing render-target writes and clears to the source texture immediately
+before the copy.
+
+The original proxy DLLs, proxy INI, and three pre-existing shader overrides
+were restored and hash-verified. UE5 user settings intentionally remain in
+windowed 1280x720 mode. The 31.2 MB raw trace remains only in the local
+test backup; no minidump is included.
