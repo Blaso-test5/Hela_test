@@ -1,0 +1,42 @@
+GTX 1050 Ti — estratti misurati, 2026-11-10
+==========================================
+
+IB prima del flush upload
+Run: 1050ti-index-data-20261110-185841
+[18:58:45.917] [TARGET_INDEX_DATA] hit=1 status=ok format=42 source_bytes=4194304 view_bytes=65536 ib_offset=393216 start_index=0 base_vertex=0 count=6 cpu_shadow=1 cpu=[0,1,2,2,1,3] d3d11=[0,0,0,0,0,0] effective=[0,0,0,0,0,0]
+
+IB dopo il flush upload
+Run: 1050ti-upload-flush-20261110-190026
+[19:00:31.434] [TARGET_INDEX_DATA] hit=1 status=ok format=42 source_bytes=4194304 view_bytes=65536 ib_offset=393216 start_index=0 base_vertex=0 count=6 cpu_shadow=1 cpu=[0,1,2,2,1,3] d3d11=[0,1,2,2,1,3] effective=[0,1,2,2,1,3]
+
+CopyDescriptors prima del fix
+Run: 1050ti-descriptor-copy-diag-20261110-192657
+[19:27:04.562] CopyDescriptors received a null range array dest_count=1 source_count=1 dest_starts=000000F29A6FEF38 dest_sizes=000000F29A6FEF48 source_starts=000000F29A6FEFB0 source_sizes=0000000000000000 type=0
+
+Root SRV e sampler dopo il fix
+Run: 1050ti-copydescriptors-fix-20261110-193019
+[19:30:24.122] [TARGET_ROOT_SLOT0] draw=1 range_type=0 descriptor=000001A122FFFFE0 kind=2 srv=000001A11D7336C0 srv_resource=000001A11D7D4738 sampler=0000000000000000 resource=000001A1193F9780
+[19:30:31.730] [TARGET_PS_BINDINGS] hit=1 srv_mask=0x0001 srv0=000001A11D7336C0 resource0=000001A11D7D4738 srv_dimension=4 srv_format=28 resource_dimension=3 texture_size=1x1 texture_format=27 sampler0=000001A119440BA0 sampler_filter=20 address=3/3/3
+[19:30:31.769] [TARGET_DRAW_STATS] hit=1 resource_hit=1 resource=000001A11D998778 vs=20e0826b236597a1 ps=44b0a992c2304254 ia_vertices=6 ia_primitives=2 vs_invocations=4 gs_invocations=0 gs_primitives=0 clip_invocations=2 clip_primitives=2 ps_invocations=1044480 hs_invocations=0 ds_invocations=0 cs_invocations=0
+[19:30:35] source/backbuffer BMP: 1360x768; 1,040,400 pixel RGB(0,0,0), 4,080 pixel RGB(255,255,255).
+
+PS reale convertito
+Run: 1050ti-converted-ps-test-20261110-193600
+[19:32:59.763] SHADER READY stage=VS hash=20e0826b236597a1 source=SM5-override bytes=1768 model=5_0
+[19:33:03.694] SHADER READY stage=PS hash=44b0a992c2304254 source=SM5-override bytes=1560 model=5_0
+[19:33:03.733] [TARGET_INDEX_DATA] hit=1 status=ok format=42 source_bytes=4194304 view_bytes=65536 ib_offset=393216 start_index=0 base_vertex=0 count=6 cpu_shadow=1 cpu=[0,1,2,2,1,3] d3d11=[0,1,2,2,1,3] effective=[0,1,2,2,1,3]
+[19:33:03.733] [TARGET_PS_BINDINGS] hit=1 srv_mask=0x0001 srv0=000002B6C8B70540 resource0=000002B6C488CE38 srv_dimension=4 srv_format=28 resource_dimension=3 texture_size=1x1 texture_format=27 sampler0=000002B6C8C585A0 sampler_filter=20 address=3/3/3
+[19:33:03.927] [TARGET_DRAW_STATS] hit=1 resource_hit=1 resource=000002B6C8D4BDB8 vs=20e0826b236597a1 ps=44b0a992c2304254 ia_vertices=6 ia_primitives=2 vs_invocations=4 gs_invocations=0 gs_primitives=0 clip_invocations=2 clip_primitives=2 ps_invocations=1044480 hs_invocations=0 ds_invocations=0 cs_invocations=0
+
+Readback pixel
+Run: 1050ti-magenta-ps-20261110
+source BMP and backbuffer BMP: 1360x768; 1,044,480 pixels RGB(255,0,255).
+
+Run: 1050ti-vertex-color-20261110
+source BMP and backbuffer BMP: 1360x768; 1,040,400 pixels RGB(255,255,255), 4,080 pixels RGB(0,0,0).
+
+Run: 1050ti-texture-sample-20261110
+source BMP and backbuffer BMP: 1360x768; 1,044,480 pixels RGB(0,0,0).
+
+Run: 1050ti-converted-ps-test-20261110-193600
+source BMP and backbuffer BMP: 1360x768; 1,044,480 pixels RGB(0,0,0).

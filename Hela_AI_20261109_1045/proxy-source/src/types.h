@@ -235,6 +235,8 @@ struct ExecState {
     uint64_t graphicsPixelShaderHash = 0;
     bool hasVertexBuffer = false;
     bool hasIndexBuffer = false;
+    Ptr<ID3D12Resource> indexBufferResource;
+    UINT indexBufferViewSize = 0;
     bool rtvBackbuffer = false;
     std::array<bool, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> vertexBuffers{};
     Ptr<ID3D11RenderTargetView> rtvs[8];

@@ -19,6 +19,485 @@ struct BackbufferSourceHistory {
 std::mutex g_resourceDrawMutex;
 std::map<ID3D11Resource*, BackbufferSourceHistory> g_backbufferSourceHistory;
 bool g_backbufferSourceHistoryDumped = false;
+std::mutex g_targetDrawDiagMutex;
+std::map<ID3D11Resource*, UINT> g_targetDrawDiagResourceCounts;
+UINT g_targetDrawDiagCount = 0;
+
+struct TargetDrawPipelineStats {
+    Ptr<ID3D11Query> query;
+    UINT hit = 0;
+    UINT resourceHit = 0;
+    uintptr_t rtvResource = 0;
+    uint64_t vsHash = 0;
+    uint64_t psHash = 0;
+};
+
+struct PendingTargetDrawPipelineStats {
+    Ptr<ID3D11Query> query;
+    UINT hit = 0;
+    UINT resourceHit = 0;
+    uintptr_t rtvResource = 0;
+    uint64_t vsHash = 0;
+    uint64_t psHash = 0;
+};
+
+std::mutex g_pendingTargetDrawStatsMutex;
+std::vector<PendingTargetDrawPipelineStats> g_pendingTargetDrawStats;
+
+UINT ClaimTargetDrawDiagSlot(ID3D11Resource* resource, UINT& resourceHit) {
+    if (!resource) return 0;
+    std::lock_guard<std::mutex> lock(g_targetDrawDiagMutex);
+    UINT& resourceCount = g_targetDrawDiagResourceCounts[resource];
+    if (resourceCount >= 2 || g_targetDrawDiagCount >= 6) return 0;
+    resourceHit = ++resourceCount;
+    return ++g_targetDrawDiagCount;
+}
+
+void PollTargetDrawPipelineStats(ID3D11DeviceContext* context) {
+    if (!context) return;
+    std::lock_guard<std::mutex> lock(g_pendingTargetDrawStatsMutex);
+    for (auto it = g_pendingTargetDrawStats.begin(); it != g_pendingTargetDrawStats.end();) {
+        D3D11_QUERY_DATA_PIPELINE_STATISTICS statistics{};
+        const HRESULT result = context->GetData(it->query.Get(), &statistics,
+            sizeof(statistics), D3D11_ASYNC_GETDATA_DONOTFLUSH);
+        if (result == S_FALSE) {
+            ++it;
+            continue;
+        }
+        if (FAILED(result)) {
+            Log("[TARGET_DRAW_STATS] hit=%u resource_hit=%u resource=%p vs=%016llx ps=%016llx "
+                "status=failed hr=0x%08lx",
+                it->hit, it->resourceHit, reinterpret_cast<void*>(it->rtvResource),
+                static_cast<unsigned long long>(it->vsHash),
+                static_cast<unsigned long long>(it->psHash), result);
+        } else {
+            Log("[TARGET_DRAW_STATS] hit=%u resource_hit=%u resource=%p vs=%016llx ps=%016llx "
+                "ia_vertices=%llu ia_primitives=%llu vs_invocations=%llu gs_invocations=%llu "
+                "gs_primitives=%llu clip_invocations=%llu clip_primitives=%llu "
+                "ps_invocations=%llu hs_invocations=%llu ds_invocations=%llu cs_invocations=%llu",
+                it->hit, it->resourceHit, reinterpret_cast<void*>(it->rtvResource),
+                static_cast<unsigned long long>(it->vsHash),
+                static_cast<unsigned long long>(it->psHash),
+                static_cast<unsigned long long>(statistics.IAVertices),
+                static_cast<unsigned long long>(statistics.IAPrimitives),
+                static_cast<unsigned long long>(statistics.VSInvocations),
+                static_cast<unsigned long long>(statistics.GSInvocations),
+                static_cast<unsigned long long>(statistics.GSPrimitives),
+                static_cast<unsigned long long>(statistics.CInvocations),
+                static_cast<unsigned long long>(statistics.CPrimitives),
+                static_cast<unsigned long long>(statistics.PSInvocations),
+                static_cast<unsigned long long>(statistics.HSInvocations),
+                static_cast<unsigned long long>(statistics.DSInvocations),
+                static_cast<unsigned long long>(statistics.CSInvocations));
+        }
+        it = g_pendingTargetDrawStats.erase(it);
+    }
+}
+
+void FinishTargetDrawPipelineStats(ExecState& state, TargetDrawPipelineStats&& pipelineStats) {
+    if (!pipelineStats.query || !state.c) return;
+    state.c->End(pipelineStats.query.Get());
+    PendingTargetDrawPipelineStats pending{};
+    pending.query = std::move(pipelineStats.query);
+    pending.hit = pipelineStats.hit;
+    pending.resourceHit = pipelineStats.resourceHit;
+    pending.rtvResource = pipelineStats.rtvResource;
+    pending.vsHash = pipelineStats.vsHash;
+    pending.psHash = pipelineStats.psHash;
+    std::lock_guard<std::mutex> lock(g_pendingTargetDrawStatsMutex);
+    g_pendingTargetDrawStats.push_back(std::move(pending));
+}
+
+void LogTargetIndexData(ExecState& state, UINT hit, ID3D11Buffer* indexBuffer,
+    DXGI_FORMAT indexFormat, UINT indexOffset, UINT indexViewSize, UINT startIndex,
+    INT baseVertex, UINT indexCount) {
+    if (!state.c || !indexBuffer) {
+        Log("[TARGET_INDEX_DATA] hit=%u status=no_context_or_index_buffer", hit);
+        return;
+    }
+
+    const UINT indexSize = indexFormat == DXGI_FORMAT_R16_UINT ? 2u
+        : indexFormat == DXGI_FORMAT_R32_UINT ? 4u : 0u;
+    if (!indexSize || !indexCount || indexCount > 6) {
+        Log("[TARGET_INDEX_DATA] hit=%u status=unsupported_format_or_count format=%u count=%u",
+            hit, static_cast<unsigned int>(indexFormat), indexCount);
+        return;
+    }
+
+    const UINT64 viewByteOffset = static_cast<UINT64>(startIndex) * indexSize;
+    const UINT64 byteCount = static_cast<UINT64>(indexCount) * indexSize;
+    if (viewByteOffset > indexViewSize || byteCount > indexViewSize - viewByteOffset) {
+        Log("[TARGET_INDEX_DATA] hit=%u status=view_range_invalid format=%u view_bytes=%u "
+            "start_index=%u count=%u",
+            hit, static_cast<unsigned int>(indexFormat), indexViewSize, startIndex, indexCount);
+        return;
+    }
+
+    const UINT64 sourceByteOffset = static_cast<UINT64>(indexOffset) + viewByteOffset;
+    D3D11_BUFFER_DESC sourceDesc{};
+    indexBuffer->GetDesc(&sourceDesc);
+    if (sourceByteOffset > sourceDesc.ByteWidth ||
+        byteCount > sourceDesc.ByteWidth - sourceByteOffset ||
+        sourceByteOffset > UINT_MAX || sourceByteOffset + byteCount > UINT_MAX) {
+        Log("[TARGET_INDEX_DATA] hit=%u status=buffer_range_invalid format=%u source_bytes=%u "
+            "ib_offset=%u start_index=%u count=%u",
+            hit, static_cast<unsigned int>(indexFormat), sourceDesc.ByteWidth,
+            indexOffset, startIndex, indexCount);
+        return;
+    }
+
+    std::array<uint32_t, 6> cpuIndices{};
+    std::array<uint32_t, 6> gpuIndices{};
+    bool hasCpuShadow = false;
+    auto* resource = dynamic_cast<Resource*>(state.indexBufferResource.Get());
+    if (resource && resource->heap == D3D12_HEAP_TYPE_UPLOAD) {
+        std::lock_guard<std::mutex> lock(resource->mu);
+        if (sourceByteOffset <= resource->shadow.size() &&
+            byteCount <= resource->shadow.size() - sourceByteOffset) {
+            const uint8_t* source = resource->shadow.data() + sourceByteOffset;
+            for (UINT i = 0; i < indexCount; ++i) {
+                if (indexSize == 2) {
+                    uint16_t value = 0;
+                    memcpy(&value, source + i * indexSize, sizeof(value));
+                    cpuIndices[i] = value;
+                } else {
+                    memcpy(&cpuIndices[i], source + i * indexSize, sizeof(cpuIndices[i]));
+                }
+            }
+            hasCpuShadow = true;
+        }
+    }
+
+    D3D11_BUFFER_DESC stagingDesc{};
+    stagingDesc.ByteWidth = static_cast<UINT>(byteCount);
+    stagingDesc.Usage = D3D11_USAGE_STAGING;
+    stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    Ptr<ID3D11Buffer> staging;
+    const HRESULT createResult = state.dev && state.dev->d11
+        ? state.dev->d11->CreateBuffer(&stagingDesc, nullptr, staging.Put())
+        : E_POINTER;
+    if (FAILED(createResult)) {
+        Log("[TARGET_INDEX_DATA] hit=%u status=staging_create_failed hr=0x%08lx",
+            hit, createResult);
+        return;
+    }
+
+    D3D11_BOX sourceBox{};
+    sourceBox.left = static_cast<UINT>(sourceByteOffset);
+    sourceBox.right = static_cast<UINT>(sourceByteOffset + byteCount);
+    sourceBox.top = 0;
+    sourceBox.bottom = 1;
+    sourceBox.front = 0;
+    sourceBox.back = 1;
+    state.c->CopySubresourceRegion(staging.Get(), 0, 0, 0, 0,
+        indexBuffer, 0, &sourceBox);
+
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    const HRESULT mapResult = state.c->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+    if (FAILED(mapResult)) {
+        Log("[TARGET_INDEX_DATA] hit=%u status=staging_map_failed hr=0x%08lx",
+            hit, mapResult);
+        return;
+    }
+    const uint8_t* gpuBytes = static_cast<const uint8_t*>(mapped.pData);
+    for (UINT i = 0; i < indexCount; ++i) {
+        if (indexSize == 2) {
+            uint16_t value = 0;
+            memcpy(&value, gpuBytes + i * indexSize, sizeof(value));
+            gpuIndices[i] = value;
+        } else {
+            memcpy(&gpuIndices[i], gpuBytes + i * indexSize, sizeof(gpuIndices[i]));
+        }
+    }
+    state.c->Unmap(staging.Get(), 0);
+
+    std::array<long long, 6> effectiveIndices{};
+    for (UINT i = 0; i < indexCount; ++i)
+        effectiveIndices[i] = static_cast<long long>(gpuIndices[i]) + baseVertex;
+    Log("[TARGET_INDEX_DATA] hit=%u status=ok format=%u source_bytes=%u view_bytes=%u "
+        "ib_offset=%u start_index=%u base_vertex=%d count=%u cpu_shadow=%u "
+        "cpu=[%u,%u,%u,%u,%u,%u] d3d11=[%u,%u,%u,%u,%u,%u] "
+        "effective=[%lld,%lld,%lld,%lld,%lld,%lld]",
+        hit, static_cast<unsigned int>(indexFormat), sourceDesc.ByteWidth, indexViewSize,
+        indexOffset, startIndex, baseVertex, indexCount, hasCpuShadow ? 1u : 0u,
+        cpuIndices[0], cpuIndices[1], cpuIndices[2], cpuIndices[3], cpuIndices[4], cpuIndices[5],
+        gpuIndices[0], gpuIndices[1], gpuIndices[2], gpuIndices[3], gpuIndices[4], gpuIndices[5],
+        effectiveIndices[0], effectiveIndices[1], effectiveIndices[2],
+        effectiveIndices[3], effectiveIndices[4], effectiveIndices[5]);
+}
+
+void LogTargetDrawDiagnostic(ExecState& state, UINT indexCount, UINT instanceCount,
+    UINT startIndex, INT baseVertex, UINT startInstance,
+    TargetDrawPipelineStats& pipelineStats) {
+    constexpr uint64_t targetVs = 0x20e0826b236597a1ULL;
+    constexpr uint64_t targetPs0 = 0x44b0a992c2304254ULL;
+    constexpr uint64_t targetPs1 = 0xd77600bde0076c33ULL;
+    if (!Cfg().diagnosticRenderTrace || !state.c ||
+        state.graphicsShaderHash != targetVs ||
+        (state.graphicsPixelShaderHash != targetPs0 &&
+         state.graphicsPixelShaderHash != targetPs1))
+        return;
+
+    PollTargetDrawPipelineStats(state.c);
+
+    ID3D11RenderTargetView* rawRtv = nullptr;
+    ID3D11DepthStencilView* rawDsv = nullptr;
+    state.c->OMGetRenderTargets(1, &rawRtv, &rawDsv);
+    Ptr<ID3D11RenderTargetView> rtv = Ptr<ID3D11RenderTargetView>::Attach(rawRtv);
+    Ptr<ID3D11DepthStencilView> dsv = Ptr<ID3D11DepthStencilView>::Attach(rawDsv);
+    ID3D11Resource* rawRtvResource = nullptr;
+    if (rtv) rtv->GetResource(&rawRtvResource);
+    Ptr<ID3D11Resource> rtvResource = Ptr<ID3D11Resource>::Attach(rawRtvResource);
+
+    UINT resourceHit = 0;
+    const UINT hit = ClaimTargetDrawDiagSlot(rtvResource.Get(), resourceHit);
+    if (!hit) return;
+
+    auto logBoundCb = [&](const char* stage) {
+        ID3D11Buffer* rawBuffer = nullptr;
+        if (strcmp(stage, "VS") == 0)
+            state.c->VSGetConstantBuffers(0, 1, &rawBuffer);
+        else
+            state.c->PSGetConstantBuffers(0, 1, &rawBuffer);
+        Ptr<ID3D11Buffer> buffer = Ptr<ID3D11Buffer>::Attach(rawBuffer);
+        if (!buffer) {
+            Log("[TARGET_CBV] hit=%u stage=%s slot=0 status=unbound", hit, stage);
+            return;
+        }
+
+        D3D11_BUFFER_DESC sourceDesc{};
+        buffer->GetDesc(&sourceDesc);
+        if (!state.dev || sourceDesc.ByteWidth < 16) {
+            Log("[TARGET_CBV] hit=%u stage=%s slot=0 buffer=%p width=%u status=unreadable",
+                hit, stage, buffer.Get(), sourceDesc.ByteWidth);
+            return;
+        }
+
+        D3D11_BUFFER_DESC stagingDesc = sourceDesc;
+        stagingDesc.Usage = D3D11_USAGE_STAGING;
+        stagingDesc.BindFlags = 0;
+        stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        stagingDesc.MiscFlags = 0;
+        stagingDesc.StructureByteStride = 0;
+        Ptr<ID3D11Buffer> staging;
+        const HRESULT createResult =
+            state.dev->d11->CreateBuffer(&stagingDesc, nullptr, staging.Put());
+        if (FAILED(createResult)) {
+            Log("[TARGET_CBV] hit=%u stage=%s slot=0 buffer=%p width=%u "
+                "status=staging-create-failed hr=0x%08lx",
+                hit, stage, buffer.Get(), sourceDesc.ByteWidth, createResult);
+            return;
+        }
+
+        state.c->CopyResource(staging.Get(), buffer.Get());
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        const HRESULT mapResult =
+            state.c->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+        if (FAILED(mapResult)) {
+            Log("[TARGET_CBV] hit=%u stage=%s slot=0 buffer=%p width=%u "
+                "status=staging-map-failed hr=0x%08lx",
+                hit, stage, buffer.Get(), sourceDesc.ByteWidth, mapResult);
+            return;
+        }
+        std::array<uint32_t, 4> words{};
+        std::array<float, 4> values{};
+        memcpy(words.data(), mapped.pData, sizeof(words));
+        memcpy(values.data(), mapped.pData, sizeof(values));
+        state.c->Unmap(staging.Get(), 0);
+        Log("[TARGET_CBV] hit=%u stage=%s slot=0 buffer=%p width=%u status=ok "
+            "words=%08x,%08x,%08x,%08x floats=%.9g,%.9g,%.9g,%.9g",
+            hit, stage, buffer.Get(), sourceDesc.ByteWidth,
+            words[0], words[1], words[2], words[3],
+            values[0], values[1], values[2], values[3]);
+    };
+    logBoundCb("VS");
+    logBoundCb("PS");
+
+    ID3D11Buffer* rawIndexBuffer = nullptr;
+    DXGI_FORMAT indexFormat = DXGI_FORMAT_UNKNOWN;
+    UINT indexOffset = 0;
+    state.c->IAGetIndexBuffer(&rawIndexBuffer, &indexFormat, &indexOffset);
+    Ptr<ID3D11Buffer> indexBuffer = Ptr<ID3D11Buffer>::Attach(rawIndexBuffer);
+    LogTargetIndexData(state, hit, indexBuffer.Get(), indexFormat,
+        indexOffset, state.indexBufferViewSize, startIndex, baseVertex, indexCount);
+
+    std::array<ID3D11ShaderResourceView*, 16> rawPsSrvs{};
+    state.c->PSGetShaderResources(0, static_cast<UINT>(rawPsSrvs.size()), rawPsSrvs.data());
+    UINT psSrvMask = 0;
+    for (UINT i = 0; i < rawPsSrvs.size(); ++i) {
+        if (!rawPsSrvs[i]) continue;
+        if (i < 16) psSrvMask |= 1u << i;
+        if (i == 0) continue;
+        rawPsSrvs[i]->Release();
+        rawPsSrvs[i] = nullptr;
+    }
+    Ptr<ID3D11ShaderResourceView> psSrv =
+        Ptr<ID3D11ShaderResourceView>::Attach(rawPsSrvs[0]);
+    D3D11_SHADER_RESOURCE_VIEW_DESC psSrvDesc{};
+    if (psSrv) psSrv->GetDesc(&psSrvDesc);
+    ID3D11Resource* rawPsResource = nullptr;
+    if (psSrv) psSrv->GetResource(&rawPsResource);
+    Ptr<ID3D11Resource> psResource = Ptr<ID3D11Resource>::Attach(rawPsResource);
+    D3D11_RESOURCE_DIMENSION psResourceDimension = D3D11_RESOURCE_DIMENSION_UNKNOWN;
+    if (psResource) psResource->GetType(&psResourceDimension);
+    UINT psTextureWidth = 0;
+    UINT psTextureHeight = 0;
+    DXGI_FORMAT psTextureFormat = DXGI_FORMAT_UNKNOWN;
+    if (psResourceDimension == D3D11_RESOURCE_DIMENSION_TEXTURE2D) {
+        Ptr<ID3D11Texture2D> psTexture;
+        if (SUCCEEDED(psResource->QueryInterface(__uuidof(ID3D11Texture2D),
+                reinterpret_cast<void**>(psTexture.Put())))) {
+            D3D11_TEXTURE2D_DESC psTextureDesc{};
+            psTexture->GetDesc(&psTextureDesc);
+            psTextureWidth = psTextureDesc.Width;
+            psTextureHeight = psTextureDesc.Height;
+            psTextureFormat = psTextureDesc.Format;
+        }
+    }
+    ID3D11SamplerState* rawPsSampler = nullptr;
+    state.c->PSGetSamplers(0, 1, &rawPsSampler);
+    Ptr<ID3D11SamplerState> psSampler = Ptr<ID3D11SamplerState>::Attach(rawPsSampler);
+    D3D11_SAMPLER_DESC psSamplerDesc{};
+    if (psSampler) psSampler->GetDesc(&psSamplerDesc);
+    Log("[TARGET_PS_BINDINGS] hit=%u srv_mask=0x%04x srv0=%p resource0=%p "
+        "srv_dimension=%u srv_format=%u "
+        "resource_dimension=%u texture_size=%ux%u texture_format=%u sampler0=%p "
+        "sampler_filter=%u address=%u/%u/%u",
+        hit, psSrvMask, psSrv.Get(), psResource.Get(),
+        static_cast<unsigned int>(psSrvDesc.ViewDimension),
+        static_cast<unsigned int>(psSrvDesc.Format),
+        static_cast<unsigned int>(psResourceDimension), psTextureWidth, psTextureHeight,
+        static_cast<unsigned int>(psTextureFormat), psSampler.Get(),
+        static_cast<unsigned int>(psSamplerDesc.Filter),
+        static_cast<unsigned int>(psSamplerDesc.AddressU),
+        static_cast<unsigned int>(psSamplerDesc.AddressV),
+        static_cast<unsigned int>(psSamplerDesc.AddressW));
+
+    std::array<ID3D11Buffer*, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> rawVertexBuffers{};
+    std::array<UINT, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> vertexStrides{};
+    std::array<UINT, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> vertexOffsets{};
+    state.c->IAGetVertexBuffers(0, static_cast<UINT>(rawVertexBuffers.size()),
+        rawVertexBuffers.data(), vertexStrides.data(), vertexOffsets.data());
+    UINT vertexBufferMask = 0;
+    UINT vertexBufferCount = 0;
+    for (UINT slot = 0; slot < rawVertexBuffers.size(); ++slot) {
+        if (!rawVertexBuffers[slot]) continue;
+        vertexBufferMask |= 1u << slot;
+        ++vertexBufferCount;
+        rawVertexBuffers[slot]->Release();
+    }
+    D3D11_PRIMITIVE_TOPOLOGY topology = D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
+    state.c->IAGetPrimitiveTopology(&topology);
+
+    D3D11_RENDER_TARGET_VIEW_DESC rtvDesc{};
+    if (rtv) rtv->GetDesc(&rtvDesc);
+
+    Ptr<ID3D11Resource> copySource;
+    uint64_t copySequence = 0;
+    if (state.dev) {
+        std::lock_guard<std::mutex> lock(state.dev->backbufferCopyLock);
+        copySource = state.dev->lastBackbufferCopySource;
+        copySequence = state.dev->lastBackbufferCopySequence;
+    }
+
+    std::array<D3D11_VIEWPORT, D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE> viewports{};
+    UINT viewportCount = static_cast<UINT>(viewports.size());
+    state.c->RSGetViewports(&viewportCount, viewports.data());
+    std::array<D3D11_RECT, D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE> scissors{};
+    UINT scissorCount = static_cast<UINT>(scissors.size());
+    state.c->RSGetScissorRects(&scissorCount, scissors.data());
+
+    ID3D11RasterizerState* rawRasterizer = nullptr;
+    state.c->RSGetState(&rawRasterizer);
+    Ptr<ID3D11RasterizerState> rasterizer = Ptr<ID3D11RasterizerState>::Attach(rawRasterizer);
+    D3D11_RASTERIZER_DESC rasterizerDesc{};
+    if (rasterizer) rasterizer->GetDesc(&rasterizerDesc);
+
+    ID3D11DepthStencilState* rawDepthState = nullptr;
+    UINT stencilRef = 0;
+    state.c->OMGetDepthStencilState(&rawDepthState, &stencilRef);
+    Ptr<ID3D11DepthStencilState> depthState = Ptr<ID3D11DepthStencilState>::Attach(rawDepthState);
+    D3D11_DEPTH_STENCIL_DESC depthDesc{};
+    if (depthState) depthState->GetDesc(&depthDesc);
+
+    ID3D11BlendState* rawBlendState = nullptr;
+    FLOAT blendFactor[4]{};
+    UINT sampleMask = 0;
+    state.c->OMGetBlendState(&rawBlendState, blendFactor, &sampleMask);
+    Ptr<ID3D11BlendState> blendState = Ptr<ID3D11BlendState>::Attach(rawBlendState);
+    D3D11_BLEND_DESC blendDesc{};
+    if (blendState) blendState->GetDesc(&blendDesc);
+
+    const UINT depthEnable = depthState
+        ? static_cast<UINT>(depthDesc.DepthEnable) : TRUE;
+    const UINT depthFunc = depthState
+        ? static_cast<UINT>(depthDesc.DepthFunc)
+        : static_cast<UINT>(D3D11_COMPARISON_LESS);
+    const UINT depthWrite = depthState
+        ? static_cast<UINT>(depthDesc.DepthWriteMask)
+        : static_cast<UINT>(D3D11_DEPTH_WRITE_MASK_ALL);
+    const UINT stencilEnable =
+        depthState && depthDesc.StencilEnable ? 1u : 0u;
+
+    Log("[TARGET_DRAW_DIAG] hit=%u resource_hit=%u vs=%016llx ps=%016llx indices=%u instances=%u "
+        "start_index=%u base_vertex=%d start_instance=%u ib=%p ib_format=%u ib_offset=%u "
+        "vb_mask=0x%08x vb_count=%u vb0_stride=%u vb0_offset=%u topology=%u",
+        hit, resourceHit, static_cast<unsigned long long>(state.graphicsShaderHash),
+        static_cast<unsigned long long>(state.graphicsPixelShaderHash),
+        indexCount, instanceCount, startIndex, baseVertex, startInstance,
+        indexBuffer.Get(), static_cast<unsigned int>(indexFormat), indexOffset,
+        vertexBufferMask, vertexBufferCount, vertexStrides[0], vertexOffsets[0],
+        static_cast<unsigned int>(topology));
+    Log("[TARGET_DRAW_DIAG] hit=%u rtv=%p rtv_format=%u rtv_resource=%p tracked_resource=%p "
+        "previous_copy_source=%p previous_copy_sequence=%llu matches_previous_copy_source=%u dsv=%p",
+        hit, rtv.Get(), static_cast<unsigned int>(rtvDesc.Format), rtvResource.Get(),
+        state.numRtv ? state.rtvResources[0].Get() : nullptr, copySource.Get(),
+        static_cast<unsigned long long>(copySequence),
+        rtvResource && rtvResource.Get() == copySource.Get() ? 1u : 0u, dsv.Get());
+    Log("[TARGET_DRAW_DIAG] hit=%u viewports=%u first_viewport=(%.1f,%.1f,%.1f,%.1f) "
+        "scissors=%u first_scissor=(%ld,%ld,%ld,%ld) raster_bound=%u cull=%u scissor_enable=%u "
+        "depth_bound=%u depth_enable=%u depth_func=%u stencil_enable=%u depth_write=%u "
+        "blend_bound=%u blend_enable=%u write_mask=0x%x blend_factor=(%.6g,%.6g,%.6g,%.6g) "
+        "sample_mask=0x%08x stencil_ref=%u",
+        hit, viewportCount,
+        viewportCount ? viewports[0].TopLeftX : 0.0f,
+        viewportCount ? viewports[0].TopLeftY : 0.0f,
+        viewportCount ? viewports[0].Width : 0.0f,
+        viewportCount ? viewports[0].Height : 0.0f,
+        scissorCount,
+        scissorCount ? scissors[0].left : 0,
+        scissorCount ? scissors[0].top : 0,
+        scissorCount ? scissors[0].right : 0,
+        scissorCount ? scissors[0].bottom : 0,
+        rasterizer ? 1u : 0u,
+        rasterizer ? static_cast<unsigned int>(rasterizerDesc.CullMode)
+                   : static_cast<unsigned int>(D3D11_CULL_BACK),
+        rasterizer ? static_cast<unsigned int>(rasterizerDesc.ScissorEnable) : 0u,
+        depthState ? 1u : 0u,
+        depthEnable, depthFunc, stencilEnable, depthWrite,
+        blendState ? 1u : 0u,
+        blendState ? static_cast<unsigned int>(blendDesc.RenderTarget[0].BlendEnable) : 0u,
+        blendState ? static_cast<unsigned int>(blendDesc.RenderTarget[0].RenderTargetWriteMask)
+                   : static_cast<unsigned int>(D3D11_COLOR_WRITE_ENABLE_ALL),
+        blendFactor[0], blendFactor[1], blendFactor[2], blendFactor[3], sampleMask, stencilRef);
+
+    D3D11_QUERY_DESC queryDesc{D3D11_QUERY_PIPELINE_STATISTICS, 0};
+    const HRESULT queryResult = state.dev && state.dev->d11
+        ? state.dev->d11->CreateQuery(&queryDesc, pipelineStats.query.Put())
+        : E_POINTER;
+    if (FAILED(queryResult)) {
+        Log("[TARGET_DRAW_STATS] hit=%u resource_hit=%u resource=%p create_query_failed hr=0x%08lx",
+            hit, resourceHit, rtvResource.Get(), queryResult);
+        pipelineStats.query.Reset();
+        return;
+    }
+    pipelineStats.hit = hit;
+    pipelineStats.resourceHit = resourceHit;
+    pipelineStats.rtvResource = reinterpret_cast<uintptr_t>(rtvResource.Get());
+    pipelineStats.vsHash = state.graphicsShaderHash;
+    pipelineStats.psHash = state.graphicsPixelShaderHash;
+    state.c->Begin(pipelineStats.query.Get());
+}
 
 void TrackTargetOperation(ID3D11Resource* resource, const std::string& context,
     TargetHistoryKind kind) {
@@ -545,7 +1024,13 @@ void BindDescriptor(ExecState& state, const Descriptor& descriptor, UINT slot, U
         break;
     }
     case DKind::SRV:
-        if (descriptor.structStride && descriptor.res) descriptor.res->SyncStruct(descriptor.structStride);
+        if (descriptor.structStride && descriptor.res) {
+            descriptor.res->SyncStruct(descriptor.structStride);
+        } else {
+            auto* uploadResource = dynamic_cast<Resource*>(descriptor.keep.Get());
+            if (uploadResource && uploadResource->heap == D3D12_HEAP_TYPE_UPLOAD)
+                uploadResource->SyncToGpu(descriptor.bufOff, descriptor.bufSize);
+        }
         BindSrv(state, stages, slot, descriptor.srv.Get());
         break;
     case DKind::UAV:
@@ -603,19 +1088,58 @@ void BindDirectDescriptor(ExecState& state, const RootParam& param, const RootAr
 }
 
 void BindRootSnapshot(ExecState& state, const std::shared_ptr<const BindSnap>& snapshot, bool compute) {
-    if (!snapshot || !snapshot->rs) return;
+    static std::atomic<UINT> targetRootBindingLogCount{0};
+    constexpr uint64_t targetVs = 0x20e0826b236597a1ULL;
+    constexpr uint64_t targetPs0 = 0x44b0a992c2304254ULL;
+    constexpr uint64_t targetPs1 = 0xd77600bde0076c33ULL;
+    const bool targetPipeline = !compute && state.graphicsShaderHash == targetVs &&
+        (state.graphicsPixelShaderHash == targetPs0 ||
+         state.graphicsPixelShaderHash == targetPs1);
+    const UINT targetDraw = targetPipeline
+        ? targetRootBindingLogCount.fetch_add(1, std::memory_order_relaxed) + 1
+        : 0;
+    const bool logTarget = targetDraw > 0 && targetDraw <= 12;
+    if (!snapshot || !snapshot->rs) {
+        if (logTarget)
+            Log("[TARGET_ROOT_BIND] draw=%u status=no_snapshot", targetDraw);
+        return;
+    }
     const auto& root = *snapshot->rs;
+    if (logTarget)
+        Log("[TARGET_ROOT_BIND] draw=%u root=%p params=%zu heaps=%zu",
+            targetDraw, snapshot->rs, root.params.size(), snapshot->descriptorHeaps.size());
     for (const auto& sampler : root.statics)
         BindSampler(state, VisibilityStages(sampler.vis, compute), sampler.slot, sampler.st.Get());
 
     for (UINT i = 0; i < root.params.size(); ++i) {
-        if (i >= snapshot->args.size()) continue;
         const RootParam& param = root.params[i];
+        if (i >= snapshot->args.size()) {
+            if (logTarget)
+                Log("[TARGET_ROOT_PARAM] draw=%u index=%u type=%u visibility=%u arg_kind=missing "
+                    "ranges=%zu",
+                    targetDraw, i, static_cast<unsigned int>(param.type),
+                    static_cast<unsigned int>(param.vis), param.ranges.size());
+            continue;
+        }
         const RootArg& arg = snapshot->args[i];
         const UINT stages = VisibilityStages(param.vis, compute);
+        if (logTarget)
+            Log("[TARGET_ROOT_PARAM] draw=%u index=%u type=%u visibility=%u arg_kind=%u "
+                "arg_value=0x%llx ranges=%zu",
+                targetDraw, i, static_cast<unsigned int>(param.type),
+                static_cast<unsigned int>(param.vis), arg.kind,
+                static_cast<unsigned long long>(arg.value), param.ranges.size());
         if (param.type == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE && arg.kind == 5) {
             UINT baseIndex = 0;
             DescriptorHeap* heap = FindHeapByGpu(arg.value, &baseIndex);
+            if (logTarget)
+                Log("[TARGET_ROOT_TABLE] draw=%u index=%u handle=0x%llx heap=%p base=%u "
+                    "heap_type=%u heap_flags=0x%x heap_size=%u gpu_base=0x%llx",
+                    targetDraw, i, static_cast<unsigned long long>(arg.value), heap, baseIndex,
+                    heap ? static_cast<unsigned int>(heap->hd.Type) : UINT_MAX,
+                    heap ? static_cast<UINT>(heap->hd.Flags) : 0u,
+                    heap ? static_cast<UINT>(heap->items.size()) : 0u,
+                    static_cast<unsigned long long>(heap ? heap->gpuBase : 0));
             if (!heap) {
                 Log("Root descriptor table handle 0x%llx is not in a live heap",
                     static_cast<unsigned long long>(arg.value));
@@ -625,18 +1149,40 @@ void BindRootSnapshot(ExecState& state, const std::shared_ptr<const BindSnap>& s
                 [heap](const Ptr<IUnknown>& item) {
                     return dynamic_cast<ID3D12DescriptorHeap*>(item.Get()) == static_cast<ID3D12DescriptorHeap*>(heap);
                 });
+            if (logTarget)
+                Log("[TARGET_ROOT_HEAP] draw=%u index=%u bound=%u",
+                    targetDraw, i, isBound ? 1u : 0u);
             if (!isBound) {
                 Log("Root descriptor table references a heap that was not set on the command list");
                 continue;
             }
             for (const auto& range : param.ranges) {
+                if (logTarget)
+                    Log("[TARGET_ROOT_RANGE] draw=%u index=%u type=%u base_reg=%u space=%u "
+                        "offset=%u count=%u first_slot=%u",
+                        targetDraw, i, static_cast<unsigned int>(range.type), range.baseReg,
+                        range.space, range.offset, range.num,
+                        range.slots.empty() ? UINT_MAX : range.slots.front());
                 for (UINT n = 0; n < range.num; ++n) {
                     if (baseIndex + range.offset + n >= heap->items.size()) {
                         Log("Descriptor table range exceeds its heap");
                         break;
                     }
-                    BindDescriptor(state, heap->items[baseIndex + range.offset + n],
-                                   range.slots[n], stages);
+                    const Descriptor& descriptor = heap->items[baseIndex + range.offset + n];
+                    if (logTarget && range.slots[n] == 0 &&
+                        (range.type == D3D12_DESCRIPTOR_RANGE_TYPE_SRV ||
+                         range.type == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)) {
+                        ID3D11Resource* rawSrvResource = nullptr;
+                        if (descriptor.srv) descriptor.srv->GetResource(&rawSrvResource);
+                        Ptr<ID3D11Resource> srvResource =
+                            Ptr<ID3D11Resource>::Attach(rawSrvResource);
+                        Log("[TARGET_ROOT_SLOT0] draw=%u range_type=%u descriptor=%p kind=%u "
+                            "srv=%p srv_resource=%p sampler=%p resource=%p",
+                            targetDraw, static_cast<unsigned int>(range.type), &descriptor,
+                            static_cast<unsigned int>(descriptor.kind), descriptor.srv.Get(),
+                            srvResource.Get(), descriptor.smp.Get(), descriptor.keep.Get());
+                    }
+                    BindDescriptor(state, descriptor, range.slots[n], stages);
                 }
             }
         } else if (param.type == D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS && arg.kind == 1) {
@@ -650,6 +1196,40 @@ void BindRootSnapshot(ExecState& state, const std::shared_ptr<const BindSnap>& s
         } else if ((param.type == D3D12_ROOT_PARAMETER_TYPE_CBV && arg.kind == 2) ||
                    (param.type == D3D12_ROOT_PARAMETER_TYPE_SRV && arg.kind == 3) ||
                    (param.type == D3D12_ROOT_PARAMETER_TYPE_UAV && arg.kind == 4)) {
+            if (logTarget && param.type == D3D12_ROOT_PARAMETER_TYPE_CBV) {
+                UINT64 offset = 0;
+                Resource* resource = ResolveVA(arg.value, &offset);
+                std::array<uint32_t, 4> words{};
+                std::array<float, 4> values{};
+                bool shadowAvailable = false;
+                if (resource) {
+                    std::lock_guard<std::mutex> lock(resource->mu);
+                    if (offset <= resource->shadow.size() &&
+                        resource->shadow.size() - static_cast<size_t>(offset) >= sizeof(words)) {
+                        memcpy(words.data(), resource->shadow.data() + offset, sizeof(words));
+                        memcpy(values.data(), resource->shadow.data() + offset, sizeof(values));
+                        shadowAvailable = true;
+                    }
+                }
+                const UINT64 remaining = resource && resource->desc.Width >= offset
+                    ? resource->desc.Width - offset : 0;
+                const UINT64 cbSize = std::min<UINT64>(remaining,
+                    D3D11_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16) & ~UINT64_C(15);
+                Log("[TARGET_ROOT_CBV] draw=%u index=%u stages=0x%x gpu_va=0x%llx "
+                    "resource=%p resource_va=0x%llx offset=%llu width=%llu heap=%u "
+                    "cb_bytes=%llu shadow_bytes=%zu shadow_status=%s "
+                    "words=%08x,%08x,%08x,%08x floats=%.9g,%.9g,%.9g,%.9g",
+                    targetDraw, i, stages, static_cast<unsigned long long>(arg.value),
+                    resource, static_cast<unsigned long long>(resource ? resource->va : 0),
+                    static_cast<unsigned long long>(offset),
+                    static_cast<unsigned long long>(resource ? resource->desc.Width : 0),
+                    static_cast<unsigned int>(resource ? resource->heap : D3D12_HEAP_TYPE_DEFAULT),
+                    static_cast<unsigned long long>(cbSize),
+                    resource ? resource->shadow.size() : 0,
+                    shadowAvailable ? "ok" : "unavailable",
+                    words[0], words[1], words[2], words[3],
+                    values[0], values[1], values[2], values[3]);
+            }
             BindDirectDescriptor(state, param, arg, stages);
         }
     }
@@ -913,133 +1493,11 @@ void STDMETHODCALLTYPE CommandList::DrawIndexedInstanced(UINT indexCount, UINT i
             return;
         }
         BindRootSnapshot(state, snapshot, false);
-        if (Cfg().diagnosticRenderTrace &&
-            (state.graphicsShaderHash == 0x20e0826b236597a1ULL ||
-             state.graphicsPixelShaderHash == 0x44b0a992c2304254ULL ||
-             state.graphicsPixelShaderHash == 0xd77600bde0076c33ULL)) {
-            static std::atomic<UINT> targetDiagCount{0};
-            const UINT diagSlot = targetDiagCount.fetch_add(1, std::memory_order_relaxed);
-            if (diagSlot < 4) {
-                ID3D11Buffer* vertexBuffer = nullptr;
-                UINT vertexStride = 0;
-                UINT vertexOffset = 0;
-                state.c->IAGetVertexBuffers(0, 1, &vertexBuffer, &vertexStride, &vertexOffset);
-
-                ID3D11Buffer* indexBuffer = nullptr;
-                DXGI_FORMAT indexFormat = DXGI_FORMAT_UNKNOWN;
-                UINT indexOffset = 0;
-                state.c->IAGetIndexBuffer(&indexBuffer, &indexFormat, &indexOffset);
-
-                D3D11_PRIMITIVE_TOPOLOGY topology = D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
-                state.c->IAGetPrimitiveTopology(&topology);
-
-                ID3D11RenderTargetView* contextRtv = nullptr;
-                ID3D11DepthStencilView* contextDsv = nullptr;
-                state.c->OMGetRenderTargets(1, &contextRtv, &contextDsv);
-                ID3D11Resource* contextRtvResource = nullptr;
-                if (contextRtv) contextRtv->GetResource(&contextRtvResource);
-
-                std::array<D3D11_VIEWPORT, D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE>
-                    contextViewports{};
-                UINT viewportCount = static_cast<UINT>(contextViewports.size());
-                state.c->RSGetViewports(&viewportCount, contextViewports.data());
-
-                std::array<D3D11_RECT, D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE>
-                    contextScissors{};
-                UINT scissorCount = static_cast<UINT>(contextScissors.size());
-                state.c->RSGetScissorRects(&scissorCount, contextScissors.data());
-
-                ID3D11RasterizerState* rasterizer = nullptr;
-                D3D11_RASTERIZER_DESC rasterizerDesc{};
-                state.c->RSGetState(&rasterizer);
-                if (rasterizer) rasterizer->GetDesc(&rasterizerDesc);
-
-                ID3D11BlendState* blendState = nullptr;
-                FLOAT blendFactor[4]{};
-                UINT sampleMask = 0;
-                D3D11_BLEND_DESC blendDesc{};
-                state.c->OMGetBlendState(&blendState, blendFactor, &sampleMask);
-                if (blendState) blendState->GetDesc(&blendDesc);
-
-                ID3D11DepthStencilState* depthStencilState = nullptr;
-                UINT stencilRef = 0;
-                D3D11_DEPTH_STENCIL_DESC depthStencilDesc{};
-                state.c->OMGetDepthStencilState(&depthStencilState, &stencilRef);
-                if (depthStencilState) depthStencilState->GetDesc(&depthStencilDesc);
-
-                const UINT cullMode = rasterizer
-                    ? static_cast<UINT>(rasterizerDesc.CullMode)
-                    : static_cast<UINT>(D3D11_CULL_BACK);
-                const UINT scissorEnable =
-                    rasterizer && rasterizerDesc.ScissorEnable ? 1u : 0u;
-                const UINT blendEnable =
-                    blendState && blendDesc.RenderTarget[0].BlendEnable ? 1u : 0u;
-                const UINT renderTargetWriteMask = blendState
-                    ? static_cast<UINT>(blendDesc.RenderTarget[0].RenderTargetWriteMask)
-                    : static_cast<UINT>(D3D11_COLOR_WRITE_ENABLE_ALL);
-                const UINT depthEnable =
-                    depthStencilState ? (depthStencilDesc.DepthEnable ? 1u : 0u) : 1u;
-                const UINT depthWriteMask = depthStencilState
-                    ? static_cast<UINT>(depthStencilDesc.DepthWriteMask)
-                    : static_cast<UINT>(D3D11_DEPTH_WRITE_MASK_ALL);
-                const UINT depthFunc = depthStencilState
-                    ? static_cast<UINT>(depthStencilDesc.DepthFunc)
-                    : static_cast<UINT>(D3D11_COMPARISON_LESS);
-                const UINT stencilEnable =
-                    depthStencilState && depthStencilDesc.StencilEnable ? 1u : 0u;
-                const D3D11_VIEWPORT* viewport =
-                    viewportCount ? &contextViewports[0] : nullptr;
-                const D3D11_RECT* scissor = scissorCount ? &contextScissors[0] : nullptr;
-                Log("[TARGET_DRAW_DIAG] #%u pso=%p vs=%016llx ps=%016llx "
-                    "args=(idx=%u,inst=%u,startIdx=%u,baseVtx=%d,startInst=%u) "
-                    "hasVb=%u hasIb=%u numRtv=%u trackedRtv0=%p trackedRes0=%p "
-                    "vb0=%p(stride=%u,off=%u) ib=%p(fmt=%u,off=%u) topo=%u "
-                    "contextRtv0=%p contextRes0=%p dsv=%p "
-                    "vpCount=%u vp=(%.1f,%.1f,%.1f,%.1f,%.2f,%.2f) "
-                    "scCount=%u sc=(%ld,%ld,%ld,%ld) "
-                    "rs=%p(cull=%u,scEn=%u) "
-                    "bs=%p(blendEn=%u,writeMask=0x%x,factor=(%.2f,%.2f,%.2f,%.2f),sampleMask=0x%x) "
-                    "dss=%p(depthEn=%u,depthWrite=%u,depthFunc=%u,stencilEn=%u,stencilRef=%u)",
-                    diagSlot + 1u,
-                    reinterpret_cast<void*>(state.graphicsPipelineIdentity),
-                    static_cast<unsigned long long>(state.graphicsShaderHash),
-                    static_cast<unsigned long long>(state.graphicsPixelShaderHash),
-                    indexCount, instanceCount, startIndex, baseVertex, startInstance,
-                    state.hasVertexBuffer ? 1u : 0u, state.hasIndexBuffer ? 1u : 0u,
-                    state.numRtv, static_cast<void*>(state.rtvs[0].Get()),
-                    static_cast<void*>(state.rtvResources[0].Get()),
-                    static_cast<void*>(vertexBuffer), vertexStride, vertexOffset,
-                    static_cast<void*>(indexBuffer), static_cast<unsigned>(indexFormat), indexOffset,
-                    static_cast<unsigned>(topology),
-                    static_cast<void*>(contextRtv), static_cast<void*>(contextRtvResource),
-                    static_cast<void*>(contextDsv), viewportCount,
-                    viewport ? viewport->TopLeftX : 0.0f,
-                    viewport ? viewport->TopLeftY : 0.0f,
-                    viewport ? viewport->Width : 0.0f,
-                    viewport ? viewport->Height : 0.0f,
-                    viewport ? viewport->MinDepth : 0.0f,
-                    viewport ? viewport->MaxDepth : 0.0f,
-                    scissorCount, scissor ? scissor->left : 0L,
-                    scissor ? scissor->top : 0L, scissor ? scissor->right : 0L,
-                    scissor ? scissor->bottom : 0L,
-                    static_cast<void*>(rasterizer), cullMode, scissorEnable,
-                    static_cast<void*>(blendState), blendEnable, renderTargetWriteMask,
-                    blendFactor[0], blendFactor[1], blendFactor[2], blendFactor[3], sampleMask,
-                    static_cast<void*>(depthStencilState), depthEnable, depthWriteMask, depthFunc,
-                    stencilEnable,
-                    stencilRef);
-
-                if (depthStencilState) depthStencilState->Release();
-                if (blendState) blendState->Release();
-                if (rasterizer) rasterizer->Release();
-                if (contextRtvResource) contextRtvResource->Release();
-                if (contextDsv) contextDsv->Release();
-                if (contextRtv) contextRtv->Release();
-                if (indexBuffer) indexBuffer->Release();
-                if (vertexBuffer) vertexBuffer->Release();
-            }
-        }
+        TargetDrawPipelineStats pipelineStats{};
+        LogTargetDrawDiagnostic(state, indexCount, instanceCount,
+            startIndex, baseVertex, startInstance, pipelineStats);
         state.c->DrawIndexedInstanced(indexCount, instanceCount, startIndex, baseVertex, startInstance);
+        FinishTargetDrawPipelineStats(state, std::move(pipelineStats));
         RecordDrawExecution(state, true, "DrawIndexedInstanced", indexCount, instanceCount);
         FlushStructWrites(state);
     });
@@ -1184,6 +1642,8 @@ void STDMETHODCALLTYPE CommandList::CopyBufferRegion(ID3D12Resource* destination
         box.bottom = 1;
         box.front = 0;
         box.back = 1;
+        if (srcResource->heap == D3D12_HEAP_TYPE_UPLOAD)
+            srcResource->SyncToGpu(sourceOffset, byteCount);
         state.c->CopySubresourceRegion(dstResource->Raw(), 0, static_cast<UINT>(destinationOffset), 0, 0,
                                        srcResource->Raw(), 0, &box);
     });
@@ -1733,11 +2193,18 @@ void STDMETHODCALLTYPE CommandList::IASetIndexBuffer(const D3D12_INDEX_BUFFER_VI
     Resource* resource = ResolveVA(view->BufferLocation, &offset);
     if (!resource || offset > UINT_MAX) return;
     Ptr<ID3D11Buffer> buffer(resource->GpuBuffer());
+    Ptr<ID3D12Resource> resourceRef(resource);
     const UINT nativeOffset = static_cast<UINT>(offset);
     const DXGI_FORMAT format = view->Format;
-    Add([buffer, nativeOffset, format](ExecState& state) {
+    const UINT viewSize = view->SizeInBytes;
+    Add([buffer, resourceRef, nativeOffset, format, viewSize](ExecState& state) {
+        auto* uploadResource = dynamic_cast<Resource*>(resourceRef.Get());
+        if (uploadResource && uploadResource->heap == D3D12_HEAP_TYPE_UPLOAD)
+            uploadResource->SyncToGpu(nativeOffset, viewSize);
         state.c->IASetIndexBuffer(buffer.Get(), format, nativeOffset);
         state.hasIndexBuffer = buffer.Get() != nullptr;
+        state.indexBufferResource = resourceRef;
+        state.indexBufferViewSize = viewSize;
     });
 }
 
@@ -1745,19 +2212,29 @@ void STDMETHODCALLTYPE CommandList::IASetVertexBuffers(UINT startSlot, UINT coun
     TraceApi("CommandList::IASetVertexBuffers");
     if (!views || startSlot + count > D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT) return;
     std::vector<Ptr<ID3D11Buffer>> buffers(count);
+    std::vector<Ptr<ID3D12Resource>> resources(count);
     std::vector<UINT> strides(count), offsets(count);
+    std::vector<UINT64> resourceOffsets(count), sizes(count);
     for (UINT i = 0; i < count; ++i) {
         UINT64 offset = 0;
         Resource* resource = ResolveVA(views[i].BufferLocation, &offset);
         if (!resource || offset > UINT_MAX) return;
         buffers[i] = Ptr<ID3D11Buffer>(resource->GpuBuffer());
+        resources[i] = Ptr<ID3D12Resource>(resource);
         strides[i] = views[i].StrideInBytes;
         offsets[i] = static_cast<UINT>(offset);
+        resourceOffsets[i] = offset;
+        sizes[i] = views[i].SizeInBytes;
     }
-    Add([startSlot, buffers = std::move(buffers), strides = std::move(strides), offsets = std::move(offsets)](ExecState& state) {
+    Add([startSlot, buffers = std::move(buffers), resources = std::move(resources),
+        strides = std::move(strides), offsets = std::move(offsets),
+        resourceOffsets = std::move(resourceOffsets), sizes = std::move(sizes)](ExecState& state) {
         std::vector<ID3D11Buffer*> raw;
         raw.reserve(buffers.size());
         for (size_t i = 0; i < buffers.size(); ++i) {
+            auto* uploadResource = dynamic_cast<Resource*>(resources[i].Get());
+            if (uploadResource && uploadResource->heap == D3D12_HEAP_TYPE_UPLOAD)
+                uploadResource->SyncToGpu(resourceOffsets[i], sizes[i]);
             raw.push_back(buffers[i].Get());
             state.vertexBuffers[startSlot + static_cast<UINT>(i)] = buffers[i].Get() != nullptr;
         }
