@@ -913,6 +913,132 @@ void STDMETHODCALLTYPE CommandList::DrawIndexedInstanced(UINT indexCount, UINT i
             return;
         }
         BindRootSnapshot(state, snapshot, false);
+        if (Cfg().diagnosticRenderTrace &&
+            (state.graphicsShaderHash == 0x20e0826b236597a1ULL ||
+             state.graphicsPixelShaderHash == 0x44b0a992c2304254ULL ||
+             state.graphicsPixelShaderHash == 0xd77600bde0076c33ULL)) {
+            static std::atomic<UINT> targetDiagCount{0};
+            const UINT diagSlot = targetDiagCount.fetch_add(1, std::memory_order_relaxed);
+            if (diagSlot < 4) {
+                ID3D11Buffer* vertexBuffer = nullptr;
+                UINT vertexStride = 0;
+                UINT vertexOffset = 0;
+                state.c->IAGetVertexBuffers(0, 1, &vertexBuffer, &vertexStride, &vertexOffset);
+
+                ID3D11Buffer* indexBuffer = nullptr;
+                DXGI_FORMAT indexFormat = DXGI_FORMAT_UNKNOWN;
+                UINT indexOffset = 0;
+                state.c->IAGetIndexBuffer(&indexBuffer, &indexFormat, &indexOffset);
+
+                D3D11_PRIMITIVE_TOPOLOGY topology = D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
+                state.c->IAGetPrimitiveTopology(&topology);
+
+                ID3D11RenderTargetView* contextRtv = nullptr;
+                ID3D11DepthStencilView* contextDsv = nullptr;
+                state.c->OMGetRenderTargets(1, &contextRtv, &contextDsv);
+                ID3D11Resource* contextRtvResource = nullptr;
+                if (contextRtv) contextRtv->GetResource(&contextRtvResource);
+
+                std::array<D3D11_VIEWPORT, D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE>
+                    contextViewports{};
+                UINT viewportCount = static_cast<UINT>(contextViewports.size());
+                state.c->RSGetViewports(&viewportCount, contextViewports.data());
+
+                std::array<D3D11_RECT, D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE>
+                    contextScissors{};
+                UINT scissorCount = static_cast<UINT>(contextScissors.size());
+                state.c->RSGetScissorRects(&scissorCount, contextScissors.data());
+
+                ID3D11RasterizerState* rasterizer = nullptr;
+                D3D11_RASTERIZER_DESC rasterizerDesc{};
+                state.c->RSGetState(&rasterizer);
+                if (rasterizer) rasterizer->GetDesc(&rasterizerDesc);
+
+                ID3D11BlendState* blendState = nullptr;
+                FLOAT blendFactor[4]{};
+                UINT sampleMask = 0;
+                D3D11_BLEND_DESC blendDesc{};
+                state.c->OMGetBlendState(&blendState, blendFactor, &sampleMask);
+                if (blendState) blendState->GetDesc(&blendDesc);
+
+                ID3D11DepthStencilState* depthStencilState = nullptr;
+                UINT stencilRef = 0;
+                D3D11_DEPTH_STENCIL_DESC depthStencilDesc{};
+                state.c->OMGetDepthStencilState(&depthStencilState, &stencilRef);
+                if (depthStencilState) depthStencilState->GetDesc(&depthStencilDesc);
+
+                const UINT cullMode = rasterizer
+                    ? static_cast<UINT>(rasterizerDesc.CullMode)
+                    : static_cast<UINT>(D3D11_CULL_BACK);
+                const UINT scissorEnable =
+                    rasterizer && rasterizerDesc.ScissorEnable ? 1u : 0u;
+                const UINT blendEnable =
+                    blendState && blendDesc.RenderTarget[0].BlendEnable ? 1u : 0u;
+                const UINT renderTargetWriteMask = blendState
+                    ? static_cast<UINT>(blendDesc.RenderTarget[0].RenderTargetWriteMask)
+                    : static_cast<UINT>(D3D11_COLOR_WRITE_ENABLE_ALL);
+                const UINT depthEnable =
+                    depthStencilState ? (depthStencilDesc.DepthEnable ? 1u : 0u) : 1u;
+                const UINT depthWriteMask = depthStencilState
+                    ? static_cast<UINT>(depthStencilDesc.DepthWriteMask)
+                    : static_cast<UINT>(D3D11_DEPTH_WRITE_MASK_ALL);
+                const UINT depthFunc = depthStencilState
+                    ? static_cast<UINT>(depthStencilDesc.DepthFunc)
+                    : static_cast<UINT>(D3D11_COMPARISON_LESS);
+                const UINT stencilEnable =
+                    depthStencilState && depthStencilDesc.StencilEnable ? 1u : 0u;
+                const D3D11_VIEWPORT* viewport =
+                    viewportCount ? &contextViewports[0] : nullptr;
+                const D3D11_RECT* scissor = scissorCount ? &contextScissors[0] : nullptr;
+                Log("[TARGET_DRAW_DIAG] #%u pso=%p vs=%016llx ps=%016llx "
+                    "args=(idx=%u,inst=%u,startIdx=%u,baseVtx=%d,startInst=%u) "
+                    "hasVb=%u hasIb=%u numRtv=%u trackedRtv0=%p trackedRes0=%p "
+                    "vb0=%p(stride=%u,off=%u) ib=%p(fmt=%u,off=%u) topo=%u "
+                    "contextRtv0=%p contextRes0=%p dsv=%p "
+                    "vpCount=%u vp=(%.1f,%.1f,%.1f,%.1f,%.2f,%.2f) "
+                    "scCount=%u sc=(%ld,%ld,%ld,%ld) "
+                    "rs=%p(cull=%u,scEn=%u) "
+                    "bs=%p(blendEn=%u,writeMask=0x%x,factor=(%.2f,%.2f,%.2f,%.2f),sampleMask=0x%x) "
+                    "dss=%p(depthEn=%u,depthWrite=%u,depthFunc=%u,stencilEn=%u,stencilRef=%u)",
+                    diagSlot + 1u,
+                    reinterpret_cast<void*>(state.graphicsPipelineIdentity),
+                    static_cast<unsigned long long>(state.graphicsShaderHash),
+                    static_cast<unsigned long long>(state.graphicsPixelShaderHash),
+                    indexCount, instanceCount, startIndex, baseVertex, startInstance,
+                    state.hasVertexBuffer ? 1u : 0u, state.hasIndexBuffer ? 1u : 0u,
+                    state.numRtv, static_cast<void*>(state.rtvs[0].Get()),
+                    static_cast<void*>(state.rtvResources[0].Get()),
+                    static_cast<void*>(vertexBuffer), vertexStride, vertexOffset,
+                    static_cast<void*>(indexBuffer), static_cast<unsigned>(indexFormat), indexOffset,
+                    static_cast<unsigned>(topology),
+                    static_cast<void*>(contextRtv), static_cast<void*>(contextRtvResource),
+                    static_cast<void*>(contextDsv), viewportCount,
+                    viewport ? viewport->TopLeftX : 0.0f,
+                    viewport ? viewport->TopLeftY : 0.0f,
+                    viewport ? viewport->Width : 0.0f,
+                    viewport ? viewport->Height : 0.0f,
+                    viewport ? viewport->MinDepth : 0.0f,
+                    viewport ? viewport->MaxDepth : 0.0f,
+                    scissorCount, scissor ? scissor->left : 0L,
+                    scissor ? scissor->top : 0L, scissor ? scissor->right : 0L,
+                    scissor ? scissor->bottom : 0L,
+                    static_cast<void*>(rasterizer), cullMode, scissorEnable,
+                    static_cast<void*>(blendState), blendEnable, renderTargetWriteMask,
+                    blendFactor[0], blendFactor[1], blendFactor[2], blendFactor[3], sampleMask,
+                    static_cast<void*>(depthStencilState), depthEnable, depthWriteMask, depthFunc,
+                    stencilEnable,
+                    stencilRef);
+
+                if (depthStencilState) depthStencilState->Release();
+                if (blendState) blendState->Release();
+                if (rasterizer) rasterizer->Release();
+                if (contextRtvResource) contextRtvResource->Release();
+                if (contextDsv) contextDsv->Release();
+                if (contextRtv) contextRtv->Release();
+                if (indexBuffer) indexBuffer->Release();
+                if (vertexBuffer) vertexBuffer->Release();
+            }
+        }
         state.c->DrawIndexedInstanced(indexCount, instanceCount, startIndex, baseVertex, startInstance);
         RecordDrawExecution(state, true, "DrawIndexedInstanced", indexCount, instanceCount);
         FlushStructWrites(state);
