@@ -2,6 +2,23 @@
 
 namespace {
 
+bool CopyBufferPrefix(ID3D11DeviceContext* context, ID3D11Buffer* destination,
+    ID3D11Buffer* source, UINT byteWidth) {
+    if (!context || !destination || !source || !byteWidth) return false;
+    D3D11_BUFFER_DESC destinationDesc{};
+    D3D11_BUFFER_DESC sourceDesc{};
+    destination->GetDesc(&destinationDesc);
+    source->GetDesc(&sourceDesc);
+    if (byteWidth > destinationDesc.ByteWidth || byteWidth > sourceDesc.ByteWidth)
+        return false;
+    D3D11_BOX box{};
+    box.right = byteWidth;
+    box.bottom = 1;
+    box.back = 1;
+    context->CopySubresourceRegion(destination, 0, 0, 0, 0, source, 0, &box);
+    return true;
+}
+
 UINT BindFlags(const D3D12_RESOURCE_DESC& desc) {
     if (desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER) {
         UINT flags = D3D11_BIND_SHADER_RESOURCE;
@@ -443,7 +460,7 @@ ID3D11Buffer* Resource::CbWindow(UINT64 offset, UINT64 size) {
 }
 
 ID3D11Buffer* Resource::StructCopy(UINT stride) {
-    if (!IsBuffer() || stride == 0 || desc.Width % stride != 0 || desc.Width > UINT_MAX) {
+    if (!IsBuffer() || stride == 0 || desc.Width > UINT_MAX) {
         if (Cfg().diagnosticRenderTrace)
             Log("[RENDER_TRACE] [tid=%lu] StructCopy rejected resource=%p width=%llu stride=%u buffer=%u",
                 GetCurrentThreadId(), this, static_cast<unsigned long long>(desc.Width), stride, IsBuffer());
@@ -461,6 +478,15 @@ ID3D11Buffer* Resource::StructCopy(UINT stride) {
                 GetCurrentThreadId(), this, static_cast<unsigned long long>(desc.Width),
                 static_cast<unsigned long long>(nativeWidth), stride);
         return nullptr;
+    }
+    if (Cfg().diagnosticRenderTrace && desc.Width % stride != 0) {
+        static std::atomic<UINT> nonAlignedLogCount{0};
+        if (nonAlignedLogCount.fetch_add(1, std::memory_order_relaxed) < 16) {
+            Log("[STRUCT_COPY_TRUNCATE] resource=%p width=%llu stride=%u "
+                "copy_bytes=%u trailing_bytes=%llu",
+                this, static_cast<unsigned long long>(desc.Width), stride, byteWidth,
+                static_cast<unsigned long long>(desc.Width % stride));
+        }
     }
 
     D3D11_BUFFER_DESC bufferDesc{};
@@ -480,8 +506,23 @@ ID3D11Buffer* Resource::StructCopy(UINT stride) {
         return nullptr;
     }
 
-    if (buf) dev->ctx->CopyResource(copy.Get(), buf.Get());
-    if (!shadow.empty()) dev->ctx->UpdateSubresource(copy.Get(), 0, nullptr, shadow.data(), 0, 0);
+    if (buf && !CopyBufferPrefix(dev->ctx.Get(), copy.Get(), buf.Get(), byteWidth)) {
+        if (Cfg().diagnosticRenderTrace)
+            Log("[RENDER_TRACE] [tid=%lu] StructCopy source range invalid resource=%p "
+                "copy_bytes=%u stride=%u",
+                GetCurrentThreadId(), this, byteWidth, stride);
+        return nullptr;
+    }
+    if (!shadow.empty()) {
+        if (shadow.size() < byteWidth) {
+            if (Cfg().diagnosticRenderTrace)
+                Log("[RENDER_TRACE] [tid=%lu] StructCopy shadow too small resource=%p "
+                    "shadow_bytes=%zu copy_bytes=%u stride=%u",
+                    GetCurrentThreadId(), this, shadow.size(), byteWidth, stride);
+            return nullptr;
+        }
+        dev->ctx->UpdateSubresource(copy.Get(), 0, nullptr, shadow.data(), 0, 0);
+    }
     auto inserted = structCopies.emplace(stride, std::move(copy));
     return inserted.first->second.Get();
 }
@@ -489,12 +530,28 @@ ID3D11Buffer* Resource::StructCopy(UINT stride) {
 void Resource::SyncStruct(UINT stride) {
     ID3D11Buffer* copy = StructCopy(stride);
     if (!copy || !buf) return;
-    dev->ctx->CopyResource(copy, buf.Get());
+    D3D11_BUFFER_DESC copyDesc{};
+    copy->GetDesc(&copyDesc);
+    if (!CopyBufferPrefix(dev->ctx.Get(), copy, buf.Get(), copyDesc.ByteWidth) &&
+        Cfg().diagnosticRenderTrace) {
+        Log("[RENDER_TRACE] [tid=%lu] SyncStruct source range invalid resource=%p "
+            "copy_bytes=%u stride=%u",
+            GetCurrentThreadId(), this, copyDesc.ByteWidth, stride);
+    }
 }
 
 void Resource::WriteBackStruct(UINT stride) {
     auto found = structCopies.find(stride);
-    if (found != structCopies.end() && buf) dev->ctx->CopyResource(buf.Get(), found->second.Get());
+    if (found != structCopies.end() && buf) {
+        D3D11_BUFFER_DESC copyDesc{};
+        found->second->GetDesc(&copyDesc);
+        if (!CopyBufferPrefix(dev->ctx.Get(), buf.Get(), found->second.Get(), copyDesc.ByteWidth) &&
+            Cfg().diagnosticRenderTrace) {
+            Log("[RENDER_TRACE] [tid=%lu] WriteBackStruct destination range invalid "
+                "resource=%p copy_bytes=%u stride=%u",
+                GetCurrentThreadId(), this, copyDesc.ByteWidth, stride);
+        }
+    }
 }
 
 HRESULT Resource::RefreshReadback() {

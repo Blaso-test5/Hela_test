@@ -10,8 +10,10 @@
 #include "bridge.h"
 #include "dxgi_factory_fwd.inc"
 #include "dxgi_swapchain_fwd.inc"
+#include <cerrno>
 
 namespace {
+std::once_flag g_dxgiFingerprintOnce;
 
 void LogDxgi(const char* format, ...) {
     char message[512]{};
@@ -22,6 +24,19 @@ void LogDxgi(const char* format, ...) {
     if (written < 0) return;
     message[sizeof(message) - 1] = '\0';
     D3D12On11LogMessage(message);
+}
+
+void LogDxgiModuleFingerprint() {
+    std::call_once(g_dxgiFingerprintOnce, [] {
+        HMODULE module = nullptr;
+        if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                reinterpret_cast<LPCSTR>(&LogDxgiModuleFingerprint), &module)) {
+            D3D12On11LogMessage("MODULE_FINGERPRINT_FAILED role=dxgi_proxy reason=module-handle-error");
+            return;
+        }
+        D3D12On11LogModuleFingerprint(module, "dxgi_proxy");
+    });
 }
 
 bool DiagnosticMaskNvidiaAdapter() {
@@ -46,6 +61,31 @@ bool FullReadbackEnabled() {
     wchar_t value[2]{};
     return GetEnvironmentVariableW(L"D3D12ON11_FULL_READBACK",
         value, ARRAYSIZE(value)) == 1 && value[0] == L'1';
+}
+
+UINT FullReadbackPresent() {
+    wchar_t value[16]{};
+    const DWORD length = GetEnvironmentVariableW(
+        L"D3D12ON11_FULL_READBACK_PRESENT", value, ARRAYSIZE(value));
+    if (!length) return 100;
+    if (length >= ARRAYSIZE(value)) {
+        LogDxgi("[READBACK_FULL_CONFIG_ERROR] D3D12ON11_FULL_READBACK_PRESENT "
+            "is too long; only the default Present #100 will be captured");
+        return 0;
+    }
+
+    wchar_t* end = nullptr;
+    errno = 0;
+    const unsigned long parsed = wcstoul(value, &end, 10);
+    if (errno == ERANGE || end == value || *end != L'\0' ||
+        parsed < 100 || parsed > UINT_MAX || parsed % 100 != 0) {
+        LogDxgi("[READBACK_FULL_CONFIG_ERROR] Invalid "
+            "D3D12ON11_FULL_READBACK_PRESENT='%ls'; expected a positive "
+            "multiple of 100, so only the default Present #100 will be captured",
+            value);
+        return 0;
+    }
+    return static_cast<UINT>(parsed);
 }
 
 struct ReadbackPixel {
@@ -238,7 +278,7 @@ void CaptureBackbufferReadback(IDXGISwapChain4* swapChain, IUnknown* source) {
     static std::atomic<uint64_t> presentCount{0};
     static const bool enabled = BackbufferReadbackEnabled();
     static const bool fullReadbackEnabled = FullReadbackEnabled();
-    static std::atomic<bool> fullReadbackAttempted{false};
+    static const UINT fullReadbackPresent = FullReadbackPresent();
     Device* device = nullptr;
     if (auto* queue = dynamic_cast<CommandQueue*>(source)) {
         device = queue->dev;
@@ -264,8 +304,8 @@ void CaptureBackbufferReadback(IDXGISwapChain4* swapChain, IUnknown* source) {
         return;
     }
 
-    const bool saveFullReadback = fullReadbackEnabled && count == 100 &&
-        !fullReadbackAttempted.exchange(true, std::memory_order_relaxed);
+    const bool saveFullReadback = fullReadbackEnabled &&
+        (count == 100 || (fullReadbackPresent && count == fullReadbackPresent));
     wchar_t sourceFilename[MAX_PATH]{};
     wchar_t backbufferFilename[MAX_PATH]{};
     if (saveFullReadback) {
@@ -897,6 +937,7 @@ HRESULT STDMETHODCALLTYPE SwapChain::ResizeBuffers1(UINT count, UINT width, UINT
 }
 
 HRESULT CreateWrappedFactory(UINT flags, REFIID riid, void** out) {
+    LogDxgiModuleFingerprint();
     if (!out) return E_POINTER;
     *out = nullptr;
     Ptr<IDXGIFactory7> native;

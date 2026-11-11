@@ -1,6 +1,8 @@
 #include "types.h"
+#include <bcrypt.h>
 #include <sys/stat.h>
 #include <direct.h>
+#include <limits>
 #include <system_error>
 #include <thread>
 
@@ -31,6 +33,7 @@ void LoadConfig(HMODULE self) {
     std::string p = path;
     size_t slash = p.find_last_of("\\/");
     g_cfg.baseDir = slash == std::string::npos ? "." : p.substr(0, slash);
+    LogModuleFingerprint("d3d12", self);
     std::string ini = g_cfg.baseDir + "\\d3d12on11.ini";
     if (GetFileAttributesA(ini.c_str()) == INVALID_FILE_ATTRIBUTES) {
         const std::string patchIni = g_cfg.baseDir + "\\D3D12On11Patch\\d3d12on11.ini";
@@ -221,6 +224,84 @@ uint64_t Fnv1a64(const void* data, size_t len) {
     return h;
 }
 std::string Hex64(uint64_t v) { char b[32]; snprintf(b, sizeof(b), "%016llx", (unsigned long long)v); return b; }
+
+bool Sha256Hex(const void* data, size_t size, std::string& result) {
+    result.clear();
+    if ((!data && size) || size > static_cast<size_t>(std::numeric_limits<ULONG>::max()))
+        return false;
+
+    BCRYPT_ALG_HANDLE algorithm = nullptr;
+    BCRYPT_HASH_HANDLE hash = nullptr;
+    DWORD objectSize = 0;
+    DWORD hashSize = 0;
+    DWORD bytesReturned = 0;
+    std::vector<uint8_t> hashObject;
+    std::array<uint8_t, 32> digest{};
+    NTSTATUS status = BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0);
+    if (!BCRYPT_SUCCESS(status)) return false;
+
+    status = BCryptGetProperty(algorithm, BCRYPT_OBJECT_LENGTH,
+        reinterpret_cast<PUCHAR>(&objectSize), sizeof(objectSize), &bytesReturned, 0);
+    if (BCRYPT_SUCCESS(status)) {
+        status = BCryptGetProperty(algorithm, BCRYPT_HASH_LENGTH,
+            reinterpret_cast<PUCHAR>(&hashSize), sizeof(hashSize), &bytesReturned, 0);
+    }
+    if (BCRYPT_SUCCESS(status) && hashSize == digest.size()) {
+        hashObject.resize(objectSize);
+        status = BCryptCreateHash(algorithm, &hash, hashObject.data(), objectSize, nullptr, 0, 0);
+    } else if (BCRYPT_SUCCESS(status)) {
+        status = STATUS_INVALID_PARAMETER;
+    }
+    if (BCRYPT_SUCCESS(status) && size) {
+        status = BCryptHashData(hash, const_cast<PUCHAR>(static_cast<const UCHAR*>(data)),
+            static_cast<ULONG>(size), 0);
+    }
+    if (BCRYPT_SUCCESS(status)) {
+        status = BCryptFinishHash(hash, digest.data(), static_cast<ULONG>(digest.size()), 0);
+    }
+    if (hash) BCryptDestroyHash(hash);
+    BCryptCloseAlgorithmProvider(algorithm, 0);
+    if (!BCRYPT_SUCCESS(status)) return false;
+
+    static constexpr char hex[] = "0123456789abcdef";
+    result.reserve(digest.size() * 2);
+    for (uint8_t byte : digest) {
+        result.push_back(hex[byte >> 4]);
+        result.push_back(hex[byte & 0x0f]);
+    }
+    return true;
+}
+
+void LogModuleFingerprint(const char* role, HMODULE module) {
+    if (!role || !module) {
+        Log("MODULE_FINGERPRINT_FAILED role=%s reason=invalid-module", role ? role : "(null)");
+        return;
+    }
+
+    char path[MAX_PATH] = {};
+    const DWORD pathLength = GetModuleFileNameA(module, path, ARRAYSIZE(path));
+    if (!pathLength || pathLength >= ARRAYSIZE(path)) {
+        Log("MODULE_FINGERPRINT_FAILED role=%s reason=module-path-error win32=%lu",
+            role, GetLastError());
+        return;
+    }
+
+    std::vector<uint8_t> image;
+    if (!ReadFileBytes(path, image)) {
+        Log("MODULE_FINGERPRINT_FAILED role=%s path=%s reason=read-failed win32=%lu",
+            role, path, GetLastError());
+        return;
+    }
+
+    std::string digest;
+    if (!Sha256Hex(image.data(), image.size(), digest)) {
+        Log("MODULE_FINGERPRINT_FAILED role=%s path=%s reason=sha256-failed bytes=%zu",
+            role, path, image.size());
+        return;
+    }
+    Log("MODULE_FINGERPRINT role=%s path=%s bytes=%zu sha256=%s",
+        role, path, image.size(), digest.c_str());
+}
 
 UINT MapRegister(char kind, UINT space, UINT reg) {
     if (!space) return reg;

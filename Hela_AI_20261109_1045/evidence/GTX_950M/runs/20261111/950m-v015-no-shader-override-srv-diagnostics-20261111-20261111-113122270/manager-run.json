@@ -1,0 +1,11 @@
+﻿{
+    "schema":  "hela-proxy-manager-run/v1",
+    "run_id":  "950m-v015-no-shader-override-srv-diagnostics-20261111-20261111-113122270",
+    "test_version":  "950m-v015-no-shader-override-srv-diagnostics-20261111",
+    "started_utc":  "2026-11-11T11:31:22.2850562Z",
+    "package_path":  "D:\\SteamLibrary\\steamapps\\common\\Hela Demo\\Hela\\Binaries\\Win64\\D3D12On11Patch\\versions\\950m-v015-no-shader-override-srv-diagnostics-20261111",
+    "target_present":  400,
+    "status":  "completed",
+    "completed_utc":  "2026-11-11T11:32:13.5090344Z",
+    "restored":  true
+}

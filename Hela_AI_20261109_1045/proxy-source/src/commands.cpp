@@ -226,6 +226,78 @@ void LogTargetIndexData(ExecState& state, UINT hit, ID3D11Buffer* indexBuffer,
         effectiveIndices[3], effectiveIndices[4], effectiveIndices[5]);
 }
 
+void LogTargetVertexData(ExecState& state, UINT hit, ID3D11Buffer* vertexBuffer,
+    UINT stride, UINT vertexOffset) {
+    constexpr UINT vertexCount = 4;
+    if (!state.c || !vertexBuffer || !stride || stride > 256) {
+        Log("[TARGET_VERTEX_DATA] hit=%u status=invalid_context_or_layout stride=%u",
+            hit, stride);
+        return;
+    }
+
+    const UINT64 byteCount = static_cast<UINT64>(stride) * vertexCount;
+    D3D11_BUFFER_DESC sourceDesc{};
+    vertexBuffer->GetDesc(&sourceDesc);
+    if (vertexOffset > sourceDesc.ByteWidth ||
+        byteCount > sourceDesc.ByteWidth - vertexOffset) {
+        Log("[TARGET_VERTEX_DATA] hit=%u status=buffer_range_invalid offset=%u stride=%u "
+            "vertices=%u buffer_bytes=%u",
+            hit, vertexOffset, stride, vertexCount, sourceDesc.ByteWidth);
+        return;
+    }
+
+    D3D11_BUFFER_DESC stagingDesc{};
+    stagingDesc.ByteWidth = static_cast<UINT>(byteCount);
+    stagingDesc.Usage = D3D11_USAGE_STAGING;
+    stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    Ptr<ID3D11Buffer> staging;
+    const HRESULT createResult = state.dev && state.dev->d11
+        ? state.dev->d11->CreateBuffer(&stagingDesc, nullptr, staging.Put())
+        : E_POINTER;
+    if (FAILED(createResult)) {
+        Log("[TARGET_VERTEX_DATA] hit=%u status=staging-create-failed hr=0x%08lx",
+            hit, createResult);
+        return;
+    }
+
+    D3D11_BOX sourceBox{};
+    sourceBox.left = vertexOffset;
+    sourceBox.right = vertexOffset + static_cast<UINT>(byteCount);
+    sourceBox.top = 0;
+    sourceBox.bottom = 1;
+    sourceBox.front = 0;
+    sourceBox.back = 1;
+    state.c->CopySubresourceRegion(staging.Get(), 0, 0, 0, 0,
+        vertexBuffer, 0, &sourceBox);
+
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    const HRESULT mapResult = state.c->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+    if (FAILED(mapResult)) {
+        Log("[TARGET_VERTEX_DATA] hit=%u status=staging-map-failed hr=0x%08lx",
+            hit, mapResult);
+        return;
+    }
+    if (!mapped.pData) {
+        state.c->Unmap(staging.Get(), 0);
+        Log("[TARGET_VERTEX_DATA] hit=%u status=invalid-mapped-data", hit);
+        return;
+    }
+
+    const auto* bytes = static_cast<const uint8_t*>(mapped.pData);
+    for (UINT vertex = 0; vertex < vertexCount; ++vertex) {
+        std::string hex;
+        hex.reserve(static_cast<size_t>(stride) * 2);
+        for (UINT byte = 0; byte < stride; ++byte) {
+            char value[3]{};
+            snprintf(value, sizeof(value), "%02x", bytes[vertex * stride + byte]);
+            hex += value;
+        }
+        Log("[TARGET_VERTEX_DATA] hit=%u vertex=%u byte_offset=%u stride=%u hex=%s",
+            hit, vertex, vertexOffset + vertex * stride, stride, hex.c_str());
+    }
+    state.c->Unmap(staging.Get(), 0);
+}
+
 void LogTargetDrawDiagnostic(ExecState& state, UINT indexCount, UINT instanceCount,
     UINT startIndex, INT baseVertex, UINT startInstance,
     TargetDrawPipelineStats& pipelineStats) {
@@ -343,11 +415,13 @@ void LogTargetDrawDiagnostic(ExecState& state, UINT indexCount, UINT instanceCou
     UINT psTextureWidth = 0;
     UINT psTextureHeight = 0;
     DXGI_FORMAT psTextureFormat = DXGI_FORMAT_UNKNOWN;
+    HRESULT psTextureQueryResult = E_NOINTERFACE;
+    Ptr<ID3D11Texture2D> psTexture;
+    D3D11_TEXTURE2D_DESC psTextureDesc{};
     if (psResourceDimension == D3D11_RESOURCE_DIMENSION_TEXTURE2D) {
-        Ptr<ID3D11Texture2D> psTexture;
-        if (SUCCEEDED(psResource->QueryInterface(__uuidof(ID3D11Texture2D),
-                reinterpret_cast<void**>(psTexture.Put())))) {
-            D3D11_TEXTURE2D_DESC psTextureDesc{};
+        psTextureQueryResult = psResource->QueryInterface(__uuidof(ID3D11Texture2D),
+            reinterpret_cast<void**>(psTexture.Put()));
+        if (SUCCEEDED(psTextureQueryResult)) {
             psTexture->GetDesc(&psTextureDesc);
             psTextureWidth = psTextureDesc.Width;
             psTextureHeight = psTextureDesc.Height;
@@ -373,6 +447,67 @@ void LogTargetDrawDiagnostic(ExecState& state, UINT indexCount, UINT instanceCou
         static_cast<unsigned int>(psSamplerDesc.AddressV),
         static_cast<unsigned int>(psSamplerDesc.AddressW));
 
+    if (hit == 1) {
+        if (!psTexture) {
+            Log("[TARGET_TEXEL] hit=%u status=not_texture2d query_hr=0x%08lx dimension=%u",
+                hit, psTextureQueryResult, static_cast<unsigned int>(psResourceDimension));
+        } else if (!state.dev || !state.dev->d11) {
+            Log("[TARGET_TEXEL] hit=%u status=no_device resource=%p", hit, psResource.Get());
+        } else if (psTextureDesc.Width != 1 || psTextureDesc.Height != 1 ||
+            psTextureDesc.ArraySize != 1 || psTextureDesc.MipLevels != 1 ||
+            psTextureDesc.SampleDesc.Count != 1 ||
+            (psTextureDesc.Format != DXGI_FORMAT_R8G8B8A8_TYPELESS &&
+             psTextureDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM &&
+             psTextureDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB)) {
+            Log("[TARGET_TEXEL] hit=%u status=unsupported size=%ux%u array=%u mips=%u "
+                "samples=%u format=%u",
+                hit, psTextureDesc.Width, psTextureDesc.Height, psTextureDesc.ArraySize,
+                psTextureDesc.MipLevels, psTextureDesc.SampleDesc.Count,
+                static_cast<unsigned int>(psTextureDesc.Format));
+        } else {
+            D3D11_TEXTURE2D_DESC stagingDesc = psTextureDesc;
+            stagingDesc.Usage = D3D11_USAGE_STAGING;
+            stagingDesc.BindFlags = 0;
+            stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+            stagingDesc.MiscFlags = 0;
+            Ptr<ID3D11Texture2D> staging;
+            const HRESULT createResult =
+                state.dev->d11->CreateTexture2D(&stagingDesc, nullptr, staging.Put());
+            if (FAILED(createResult)) {
+                Log("[TARGET_TEXEL] hit=%u status=staging-create-failed hr=0x%08lx "
+                    "resource=%p format=%u",
+                    hit, createResult, psResource.Get(),
+                    static_cast<unsigned int>(psTextureDesc.Format));
+            } else {
+                state.c->CopyResource(staging.Get(), psTexture.Get());
+                D3D11_MAPPED_SUBRESOURCE mapped{};
+                const HRESULT mapResult =
+                    state.c->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+                if (FAILED(mapResult)) {
+                    Log("[TARGET_TEXEL] hit=%u status=staging-map-failed hr=0x%08lx "
+                        "resource=%p",
+                        hit, mapResult, psResource.Get());
+                } else if (!mapped.pData || mapped.RowPitch < 4) {
+                    state.c->Unmap(staging.Get(), 0);
+                    Log("[TARGET_TEXEL] hit=%u status=invalid-mapped-data row_pitch=%u",
+                        hit, mapped.RowPitch);
+                } else {
+                    const auto* rgba = static_cast<const uint8_t*>(mapped.pData);
+                    Log("[TARGET_TEXEL] hit=%u status=ok srv=%p resource=%p "
+                        "srv_format=%u resource_format=%u rgba=(%u,%u,%u,%u)",
+                        hit, psSrv.Get(), psResource.Get(),
+                        static_cast<unsigned int>(psSrvDesc.Format),
+                        static_cast<unsigned int>(psTextureDesc.Format),
+                        static_cast<unsigned int>(rgba[0]),
+                        static_cast<unsigned int>(rgba[1]),
+                        static_cast<unsigned int>(rgba[2]),
+                        static_cast<unsigned int>(rgba[3]));
+                    state.c->Unmap(staging.Get(), 0);
+                }
+            }
+        }
+    }
+
     std::array<ID3D11Buffer*, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> rawVertexBuffers{};
     std::array<UINT, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> vertexStrides{};
     std::array<UINT, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> vertexOffsets{};
@@ -384,6 +519,9 @@ void LogTargetDrawDiagnostic(ExecState& state, UINT indexCount, UINT instanceCou
         if (!rawVertexBuffers[slot]) continue;
         vertexBufferMask |= 1u << slot;
         ++vertexBufferCount;
+        if (hit == 1 && slot == 0)
+            LogTargetVertexData(state, hit, rawVertexBuffers[slot],
+                vertexStrides[slot], vertexOffsets[slot]);
         rawVertexBuffers[slot]->Release();
     }
     D3D11_PRIMITIVE_TOPOLOGY topology = D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
@@ -457,8 +595,9 @@ void LogTargetDrawDiagnostic(ExecState& state, UINT indexCount, UINT instanceCou
     Log("[TARGET_DRAW_DIAG] hit=%u viewports=%u first_viewport=(%.1f,%.1f,%.1f,%.1f) "
         "scissors=%u first_scissor=(%ld,%ld,%ld,%ld) raster_bound=%u cull=%u scissor_enable=%u "
         "depth_bound=%u depth_enable=%u depth_func=%u stencil_enable=%u depth_write=%u "
-        "blend_bound=%u blend_enable=%u write_mask=0x%x blend_factor=(%.6g,%.6g,%.6g,%.6g) "
-        "sample_mask=0x%08x stencil_ref=%u",
+        "blend_bound=%u blend_enable=%u blend_src=%u blend_dst=%u blend_op=%u "
+        "blend_src_alpha=%u blend_dst_alpha=%u blend_op_alpha=%u write_mask=0x%x "
+        "blend_factor=(%.6g,%.6g,%.6g,%.6g) sample_mask=0x%08x stencil_ref=%u",
         hit, viewportCount,
         viewportCount ? viewports[0].TopLeftX : 0.0f,
         viewportCount ? viewports[0].TopLeftY : 0.0f,
@@ -477,6 +616,12 @@ void LogTargetDrawDiagnostic(ExecState& state, UINT indexCount, UINT instanceCou
         depthEnable, depthFunc, stencilEnable, depthWrite,
         blendState ? 1u : 0u,
         blendState ? static_cast<unsigned int>(blendDesc.RenderTarget[0].BlendEnable) : 0u,
+        static_cast<unsigned int>(blendDesc.RenderTarget[0].SrcBlend),
+        static_cast<unsigned int>(blendDesc.RenderTarget[0].DestBlend),
+        static_cast<unsigned int>(blendDesc.RenderTarget[0].BlendOp),
+        static_cast<unsigned int>(blendDesc.RenderTarget[0].SrcBlendAlpha),
+        static_cast<unsigned int>(blendDesc.RenderTarget[0].DestBlendAlpha),
+        static_cast<unsigned int>(blendDesc.RenderTarget[0].BlendOpAlpha),
         blendState ? static_cast<unsigned int>(blendDesc.RenderTarget[0].RenderTargetWriteMask)
                    : static_cast<unsigned int>(D3D11_COLOR_WRITE_ENABLE_ALL),
         blendFactor[0], blendFactor[1], blendFactor[2], blendFactor[3], sampleMask, stencilRef);
@@ -651,20 +796,23 @@ void LogSkippedDraw(ExecState& state, const char* operation,
         char context[512]{};
         snprintf(context, sizeof(context),
             "Skipped %s rtv_slot=%u pso=%p vs_hash=%016llx ps_hash=%016llx "
-            "missing_vs=%u missing_shader=%u arg0=%u arg1=%u",
+            "missing_vs=%u missing_shader=%u missing_stage_mask=0x%02x arg0=%u arg1=%u",
             operation, i, reinterpret_cast<void*>(state.graphicsPipelineIdentity),
             static_cast<unsigned long long>(state.graphicsShaderHash),
             static_cast<unsigned long long>(state.graphicsPixelShaderHash),
             state.graphicsPlaceholderVs ? 1u : 0u, state.skipDraws ? 1u : 0u,
+            state.graphicsMissingShaderStages,
             arg0, arg1);
         TrackTargetOperation(resource, context, TargetHistoryKind::SkippedDraw);
     }
     Log("[RENDER_TRACE] [DRAW_SKIPPED] api=%s pipeline=%p vs-hash=%016llx ps-hash=%016llx "
-        "missing-vs=%u missing-shader=%u arg0=%u arg1=%u rtvs=%u backbuffer=%u",
+        "missing-vs=%u missing-shader=%u missing-stage-mask=0x%02x "
+        "reason=missing-sm5-override arg0=%u arg1=%u rtvs=%u backbuffer=%u",
         operation, reinterpret_cast<void*>(state.graphicsPipelineIdentity),
         static_cast<unsigned long long>(state.graphicsShaderHash),
         static_cast<unsigned long long>(state.graphicsPixelShaderHash),
         state.graphicsPlaceholderVs ? 1u : 0u, state.skipDraws ? 1u : 0u,
+        state.graphicsMissingShaderStages,
         arg0, arg1, state.numRtv, state.rtvBackbuffer ? 1u : 0u);
 }
 
@@ -1088,6 +1236,7 @@ void BindDirectDescriptor(ExecState& state, const RootParam& param, const RootAr
 }
 
 void BindRootSnapshot(ExecState& state, const std::shared_ptr<const BindSnap>& snapshot, bool compute) {
+    static std::atomic<UINT> failedSrvBindingLogCount{0};
     static std::atomic<UINT> targetRootBindingLogCount{0};
     constexpr uint64_t targetVs = 0x20e0826b236597a1ULL;
     constexpr uint64_t targetPs0 = 0x44b0a992c2304254ULL;
@@ -1169,6 +1318,20 @@ void BindRootSnapshot(ExecState& state, const std::shared_ptr<const BindSnap>& s
                         break;
                     }
                     const Descriptor& descriptor = heap->items[baseIndex + range.offset + n];
+                    if (descriptor.diagnosticFailureId &&
+                        failedSrvBindingLogCount.fetch_add(1, std::memory_order_relaxed) < 16) {
+                        Log("[SRV_CREATE_FAIL_BOUND] fail_id=%u hr=0x%08lx compute=%u "
+                            "pso=%p vs=%016llx ps=%016llx cs=%016llx heap=%p heap_index=%u "
+                            "root_param=%u range_type=%u register=%u stages=0x%x",
+                            descriptor.diagnosticFailureId, descriptor.diagnosticFailureResult,
+                            compute ? 1u : 0u,
+                            reinterpret_cast<void*>(state.graphicsPipelineIdentity),
+                            static_cast<unsigned long long>(state.graphicsShaderHash),
+                            static_cast<unsigned long long>(state.graphicsPixelShaderHash),
+                            static_cast<unsigned long long>(state.computeShaderHash),
+                            heap, baseIndex + range.offset + n, i,
+                            static_cast<unsigned int>(range.type), range.slots[n], stages);
+                    }
                     if (logTarget && range.slots[n] == 0 &&
                         (range.type == D3D12_DESCRIPTOR_RANGE_TYPE_SRV ||
                          range.type == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)) {
@@ -1251,9 +1414,11 @@ void ApplyPipeline(ExecState& state, PipelineState* pipeline) {
         state.hasComputePipeline = false;
         state.graphicsPlaceholderVs = false;
         state.computePlaceholderCs = false;
+        state.graphicsMissingShaderStages = 0;
         state.graphicsPipelineIdentity = 0;
         state.graphicsShaderHash = 0;
         state.graphicsPixelShaderHash = 0;
+        state.computeShaderHash = 0;
         return;
     }
     state.skipDraws = !pipeline->compute && pipeline->missingShader;
@@ -1262,10 +1427,12 @@ void ApplyPipeline(ExecState& state, PipelineState* pipeline) {
     state.hasComputePipeline = pipeline->compute;
     state.graphicsPlaceholderVs = !pipeline->compute && pipeline->missingVs;
     state.computePlaceholderCs = pipeline->compute && pipeline->missingCs;
+    state.graphicsMissingShaderStages = pipeline->compute ? 0 : pipeline->missingShaderStages;
     state.graphicsPipelineIdentity = pipeline->compute
         ? 0 : reinterpret_cast<uintptr_t>(pipeline);
     state.graphicsShaderHash = pipeline->compute ? 0 : pipeline->shaderHash;
     state.graphicsPixelShaderHash = pipeline->compute ? 0 : pipeline->pixelShaderHash;
+    state.computeShaderHash = pipeline->compute ? pipeline->shaderHash : 0;
     if (pipeline->missingShader)
         Log("Skipped execution for PSO placeholder with missing SM5 shader override");
     state.c->VSSetShader(pipeline->vs.Get(), nullptr, 0);
@@ -1443,8 +1610,11 @@ void STDMETHODCALLTYPE CommandList::ClearState(ID3D12PipelineState* initialState
         state.hasComputePipeline = false;
         state.graphicsPlaceholderVs = false;
         state.computePlaceholderCs = false;
+        state.graphicsMissingShaderStages = 0;
         state.graphicsPipelineIdentity = 0;
         state.graphicsShaderHash = 0;
+        state.graphicsPixelShaderHash = 0;
+        state.computeShaderHash = 0;
         state.c->ClearState();
         if (keep) {
             auto* pipeline = dynamic_cast<PipelineState*>(keep.Get());

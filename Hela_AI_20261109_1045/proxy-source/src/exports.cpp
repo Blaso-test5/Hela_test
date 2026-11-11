@@ -164,6 +164,15 @@ extern "C" __declspec(dllexport) void WINAPI D3D12On11LogMessage(const char* mes
     Log("%s", message);
 }
 
+extern "C" __declspec(dllexport) void WINAPI D3D12On11LogModuleFingerprint(
+    HMODULE module, const char* role) {
+    if (FAILED(EnsureConfig())) {
+        OutputDebugStringA("d3d12on11: could not initialize logging configuration\n");
+        return;
+    }
+    LogModuleFingerprint(role, module);
+}
+
 extern "C" __declspec(dllexport) void WINAPI D3D12On11TraceCaller(
     const char* api, const void* returnAddress) {
     if (!api) return;

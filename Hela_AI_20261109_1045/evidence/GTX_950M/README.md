@@ -1,12 +1,32 @@
 # GTX 950M Hela test
 
-Run date: 2026-11-10
+Run date: 2026-11-11
 
 For the latest continuation state and next diagnostic run, see
 [`checkpoint-20261111.md`](./checkpoint-20261111.md).
 
 This directory contains only evidence from the Hela run on this PC's NVIDIA
 GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
+
+## Latest status — 2026-11-11
+
+- v012's `Load` probe changed from encoded zero at Present #100 to encoded
+  ones by #1300. These are diagnostic shader colors, not gameplay.
+- v013's `SampleLevel` probe was encoded zero at #100. Its log stops at #800;
+  no verified #1300 capture exists.
+- v014's no-override baseline is uniformly black at #100; at #400 the
+  matched RTV history reports 66 skipped draws. Real Hela rendering is still
+  not demonstrated on this GPU.
+- **v015 managed run:** Present #100 and #400 source/backbuffer BMPs are
+  uniformly black (`0/921,600` non-black pixels). No SRV creation failure or
+  `0x8007000e` was logged; 64 target descriptor writes were observed. This
+  does not explain the earlier failure or demonstrate scene rendering: the
+  final heartbeat has zero successful draws and 947 VS skips. See the
+  [v015 run analysis](./runs/20261111/950m-v015-no-shader-override-srv-diagnostics-20261111-20261111-113122270/README.md).
+- The manager verified v015's runtime fingerprints and restored the exact
+  pre-run v001 DLLs and six installed shader overrides. Its run folder retains
+  the log, report, four BMPs, manifest, and restore point. See the
+  [checkpoint](./checkpoint-20261111.md) for the next diagnostic step.
 
 ## Result
 
@@ -258,3 +278,47 @@ GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
   Present #100's source history has 66 draws, zero skipped draws, and the
   target VS/PS hashes. Source and backbuffer readbacks remain black, so the
   rendering cause is still undetermined.
+
+## November 11 real-pixel-shader runs
+
+- **v005:** both converted game PS shaders loaded as SM5 overrides with the
+  fullscreen VS test override. The t0 texel was white
+  (`RGBA=(255,255,255,255)`), but source and backbuffer Present #100 BMPs were
+  fully black (`0/921,600` non-black pixels). This rules out a black t0 for
+  the measured draws.
+- **v006:** the target input layout and first four vertices were read back.
+  Their `ATTRIBUTE3` colors are black RGB/alpha 1, and both target PS shaders
+  consume that color for RGB. The Present #100 history contains only the
+  target VS and those two PS hashes (66 draws, no skips or clears).
+- The v006 heartbeat reached 465 Presents with 2,126 compute PSOs created and
+  zero compute dispatches executed. The measured quad's output is explained,
+  but the missing scene is not. Full setup, interpretation, hashes, raw logs,
+  reports, and BMPs are archived under
+  [`runs/20261111`](./runs/20261111/).
+- v005/v006 restored the game directory to v001 and verified its DLL hashes.
+- **v007:** the white-`COLOR` VS override was confirmed loaded with both
+  converted PS overrides and white t0, but Present #100 source/backbuffer
+  stayed entirely black. Black vertex colors alone are not sufficient to
+  explain the readback; see
+  [`950m-v007-white-vertex-color-20261111`](./runs/20261111/950m-v007-white-vertex-color-20261111/README.md).
+- New v008 tooling now requires a run manifest that pins both proxy DLLs and
+  the exact full `.cso` override set before launching. The proxy also logs
+  the SHA-256 of loaded modules and shader overrides; the launcher rejects
+  missing or mismatched runtime attestations.
+- **v008:** with both target PSs returning solid white, the source and
+  backbuffer readbacks became entirely white (`921,600/921,600` non-black).
+  Runtime DLL and all required shader fingerprints matched the run manifest
+  both before and after the test. This proves the controlled draw/copy path
+  works and narrows the remaining black output to the converted PS logic or
+  its inputs/translation; it is not normal game rendering. Details and all
+  hashes are in
+  [`950m-v008-solid-ps-fingerprint-20261111`](./runs/20261111/950m-v008-solid-ps-fingerprint-20261111/README.md).
+- **v009:** both target PSs returned sampled t0 RGB multiplied by the
+  interpolated VS `COLOR`, with gamma and constant-buffer adjustments
+  bypassed. The white t0 probe and pipeline statistics confirm the target
+  draws execute on the captured source resource (921,600 and 230,400 PS
+  invocations). Both Present #100 readbacks nevertheless remained entirely
+  black. The actual per-pixel PS sample and interpolated inputs are still
+  unknown; the next test will emit sampled t0, `COLOR`, and their product in
+  separate channels. Evidence and hashes are archived in
+  [`950m-v009-sample-color-fingerprint-20261111`](./runs/20261111/950m-v009-sample-color-fingerprint-20261111/README.md).

@@ -25,6 +25,7 @@ D3D12ON11_BRIDGE_API void WINAPI D3D12On11Flush(IUnknown* source);
 D3D12ON11_BRIDGE_API void WINAPI D3D12On11DumpBackbufferSourceHistory();
 D3D12ON11_BRIDGE_API void WINAPI D3D12On11LogUnsupported(const char* operation);
 D3D12ON11_BRIDGE_API void WINAPI D3D12On11LogMessage(const char* message);
+D3D12ON11_BRIDGE_API void WINAPI D3D12On11LogModuleFingerprint(HMODULE module, const char* role);
 D3D12ON11_BRIDGE_API void WINAPI D3D12On11TraceCaller(const char* api, const void* returnAddress);
 D3D12ON11_BRIDGE_API void WINAPI D3D12On11TraceApi(const char* api);
 D3D12ON11_BRIDGE_API void WINAPI D3D12On11TraceSwapChainCreated();

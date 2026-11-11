@@ -256,6 +256,34 @@ void STDMETHODCALLTYPE Device::CreateShaderResourceView(ID3D12Resource* sourceRe
         : CreateTextureSrv(this, resource, *source, descriptor);
     Log("CreateShaderResourceView result=0x%08lx", result);
     if (FAILED(result) && Cfg().diagnosticRenderTrace) {
+        static std::atomic<UINT> nextFailureId{0};
+        static std::atomic<UINT> failureLogCount{0};
+        descriptor.diagnosticFailureId =
+            nextFailureId.fetch_add(1, std::memory_order_relaxed) + 1;
+        descriptor.diagnosticFailureResult = result;
+        if (failureLogCount.fetch_add(1, std::memory_order_relaxed) < 16) {
+            UINT descriptorIndex = UINT_MAX;
+            DescriptorHeap* descriptorHeap = FindHeapByCpu(handle.ptr, &descriptorIndex);
+            UINT structureStride = 0;
+            UINT64 firstElement = 0;
+            UINT numElements = 0;
+            if (source->ViewDimension == D3D12_SRV_DIMENSION_BUFFER) {
+                structureStride = source->Buffer.StructureByteStride;
+                firstElement = source->Buffer.FirstElement;
+                numElements = source->Buffer.NumElements;
+            }
+            Log("[SRV_CREATE_FAIL] fail_id=%u hr=0x%08lx heap=%p heap_index=%u "
+                "resource=%p resource_width=%llu view_dim=%u format=%u "
+                "stride=%u first_element=%llu num_elements=%llu",
+                descriptor.diagnosticFailureId, result, descriptorHeap, descriptorIndex,
+                resource, static_cast<unsigned long long>(resource->desc.Width),
+                static_cast<unsigned int>(source->ViewDimension),
+                static_cast<unsigned int>(source->Format), structureStride,
+                static_cast<unsigned long long>(firstElement),
+                static_cast<unsigned long long>(numElements));
+        }
+    }
+    if (FAILED(result) && Cfg().diagnosticRenderTrace) {
         UINT64 firstElement = 0;
         UINT64 numElements = 0;
         UINT firstMip = 0;

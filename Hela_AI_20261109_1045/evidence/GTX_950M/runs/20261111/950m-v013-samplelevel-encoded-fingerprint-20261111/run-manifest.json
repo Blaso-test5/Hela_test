@@ -1,0 +1,22 @@
+﻿{
+    "schema":  "hela-run-manifest/v1",
+    "testVersion":  "950m-v013-samplelevel-encoded-fingerprint-20261111",
+    "runtimeAttestation":  "module-and-shader-sha256",
+    "runtime":  {
+                    "d3d12":  "58AF854FC49EEC4D78F011DF7E7A39AF568631BF1B687337CD20460FA91DCE84",
+                    "dxgi":  "81EC9BD66291840983D3FBAF24CCF9E1A5F7884D6A334F6C8DB59D20135AC6A4"
+                },
+    "overrides":  {
+                      "20e0826b236597a1.cso":  "0DD0F85D48D1E27852B99A696017A5DBBE84AAA4562271EDCF139D94AB8B39F8",
+                      "25e657206d761172.cso":  "84E92D1475080AC8919F855A2EB6F06E8C0829DAD0FE76C5E453B6D1101E99AD",
+                      "38acdb88bb8801b9.cso":  "0724669DE377F5BCD07CCB96F3B3172E955D1FA7C56C99E09C997601D12DF9CC",
+                      "44b0a992c2304254.cso":  "C8120FE394213FD65BC2967459807F0C3F851DE2AE2B69690B31166CFF5AC7E1",
+                      "74867736557b00e8.cso":  "FD8DBEFB9ABA6699FA8BFED527A6388ED65682B8E9CE28CD529F1F7112FC3E40",
+                      "d77600bde0076c33.cso":  "576627387F3BCD1676ABB819C76C061CC8E315029BAE0E12BFD1B3CDDF47DD51"
+                  },
+    "requiredOverrides":  [
+                              "20e0826b236597a1.cso",
+                              "44b0a992c2304254.cso",
+                              "d77600bde0076c33.cso"
+                          ]
+}

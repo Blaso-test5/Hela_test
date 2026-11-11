@@ -11,6 +11,12 @@ bool HasBytecode(const D3D12_SHADER_BYTECODE& bytecode) {
     return bytecode.pShaderBytecode && bytecode.BytecodeLength;
 }
 
+uint64_t ShaderHash(const D3D12_SHADER_BYTECODE& bytecode) {
+    return HasBytecode(bytecode)
+        ? Fnv1a64(bytecode.pShaderBytecode, bytecode.BytecodeLength)
+        : 0;
+}
+
 bool ShouldLogShaderHash(uint64_t hash) {
     std::lock_guard<std::mutex> lock(g_shaderCacheMutex);
     return g_loggedShaders.insert(hash).second;
@@ -55,10 +61,16 @@ HRESULT LoadShader(Device* device, const char* stage, const D3D12_SHADER_BYTECOD
             Log("%s replacement %s is not a valid SM5 DXBC shader", stage, overridePath.c_str());
             return DXGI_ERROR_INVALID_CALL;
         }
+        std::string overrideSha256;
+        if (!Sha256Hex(overrideBytes.data(), overrideBytes.size(), overrideSha256)) {
+            Log("SHADER BLOCKED stage=%s hash=%s reason=override-sha256-failed path=%s",
+                stage, hashText.c_str(), overridePath.c_str());
+            return HRESULT_FROM_WIN32(ERROR_CRC);
+        }
         resolved = std::move(overrideBytes);
         if (firstSeen) {
-            Log("SHADER READY stage=%s hash=%s source=SM5-override path=%s bytes=%zu model=%u_%u",
-                stage, hashText.c_str(), overridePath.c_str(), resolved.size(),
+            Log("SHADER READY stage=%s hash=%s source=SM5-override path=%s bytes=%zu sha256=%s model=%u_%u",
+                stage, hashText.c_str(), overridePath.c_str(), resolved.size(), overrideSha256.c_str(),
                 replacement.versionMajor, replacement.versionMinor);
         }
         return S_OK;
@@ -80,7 +92,8 @@ HRESULT LoadShader(Device* device, const char* stage, const D3D12_SHADER_BYTECOD
         } else if (original.hasDxil) {
             Log("SHADER DUMP_SKIPPED stage=%s hash=%s reason=dump-disabled", stage, hashText.c_str());
         }
-        Log("SHADER PLACEHOLDER stage=%s hash=%s reason=no-usable-SM5-bytecode DXBC=%u DXIL=%u overrides=%s",
+        Log("SHADER PLACEHOLDER stage=%s hash=%s reason=no-usable-SM5-bytecode DXBC=%u DXIL=%u "
+            "action=provide-sm5-override-or-add-dxil-translation overrides=%s",
             stage, hashText.c_str(), original.isDxbc, original.hasDxil, overridePath.c_str());
     }
     return original.hasDxil ? S_FALSE : DXGI_ERROR_UNSUPPORTED;
@@ -346,27 +359,61 @@ HRESULT PipelineState::CreateGraphics(Device* device, const D3D12_GRAPHICS_PIPEL
     HRESULT result = CheckRootSignature(desc->pRootSignature, pipeline->rootSig);
     if (FAILED(result)) return result;
     bool anyMissingOverride = false;
+    UINT missingShaderStages = 0;
     std::vector<uint8_t> vsCode;
     if (FAILED(result = CreateVertexShader(device, desc->VS, pipeline->vs, vsCode))) return result;
     pipeline->missingVs = result == S_FALSE;
     pipeline->shaderHash = Fnv1a64(desc->VS.pShaderBytecode, desc->VS.BytecodeLength);
-    if (result == S_FALSE) anyMissingOverride = true;
+    if (pipeline->shaderHash == 0x20e0826b236597a1ULL && desc->InputLayout.NumElements) {
+        if (!desc->InputLayout.pInputElementDescs) {
+            Log("[TARGET_INPUT_LAYOUT] status=missing-elements count=%u",
+                desc->InputLayout.NumElements);
+        } else {
+            Log("[TARGET_INPUT_LAYOUT] elements=%u", desc->InputLayout.NumElements);
+            for (UINT i = 0; i < desc->InputLayout.NumElements; ++i) {
+                const auto& input = desc->InputLayout.pInputElementDescs[i];
+                Log("[TARGET_INPUT_LAYOUT] element=%u semantic=%s semantic_index=%u "
+                    "slot=%u format=%u offset=%u classification=%u step_rate=%u",
+                    i, input.SemanticName ? input.SemanticName : "(null)",
+                    input.SemanticIndex, input.InputSlot,
+                    static_cast<unsigned int>(input.Format), input.AlignedByteOffset,
+                    static_cast<unsigned int>(input.InputSlotClass),
+                    input.InstanceDataStepRate);
+            }
+        }
+    }
+    if (result == S_FALSE) {
+        anyMissingOverride = true;
+        missingShaderStages |= 1u << 0;
+    }
     if (HasBytecode(desc->PS)) {
         if (FAILED(result = CreatePixelShader(device, desc->PS, pipeline->ps))) return result;
         pipeline->pixelShaderHash = Fnv1a64(desc->PS.pShaderBytecode, desc->PS.BytecodeLength);
-        if (result == S_FALSE) anyMissingOverride = true;
+        if (result == S_FALSE) {
+            anyMissingOverride = true;
+            missingShaderStages |= 1u << 1;
+        }
     }
     if (HasBytecode(desc->GS)) {
         if (FAILED(result = CreateGeometryShader(device, desc->GS, pipeline->gs))) return result;
-        if (result == S_FALSE) anyMissingOverride = true;
+        if (result == S_FALSE) {
+            anyMissingOverride = true;
+            missingShaderStages |= 1u << 2;
+        }
     }
     if (HasBytecode(desc->HS)) {
         if (FAILED(result = CreateHullShader(device, desc->HS, pipeline->hs))) return result;
-        if (result == S_FALSE) anyMissingOverride = true;
+        if (result == S_FALSE) {
+            anyMissingOverride = true;
+            missingShaderStages |= 1u << 3;
+        }
     }
     if (HasBytecode(desc->DS)) {
         if (FAILED(result = CreateDomainShader(device, desc->DS, pipeline->ds))) return result;
-        if (result == S_FALSE) anyMissingOverride = true;
+        if (result == S_FALSE) {
+            anyMissingOverride = true;
+            missingShaderStages |= 1u << 4;
+        }
     }
     if (FAILED(result = CreateInputLayout(device, desc->InputLayout, vsCode, pipeline->il))) return result;
     if (FAILED(result = CreateRasterizer(device, desc->RasterizerState, pipeline->rs))) return result;
@@ -375,15 +422,35 @@ HRESULT PipelineState::CreateGraphics(Device* device, const D3D12_GRAPHICS_PIPEL
 
     pipeline->sampleMask = desc->SampleMask;
     pipeline->missingShader = anyMissingOverride;
+    pipeline->missingShaderStages = missingShaderStages;
     if (Cfg().diagnosticRenderTrace) {
         auto& stats = TraceStats();
         stats.psoGraphics.fetch_add(1, std::memory_order_relaxed);
         stats.lastPsoHash.store(pipeline->shaderHash, std::memory_order_relaxed);
     }
     *out = pipeline.release();
-    if (logMilestone) {
-        Log("PSO GRAPHICS #%u READY status=%s",
-            psoIndex, (*out)->missingShader ? "placeholder-missing-sm5-override" : "ready");
+    static std::atomic<uint32_t> missingGraphicsPsoLogCount{0};
+    const uint64_t vsHash = ShaderHash(desc->VS);
+    const uint64_t psHash = ShaderHash(desc->PS);
+    const uint64_t gsHash = ShaderHash(desc->GS);
+    const uint64_t hsHash = ShaderHash(desc->HS);
+    const uint64_t dsHash = ShaderHash(desc->DS);
+    const bool targetPso = vsHash == 0x20e0826b236597a1ULL &&
+        (psHash == 0x44b0a992c2304254ULL || psHash == 0xd77600bde0076c33ULL);
+    const bool logMissingPso = (*out)->missingShader &&
+        (missingGraphicsPsoLogCount.fetch_add(1, std::memory_order_relaxed) < 128 || targetPso);
+    if (logMilestone || logMissingPso) {
+        Log("PSO GRAPHICS #%u READY status=%s pso=%p missing_mask=0x%02x "
+            "VS=%016llx/%zu PS=%016llx/%zu GS=%016llx/%zu HS=%016llx/%zu DS=%016llx/%zu "
+            "d11_vs=%u d11_ps=%u d11_il=%u",
+            psoIndex, (*out)->missingShader ? "placeholder-missing-sm5-override" : "ready",
+            static_cast<void*>(*out), (*out)->missingShaderStages,
+            static_cast<unsigned long long>(vsHash), desc->VS.BytecodeLength,
+            static_cast<unsigned long long>(psHash), desc->PS.BytecodeLength,
+            static_cast<unsigned long long>(gsHash), desc->GS.BytecodeLength,
+            static_cast<unsigned long long>(hsHash), desc->HS.BytecodeLength,
+            static_cast<unsigned long long>(dsHash), desc->DS.BytecodeLength,
+            (*out)->vs ? 1u : 0u, (*out)->ps ? 1u : 0u, (*out)->il ? 1u : 0u);
     }
     return S_OK;
 }
@@ -405,6 +472,7 @@ HRESULT PipelineState::CreateCompute(Device* device, const D3D12_COMPUTE_PIPELIN
     pipeline->missingCs = result == S_FALSE;
     pipeline->shaderHash = Fnv1a64(desc->CS.pShaderBytecode, desc->CS.BytecodeLength);
     pipeline->missingShader = result == S_FALSE;
+    pipeline->missingShaderStages = result == S_FALSE ? (1u << 5) : 0;
     pipeline->compute = true;
     if (Cfg().diagnosticRenderTrace) {
         auto& stats = TraceStats();
@@ -412,9 +480,15 @@ HRESULT PipelineState::CreateCompute(Device* device, const D3D12_COMPUTE_PIPELIN
         stats.lastPsoHash.store(pipeline->shaderHash, std::memory_order_relaxed);
     }
     *out = pipeline.release();
-    if (logMilestone) {
-        Log("PSO COMPUTE #%u READY status=%s",
-            psoIndex, (*out)->missingShader ? "placeholder-missing-sm5-override" : "ready");
+    static std::atomic<uint32_t> missingComputePsoLogCount{0};
+    if (logMilestone || ((*out)->missingShader &&
+        missingComputePsoLogCount.fetch_add(1, std::memory_order_relaxed) < 128)) {
+        Log("PSO COMPUTE #%u READY status=%s pso=%p missing_mask=0x%02x "
+            "CS=%016llx/%zu d11_cs=%u",
+            psoIndex, (*out)->missingShader ? "placeholder-missing-sm5-override" : "ready",
+            static_cast<void*>(*out), (*out)->missingShaderStages,
+            static_cast<unsigned long long>((*out)->shaderHash), desc->CS.BytecodeLength,
+            (*out)->cs ? 1u : 0u);
     }
     return S_OK;
 }

@@ -1,0 +1,11 @@
+{
+  "schema": "hela-run-manifest/v1",
+  "testVersion": "950m-v015-no-shader-override-srv-diagnostics-20261111",
+  "runtimeAttestation": "module-and-shader-sha256",
+  "runtime": {
+    "d3d12": "0B986B326848CDE6148F86E7F7BA8D17795293115F51F17DEC2593758484A605",
+    "dxgi": "252B4C8E62CC176A3B5568C53F76730E4CFB9432998DF556EDD502D73C5F70CD"
+  },
+  "overrides": {},
+  "requiredOverrides": []
+}

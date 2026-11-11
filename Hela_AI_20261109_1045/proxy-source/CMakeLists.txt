@@ -28,7 +28,7 @@ add_library(d3d12 SHARED
 target_compile_features(d3d12 PRIVATE cxx_std_17)
 target_compile_definitions(d3d12 PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_include_directories(d3d12 PRIVATE src generated)
-target_link_libraries(d3d12 PRIVATE d3d11 dxgi dxguid dbghelp)
+target_link_libraries(d3d12 PRIVATE d3d11 dxgi dxguid dbghelp bcrypt)
 set_target_properties(d3d12 PROPERTIES OUTPUT_NAME d3d12)
 if(MSVC AND D3D12ON11_DIAGNOSTIC_SYMBOLS)
   target_compile_options(d3d12 PRIVATE $<$<CONFIG:Release>:/Zi>)
@@ -40,7 +40,10 @@ target_compile_features(dxgi_proxy PRIVATE cxx_std_17)
 target_compile_definitions(dxgi_proxy PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX D3D12ON11_BRIDGE_IMPORT)
 target_include_directories(dxgi_proxy PRIVATE src generated)
 target_link_libraries(dxgi_proxy PRIVATE d3d12 dxgi dxguid)
-set_target_properties(dxgi_proxy PROPERTIES OUTPUT_NAME dxgi)
+set_target_properties(dxgi_proxy PROPERTIES
+  OUTPUT_NAME dxgi
+  ARCHIVE_OUTPUT_NAME dxgi_proxy
+)
 
 add_library(nvapi_trace SHARED EXCLUDE_FROM_ALL
   tools/nvapi_trace.cpp
@@ -87,6 +90,12 @@ if(BUILD_TESTING)
   target_compile_definitions(d3d11_bc_mip_staging_smoke PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
   target_link_libraries(d3d11_bc_mip_staging_smoke PRIVATE d3d11 dxgi)
   add_test(NAME d3d11_bc_mip_staging_smoke COMMAND d3d11_bc_mip_staging_smoke)
+
+  add_executable(d3d11_structured_buffer_copy_smoke tests/structured_buffer_copy_smoke.cpp)
+  target_compile_features(d3d11_structured_buffer_copy_smoke PRIVATE cxx_std_17)
+  target_compile_definitions(d3d11_structured_buffer_copy_smoke PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_link_libraries(d3d11_structured_buffer_copy_smoke PRIVATE d3d11 dxgi)
+  add_test(NAME d3d11_structured_buffer_copy_smoke COMMAND d3d11_structured_buffer_copy_smoke)
 
   add_executable(d3d12on11_crash_handler_smoke
     tests/crash_handler_smoke.cpp

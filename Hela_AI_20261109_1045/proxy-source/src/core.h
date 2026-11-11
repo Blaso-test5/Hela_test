@@ -68,6 +68,8 @@ struct Config {
 Config& Cfg();
 void LoadConfig(HMODULE self);
 void Log(const char* fmt, ...);
+bool Sha256Hex(const void* data, size_t size, std::string& result);
+void LogModuleFingerprint(const char* role, HMODULE module);
 void Unimpl(const char* name);   // registra una sola volta ogni metodo non implementato
 
 struct RenderTraceStats {

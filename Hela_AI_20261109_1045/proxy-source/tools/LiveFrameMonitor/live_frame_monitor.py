@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
 
 SCHEMA_ID = "hela.live_frame_monitor"
-SCHEMA_VERSION = "1.1.0"
+SCHEMA_VERSION = "1.2.0"
 
 # Bounded memory limits
 MAX_RETAINED_DRAWS_PER_RESOURCE = 20
@@ -117,6 +117,16 @@ RE_SIZE_WH = re.compile(r"\bsize=(\d+)x(\d+)", re.IGNORECASE)
 
 RE_SHADER_READY = re.compile(r"\bSHADER\s+READY\b", re.IGNORECASE)
 RE_SHADER_PLACEHOLDER = re.compile(r"\bSHADER\s+PLACEHOLDER\b", re.IGNORECASE)
+RE_MODULE_FINGERPRINT = re.compile(
+    r"\bMODULE_FINGERPRINT\s+role=(d3d12|dxgi_proxy)\b.*?"
+    r"\bsha256=([0-9a-fA-F]{64})\b",
+    re.IGNORECASE,
+)
+RE_MODULE_FINGERPRINT_FAILED = re.compile(
+    r"\bMODULE_FINGERPRINT_FAILED\s+role=(d3d12|dxgi_proxy)\b.*?"
+    r"\breason=([^\s,;]+)",
+    re.IGNORECASE,
+)
 RE_SHADER_STAGE = re.compile(
     r"\b(?:stage|type)[:=\s]*(VS|PS|CS|GS|HS|DS|compute|vertex|pixel)\b|\b(VS|PS|CS)\b",
     re.IGNORECASE,
@@ -141,6 +151,57 @@ def norm_ptr(ptr: str) -> str:
 
 def norm_hash(h: str) -> str:
     return h.lower()
+
+
+def load_run_manifest(manifest_path: Path) -> Dict[str, Any]:
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Unable to read run manifest '{manifest_path}': {exc}") from exc
+
+    if not isinstance(manifest, dict):
+        raise ValueError(f"Invalid run manifest '{manifest_path}': expected a JSON object")
+    if (
+        manifest.get("schema") != "hela-run-manifest/v1"
+        or manifest.get("runtimeAttestation") != "module-and-shader-sha256"
+        or not isinstance(manifest.get("testVersion"), str)
+        or not manifest["testVersion"].strip()
+    ):
+        raise ValueError(f"Invalid run manifest identity: {manifest_path}")
+
+    runtime = manifest.get("runtime")
+    if not isinstance(runtime, dict):
+        raise ValueError(f"Invalid run manifest runtime section: {manifest_path}")
+    expected_modules: Dict[str, str] = {}
+    for role in ("d3d12", "dxgi"):
+        digest = runtime.get(role)
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", digest):
+            raise ValueError(f"Invalid SHA-256 for runtime.{role} in '{manifest_path}'")
+        expected_modules[role] = digest.lower()
+
+    overrides = manifest.get("overrides")
+    required_overrides = manifest.get("requiredOverrides")
+    if not isinstance(overrides, dict) or not isinstance(required_overrides, list):
+        raise ValueError(f"Invalid run manifest shader override section: {manifest_path}")
+    for name, digest in overrides.items():
+        if (
+            not isinstance(name, str)
+            or Path(name).name != name
+            or not name.lower().endswith(".cso")
+            or not isinstance(digest, str)
+            or not re.fullmatch(r"[0-9a-fA-F]{64}", digest)
+        ):
+            raise ValueError(f"Invalid shader override entry in '{manifest_path}': {name}")
+    if any(not isinstance(name, str) or name not in overrides for name in required_overrides):
+        raise ValueError(f"Invalid requiredOverrides in '{manifest_path}'")
+
+    return {
+        "test_version": manifest["testVersion"],
+        "manifest_path": str(manifest_path.resolve()),
+        "expected_modules": expected_modules,
+        "expected_overrides": {name: digest.lower() for name, digest in overrides.items()},
+        "required_overrides": list(required_overrides),
+    }
 
 
 def is_rgba_non_black(rgba: Tuple[int, int, int, int]) -> bool:
@@ -368,8 +429,15 @@ class LiveMonitorState:
     when unrelated shader/thread lines are logged in between.
     """
 
-    def __init__(self, event_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None) -> None:
+    def __init__(
+        self,
+        event_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        run_manifest: Optional[Dict[str, Any]] = None,
+    ) -> None:
         self.event_callback = event_callback
+        self.run_manifest = run_manifest
+        self.module_fingerprint_observations: Dict[str, List[str]] = {}
+        self.module_fingerprint_failures: Dict[str, str] = {}
         self.generation: int = 1
         self.truncation_count: int = 0
         self.lines_processed: int = 0
@@ -430,6 +498,8 @@ class LiveMonitorState:
         self.present100_readback_bb = None
         self.shaders_ready.clear()
         self.shaders_placeholder.clear()
+        self.module_fingerprint_observations.clear()
+        self.module_fingerprint_failures.clear()
         self.total_ready_events = 0
         self.total_placeholder_events = 0
         self.copy_to_bb_recent.clear()
@@ -522,6 +592,37 @@ class LiveMonitorState:
         line_no = self.lines_processed
         line = raw_line.strip()
         if not line:
+            return
+
+        fingerprint = RE_MODULE_FINGERPRINT.search(line)
+        if fingerprint:
+            role = "d3d12" if fingerprint.group(1).lower() == "d3d12" else "dxgi"
+            digest = fingerprint.group(2).lower()
+            observations = self.module_fingerprint_observations.setdefault(role, [])
+            if digest not in observations and len(observations) < 4:
+                observations.append(digest)
+            expected = (
+                self.run_manifest["expected_modules"].get(role)
+                if self.run_manifest else None
+            )
+            status = "matches" if expected == digest else "mismatch" if expected else "observed"
+            self._emit(
+                "MODULE_FINGERPRINT",
+                f"[MODULE_FINGERPRINT] {role}={digest} status={status}",
+                {"role": role, "sha256": digest, "expected_sha256": expected, "status": status},
+            )
+            return
+
+        fingerprint_failure = RE_MODULE_FINGERPRINT_FAILED.search(line)
+        if fingerprint_failure:
+            role = "d3d12" if fingerprint_failure.group(1).lower() == "d3d12" else "dxgi"
+            reason = fingerprint_failure.group(2)
+            self.module_fingerprint_failures[role] = reason
+            self._emit(
+                "MODULE_FINGERPRINT_FAILED",
+                f"[MODULE_FINGERPRINT_FAILED] {role} reason={reason}",
+                {"role": role, "reason": reason},
+            )
             return
 
         # 1. Resource History header line
@@ -794,23 +895,63 @@ class LiveMonitorState:
             dataclasses.asdict(info),
         )
 
-    def present100_reached(self) -> bool:
-        """
-        Returns True strictly when the actual Present #100 source AND backbuffer readback
-        records have both reached completion (`is_complete()` / `emitted_complete_event`).
-        Never triggers early on incomplete headers, and never triggers on Present #200+ if #100
-        was absent.
-        """
-        if (
-            self.present100_readback_src is not None
-            and self.present100_readback_src.emitted_complete_event
-            and self.present100_readback_bb is not None
-            and self.present100_readback_bb.emitted_complete_event
-        ):
-            return True
-        return False
+    def present_reached(self, present_num: int) -> bool:
+        source = self.readbacks_by_key.get(("source", present_num))
+        backbuffer = self.readbacks_by_key.get(("backbuffer", present_num))
+        return bool(
+            source and source.emitted_complete_event
+            and backbuffer and backbuffer.emitted_complete_event
+        )
 
-    def build_report(self, log_path: str) -> Dict[str, Any]:
+    def present100_reached(self) -> bool:
+        return self.present_reached(100)
+
+    def run_identity_report(self) -> Dict[str, Any]:
+        if not self.run_manifest:
+            attestation_status = "untracked"
+            expected_modules: Dict[str, str] = {}
+            test_version = None
+            manifest_path = None
+        else:
+            expected_modules = self.run_manifest["expected_modules"]
+            test_version = self.run_manifest["test_version"]
+            manifest_path = self.run_manifest["manifest_path"]
+            has_mismatch = any(
+                observed != expected_modules[role]
+                for role, digests in self.module_fingerprint_observations.items()
+                for observed in digests
+                if role in expected_modules
+            )
+            has_all_fingerprints = all(
+                expected in self.module_fingerprint_observations.get(role, [])
+                for role, expected in expected_modules.items()
+            )
+            if self.module_fingerprint_failures:
+                attestation_status = "failed"
+            elif has_mismatch:
+                attestation_status = "mismatch"
+            elif has_all_fingerprints:
+                attestation_status = "verified"
+            else:
+                attestation_status = "pending"
+
+        return {
+            "test_version": test_version,
+            "manifest_path": manifest_path,
+            "expected_modules": expected_modules,
+            "observed_modules": {
+                role: digests[-1] for role, digests in self.module_fingerprint_observations.items()
+                if digests
+            },
+            "module_fingerprint_observations": {
+                role: list(digests)
+                for role, digests in self.module_fingerprint_observations.items()
+            },
+            "module_fingerprint_failures": dict(self.module_fingerprint_failures),
+            "attestation_status": attestation_status,
+        }
+
+    def build_report(self, log_path: str, capture_present: int = 100) -> Dict[str, Any]:
         # Strictly report Present #100 in `present_100` (never substitute Present #200+ as #100)
         rb_src = self.present100_readback_src
         rb_bb = self.present100_readback_bb
@@ -820,6 +961,12 @@ class LiveMonitorState:
             rb_bb.recompute_from_samples_if_needed()
 
         matched_hist = self.resources_by_ptr.get(rb_src.source) if (rb_src and rb_src.source) else None
+        capture_src = self.readbacks_by_key.get(("source", capture_present))
+        capture_bb = self.readbacks_by_key.get(("backbuffer", capture_present))
+        if capture_src is not None:
+            capture_src.recompute_from_samples_if_needed()
+        if capture_bb is not None:
+            capture_bb.recompute_from_samples_if_needed()
 
         history_vs = sorted({vs for r in self.resources_by_ptr.values() for vs in r.unique_vs()})
         history_ps = sorted({ps for r in self.resources_by_ptr.values() for ps in r.unique_ps()})
@@ -917,11 +1064,19 @@ class LiveMonitorState:
         return {
             "schema": SCHEMA_ID,
             "schema_version": SCHEMA_VERSION,
+            "run_identity": self.run_identity_report(),
             "monitor_metadata": {
                 "log_path": log_path,
                 "generation": self.generation,
                 "truncation_count": self.truncation_count,
                 "lines_processed_in_generation": self.lines_processed,
+                "capture_present": capture_present,
+            },
+            "capture_target": {
+                "present": capture_present,
+                "complete": self.present_reached(capture_present),
+                "source_readback": dataclasses.asdict(capture_src) if capture_src else None,
+                "backbuffer_readback": dataclasses.asdict(capture_bb) if capture_bb else None,
             },
             "present_100": {
                 "source_readback": dataclasses.asdict(rb_src) if rb_src else None,
@@ -1052,7 +1207,24 @@ def format_human_summary(report: Dict[str, Any]) -> str:
         f"Log Path   : {meta['log_path']} (gen={meta['generation']}, "
         f"truncations={meta['truncation_count']}, lines={meta['lines_processed_in_generation']:,})"
     )
+    run_identity = report["run_identity"]
+    out.append(
+        f"Run Version: {run_identity['test_version'] or '<untracked>'} "
+        f"(module fingerprints={run_identity['attestation_status']})"
+    )
+    out.append(
+        f"Capture    : Present #{report['capture_target']['present']} "
+        f"complete={report['capture_target']['complete']}"
+    )
     out.append("")
+    if run_identity["expected_modules"]:
+        out.append("[0] RUNTIME PATCH IDENTITY")
+        out.append("-" * 78)
+        for role in ("d3d12", "dxgi"):
+            expected = run_identity["expected_modules"].get(role, "<not pinned>")
+            observed = run_identity["observed_modules"].get(role, "<not observed>")
+            out.append(f"  {role:10}: expected={expected} observed={observed}")
+        out.append("")
     out.append("[1] PRESENT #100 SOURCE HISTORY & READBACK CORRELATION")
     out.append("-" * 78)
     rb_src = p100["source_readback"]
@@ -1110,6 +1282,18 @@ def format_human_summary(report: Dict[str, Any]) -> str:
                 f"                 - [{label}] {b['path']}: {b['width']}x{b['height']} "
                 f"({b['bits_per_pixel']}bpp) non-black={b['non_black_pixels']}/{b['total_pixels']}"
             )
+    capture = report["capture_target"]
+    if capture["present"] != 100:
+        out.append(f"  CAPTURE #{capture['present']} complete={capture['complete']}")
+        for label in ("source_readback", "backbuffer_readback"):
+            record = capture[label]
+            if record is None:
+                out.append(f"                 - {label}: <not observed>")
+            else:
+                out.append(
+                    f"                 - {label}: {record['width']}x{record['height']} "
+                    f"non-black={record['non_black_count']}/{record['total_sampled']}"
+                )
     out.append("")
 
     out.append("[2] SHADER READINESS & COMPUTE PLACEHOLDERS")
@@ -1165,18 +1349,43 @@ def run_monitor(
     poll_interval_sec: float = 0.20,
     once: bool = False,
     stop_after_present100: bool = False,
+    stop_after_present_num: Optional[int] = None,
     max_wait_sec: Optional[float] = None,
     source_bmp_path: Optional[Path] = None,
     backbuffer_bmp_path: Optional[Path] = None,
     bmp_wait_timeout_sec: float = 5.0,
     json_path: Optional[Path] = None,
     quiet_events: bool = False,
+    run_manifest_path: Optional[Path] = None,
 ) -> Tuple[int, Dict[str, Any]]:
     def _print_live_event(summary: str, _evt: Dict[str, Any]) -> None:
         if not quiet_events:
             print(f"[LIVE] {summary}", flush=True)
 
-    state = LiveMonitorState(event_callback=_print_live_event)
+    if stop_after_present100:
+        if stop_after_present_num is not None and stop_after_present_num != 100:
+            print("ERROR: --stop-after-present100 conflicts with --stop-after-present.", file=sys.stderr)
+            return 2, LiveMonitorState().build_report(str(log_path))
+        stop_after_present_num = 100
+    if stop_after_present_num is not None and (
+        stop_after_present_num < 100 or stop_after_present_num % 100 != 0
+    ):
+        print("ERROR: stop-after-present must be a positive multiple of 100.", file=sys.stderr)
+        return 2, LiveMonitorState().build_report(str(log_path))
+
+    run_manifest = None
+    if run_manifest_path is not None:
+        try:
+            run_manifest = load_run_manifest(run_manifest_path)
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2, LiveMonitorState().build_report(str(log_path))
+
+    state = LiveMonitorState(
+        event_callback=_print_live_event,
+        run_manifest=run_manifest,
+    )
+    capture_present = stop_after_present_num or 100
     tailer = LogFileTailer(log_path, state=state, start_at_end=False)
 
     stop_requested = False
@@ -1189,7 +1398,7 @@ def run_monitor(
     signal.signal(signal.SIGINT, _sigint_handler)
 
     start_time = time.monotonic()
-    present100_seen_at: Optional[float] = None
+    capture_present_seen_at: Optional[float] = None
 
     pending_bmps: Dict[str, Path] = {}
     if source_bmp_path:
@@ -1200,7 +1409,7 @@ def run_monitor(
     try:
         if once and not log_path.is_file():
             print(f"ERROR: Log file not found in --once mode: {log_path}", file=sys.stderr)
-            return 2, state.build_report(str(log_path))
+            return 2, state.build_report(str(log_path), capture_present)
 
         while not stop_requested:
             tailer.poll()
@@ -1222,14 +1431,13 @@ def run_monitor(
                 break
 
             now = time.monotonic()
-            if state.present100_reached():
-                if present100_seen_at is None:
-                    present100_seen_at = now
-                if stop_after_present100:
-                    if not pending_bmps or (now - present100_seen_at) >= bmp_wait_timeout_sec:
-                        tailer.poll()
-                        tailer.flush_partial()
-                        break
+            if stop_after_present_num is not None and state.present_reached(capture_present):
+                if capture_present_seen_at is None:
+                    capture_present_seen_at = now
+                if not pending_bmps or (now - capture_present_seen_at) >= bmp_wait_timeout_sec:
+                    tailer.poll()
+                    tailer.flush_partial()
+                    break
 
             if max_wait_sec is not None and (now - start_time) >= max_wait_sec:
                 tailer.flush_partial()
@@ -1239,7 +1447,7 @@ def run_monitor(
     finally:
         signal.signal(signal.SIGINT, old_sigint)
 
-    report = state.build_report(str(log_path))
+    report = state.build_report(str(log_path), capture_present)
     if json_path:
         try:
             if json_path.parent:
@@ -1270,6 +1478,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Stop automatically once Present #100 readbacks/history (and optional BMPs) are captured.",
     )
     parser.add_argument(
+        "--stop-after-present",
+        type=int,
+        default=None,
+        help="Stop after both source and backbuffer readbacks for this Present number complete.",
+    )
+    parser.add_argument(
         "--poll-interval",
         type=float,
         default=0.20,
@@ -1285,25 +1499,30 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--source-bmp",
         dest="source_bmp",
         default=None,
-        help="Optional path to Present #100 source BMP to wait for and inspect when complete.",
+        help="Optional path to source BMP to wait for and inspect when complete.",
     )
     parser.add_argument(
         "--backbuffer-bmp",
         dest="backbuffer_bmp",
         default=None,
-        help="Optional path to Present #100 backbuffer BMP to wait for and inspect when complete.",
+        help="Optional path to backbuffer BMP to wait for and inspect when complete.",
     )
     parser.add_argument(
         "--bmp-wait-timeout",
         type=float,
         default=5.0,
-        help="Seconds to wait for BMP completion after Present #100 is logged (default: 5.0).",
+        help="Seconds to wait for BMP completion after the target Present is logged (default: 5.0).",
     )
     parser.add_argument(
         "--json",
         dest="json_path",
         default=None,
         help="Optional output path for the structured JSON report.",
+    )
+    parser.add_argument(
+        "--run-manifest",
+        default=None,
+        help="Optional hela-run-manifest/v1 to label the run and attest loaded module fingerprints.",
     )
     parser.add_argument(
         "--quiet-events",
@@ -1317,12 +1536,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         poll_interval_sec=args.poll_interval,
         once=args.once,
         stop_after_present100=args.stop_after_present100,
+        stop_after_present_num=args.stop_after_present,
         max_wait_sec=args.max_wait,
         source_bmp_path=Path(args.source_bmp) if args.source_bmp else None,
         backbuffer_bmp_path=Path(args.backbuffer_bmp) if args.backbuffer_bmp else None,
         bmp_wait_timeout_sec=args.bmp_wait_timeout,
         json_path=Path(args.json_path) if args.json_path else None,
         quiet_events=args.quiet_events,
+        run_manifest_path=Path(args.run_manifest) if args.run_manifest else None,
     )
     return rc
 

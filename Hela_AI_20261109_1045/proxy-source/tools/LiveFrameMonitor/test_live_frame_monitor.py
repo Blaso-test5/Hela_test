@@ -9,6 +9,7 @@ Covers:
   - Strict Present #100 slot isolation (never falls back to Present #200+ if #100 is absent)
   - `--stop-after-present100` immediate completion once both #100 readbacks are complete, with bounded
     BMP timeout when BMP files are absent
+  - Manifest-pinned live module fingerprint attestation and configurable Present capture targets
   - PowerShell `Start-HelaLiveMonitor.ps1` argument quoting for paths containing spaces
   - Atomic completeness detection for partial vs finished 24-bit BMP files
   - Bounded memory ring-buffer caps
@@ -252,6 +253,80 @@ class LiveFrameMonitorTests(unittest.TestCase):
         self.assertIsNone(report["present_100"]["source_readback"])
         self.assertIsNone(report["present_100"]["backbuffer_readback"])
 
+    def test_run_manifest_module_fingerprint_attestation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest_path = Path(tmpdir) / "run-manifest.json"
+            expected_d3d12 = "a" * 64
+            expected_dxgi = "b" * 64
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "hela-run-manifest/v1",
+                        "runtimeAttestation": "module-and-shader-sha256",
+                        "testVersion": "unit-test-v001",
+                        "runtime": {"d3d12": expected_d3d12, "dxgi": expected_dxgi},
+                        "overrides": {},
+                        "requiredOverrides": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            manifest = lfm.load_run_manifest(manifest_path)
+            state = lfm.LiveMonitorState(run_manifest=manifest)
+            self.assertEqual(state.run_identity_report()["attestation_status"], "pending")
+
+            state.feed_line(f"MODULE_FINGERPRINT role=d3d12 sha256={expected_d3d12}")
+            state.feed_line(f"MODULE_FINGERPRINT role=dxgi_proxy sha256={expected_dxgi}")
+            self.assertEqual(state.run_identity_report()["attestation_status"], "verified")
+
+            state.feed_line(f"MODULE_FINGERPRINT role=d3d12 sha256={'c' * 64}")
+            self.assertEqual(state.run_identity_report()["attestation_status"], "mismatch")
+
+            state.feed_line("MODULE_FINGERPRINT_FAILED role=dxgi_proxy reason=read-failed")
+            identity = state.run_identity_report()
+            self.assertEqual(identity["attestation_status"], "failed")
+            self.assertEqual(identity["module_fingerprint_failures"]["dxgi"], "read-failed")
+
+    def test_configurable_present_target_isolated_from_present100(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "present400.log"
+            log_path.write_text(
+                "\n".join(
+                    [
+                        "[READBACK_SRC] Present #400 CopyResource source=0000024096331C38 width=1280 height=720 format=24 sequence=400",
+                        "  Top-left: RGBA=(1, 0, 0, 255)",
+                        "  Top-right: RGBA=(1, 0, 0, 255)",
+                        "  Center: RGBA=(1, 0, 0, 255)",
+                        "  Bottom-left: RGBA=(1, 0, 0, 255)",
+                        "  Bottom-right: RGBA=(1, 0, 0, 255)",
+                        "[READBACK] Present #400 size=1280x720 format=24 buffer=0",
+                        "  Top-left: RGBA=(1, 0, 0, 255)",
+                        "  Top-right: RGBA=(1, 0, 0, 255)",
+                        "  Center: RGBA=(1, 0, 0, 255)",
+                        "  Bottom-left: RGBA=(1, 0, 0, 255)",
+                        "  Bottom-right: RGBA=(1, 0, 0, 255)",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            rc, report = lfm.run_monitor(
+                log_path=log_path,
+                poll_interval_sec=0.01,
+                stop_after_present_num=400,
+                max_wait_sec=2.0,
+                quiet_events=True,
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(report["capture_target"]["complete"])
+        self.assertEqual(report["capture_target"]["present"], 400)
+        self.assertEqual(report["capture_target"]["source_readback"]["present"], 400)
+        self.assertEqual(report["capture_target"]["source_readback"]["non_black_count"], 5)
+        self.assertIsNone(report["present_100"]["source_readback"])
+
     def test_stop_after_present100_terminates_promptly_with_bounded_missing_bmp_timeout(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
@@ -304,6 +379,7 @@ class LiveFrameMonitorTests(unittest.TestCase):
         spaced_log = r"D:\SteamLibrary\steamapps\common\Hela Demo\d3d12on11.log"
         spaced_json = r"D:\Ghidra MCP\Hela-Export\tools\LiveFrameMonitor\out\report with spaces.json"
         spaced_bmp = r"D:\Ghidra MCP\Hela-Export\tools\LiveFrameMonitor\out\src 100.bmp"
+        spaced_manifest = r"D:\Ghidra MCP\Hela-Export\evidence\run manifest.json"
 
         proc = subprocess.run(
             [
@@ -319,7 +395,12 @@ class LiveFrameMonitorTests(unittest.TestCase):
                 spaced_json,
                 "-SourceBmpPath",
                 spaced_bmp,
-                "-StopAfterPresent100",
+                "-RunManifestPath",
+                spaced_manifest,
+                "-StopAfterPresent",
+                "400",
+                "-MonitorMaxWaitSeconds",
+                "180",
                 "-PrintCommandLineOnly",
             ],
             capture_output=True,
@@ -330,7 +411,10 @@ class LiveFrameMonitorTests(unittest.TestCase):
         self.assertIn(f'"{spaced_log}"', cmd_line)
         self.assertIn(f'"{spaced_json}"', cmd_line)
         self.assertIn(f'"{spaced_bmp}"', cmd_line)
-        self.assertIn("--stop-after-present100", cmd_line)
+        self.assertIn(f'"{spaced_manifest}"', cmd_line)
+        self.assertIn("--stop-after-present 400", cmd_line)
+        self.assertIn("--max-wait 180", cmd_line)
+        self.assertIn("--run-manifest", cmd_line)
 
     def test_bmp_incomplete_vs_complete_inspection(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

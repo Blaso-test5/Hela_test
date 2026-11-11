@@ -10,6 +10,8 @@ enum class DKind : uint8_t { None, CBV, SRV, UAV, RTV, DSV, Sampler };
 
 struct Descriptor {
     DKind kind = DKind::None;
+    UINT diagnosticFailureId = 0;
+    HRESULT diagnosticFailureResult = S_OK;
     Ptr<ID3D11ShaderResourceView> srv;
     Ptr<ID3D11UnorderedAccessView> uav;
     Ptr<ID3D11RenderTargetView> rtv;
@@ -173,6 +175,7 @@ struct RootSignature : Stub_ID3D12RootSignature {
 // ------------------------------------------------------------------ PSO
 struct PipelineState : Stub_ID3D12PipelineState {
     bool compute = false, missingShader = false, missingVs = false, missingCs = false;
+    UINT missingShaderStages = 0;
     uint64_t shaderHash = 0, pixelShaderHash = 0;
     Ptr<ID3D11VertexShader> vs; Ptr<ID3D11PixelShader> ps; Ptr<ID3D11GeometryShader> gs;
     Ptr<ID3D11HullShader> hs; Ptr<ID3D11DomainShader> ds; Ptr<ID3D11ComputeShader> cs;
@@ -230,9 +233,11 @@ struct ExecState {
     bool hasComputePipeline = false;
     bool graphicsPlaceholderVs = false;
     bool computePlaceholderCs = false;
+    UINT graphicsMissingShaderStages = 0;
     uintptr_t graphicsPipelineIdentity = 0;
     uint64_t graphicsShaderHash = 0;
     uint64_t graphicsPixelShaderHash = 0;
+    uint64_t computeShaderHash = 0;
     bool hasVertexBuffer = false;
     bool hasIndexBuffer = false;
     Ptr<ID3D12Resource> indexBufferResource;
