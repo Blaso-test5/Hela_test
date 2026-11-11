@@ -240,7 +240,13 @@ collision-checked UTC directory, backs up exact DLL/override bytes, archives
 the run log and BMPs, binds the manifest to the live monitor, and restores the
 pre-run files in `finally`. The monitor supports a configurable target Present
 and reports `pending`, `verified`, `mismatch`, or `failed` module attestation.
-The v015 preflight and an isolated synthetic restore both passed; all 12
+Arena reviewed the modified tool excerpts: the process cleanup race was
+actionable and is fixed with independent/nested cleanup and bounded exit waits;
+the report also defensively rejects empty fingerprint sets. The review's claim
+that restore was unconditional was already prevented by the `installationStarted`
+guard; the manager now additionally represents initially absent proxy DLLs and
+override directories and preserves compatibility with previous restore
+manifests. The v015 preflight and synthetic restores passed; all 13
 LiveFrameMonitor unit tests and PowerShell parser checks passed.
 
 ## Build and run identity

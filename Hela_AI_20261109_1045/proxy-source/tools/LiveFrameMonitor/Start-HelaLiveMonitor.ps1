@@ -282,26 +282,37 @@ try {
     }
 }
 finally {
-    # 1. Tear down monitor process if still running
-    if ($null -ne $MonitorProc -and -not $MonitorProc.HasExited) {
-        Write-Host "[Launcher] Stopping LiveFrameMonitor (PID $($MonitorProc.Id))..." -ForegroundColor Yellow
-        Stop-Process -Id $MonitorProc.Id -Force -ErrorAction Stop
-    }
-
-    if ($StopGameAfterMonitor -and $null -ne $GameProc -and -not $GameProc.HasExited) {
-        Write-Host "[Launcher] Closing diagnostic game process (PID $($GameProc.Id))..." -ForegroundColor Yellow
-        $null = $GameProc.CloseMainWindow()
-        if (-not $GameProc.WaitForExit(5000)) {
-            Stop-Process -Id $GameProc.Id -Force -ErrorAction Stop
-            $GameProc.WaitForExit()
+    try {
+        if ($null -ne $MonitorProc -and -not $MonitorProc.HasExited) {
+            Write-Host "[Launcher] Stopping LiveFrameMonitor (PID $($MonitorProc.Id))..." -ForegroundColor Yellow
+            Stop-Process -Id $MonitorProc.Id -Force -ErrorAction SilentlyContinue
+            if (-not $MonitorProc.WaitForExit(5000)) {
+                throw "LiveFrameMonitor process $($MonitorProc.Id) did not exit after termination."
+            }
+        }
+    } finally {
+        try {
+            if ($StopGameAfterMonitor -and $null -ne $GameProc -and -not $GameProc.HasExited) {
+                Write-Host "[Launcher] Closing diagnostic game process (PID $($GameProc.Id))..." -ForegroundColor Yellow
+                try {
+                    $null = $GameProc.CloseMainWindow()
+                } catch [InvalidOperationException] {
+                    # The game may exit between HasExited and CloseMainWindow.
+                }
+                if (-not $GameProc.WaitForExit(5000)) {
+                    Stop-Process -Id $GameProc.Id -Force -ErrorAction SilentlyContinue
+                    if (-not $GameProc.WaitForExit(5000)) {
+                        throw "Hela process $($GameProc.Id) did not exit after termination."
+                    }
+                }
+            }
+        } finally {
+            foreach ($name in $ManagedEnvVars) {
+                [Environment]::SetEnvironmentVariable($name, $SavedEnv[$name], "Process")
+            }
+            Write-Host "[Launcher] Process-scoped environment variables restored." -ForegroundColor DarkGray
         }
     }
-
-    # 2. Restore strictly process-scoped environment variables
-    foreach ($name in $ManagedEnvVars) {
-        [Environment]::SetEnvironmentVariable($name, $SavedEnv[$name], "Process")
-    }
-    Write-Host "[Launcher] Process-scoped environment variables restored." -ForegroundColor DarkGray
 }
 
 if ($LaunchGame) {

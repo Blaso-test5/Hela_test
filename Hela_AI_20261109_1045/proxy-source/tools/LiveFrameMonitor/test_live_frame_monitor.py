@@ -10,6 +10,7 @@ Covers:
   - `--stop-after-present100` immediate completion once both #100 readbacks are complete, with bounded
     BMP timeout when BMP files are absent
   - Manifest-pinned live module fingerprint attestation and configurable Present capture targets
+  - Manager restoration of absent vanilla proxy files and legacy restore manifests
   - PowerShell `Start-HelaLiveMonitor.ps1` argument quoting for paths containing spaces
   - Atomic completeness detection for partial vs finished 24-bit BMP files
   - Bounded memory ring-buffer caps
@@ -17,6 +18,7 @@ Covers:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import struct
@@ -32,6 +34,7 @@ import live_frame_monitor as lfm
 TOOL_DIR = Path(__file__).resolve().parent
 FIXTURE_LOG = TOOL_DIR / "fixtures" / "sample_live_stream.log"
 LAUNCHER_PS1 = TOOL_DIR / "Start-HelaLiveMonitor.ps1"
+PROXY_MANAGER_PS1 = TOOL_DIR / "ProxyManager.ps1"
 
 
 def _make_24bit_bmp_bytes(width: int, height: int, fill_bgr: bytes = b"\x00\x00\x00") -> bytes:
@@ -60,6 +63,31 @@ def _make_24bit_bmp_bytes(width: int, height: int, fill_bgr: bytes = b"\x00\x00\
         0,
     )
     return header + pixel_data
+
+
+def _run_proxy_manager_restore(
+    powershell: str,
+    game_exe: Path,
+    run_directory: Path,
+) -> subprocess.CompletedProcess[str]:
+    quote = lambda value: "'" + str(value).replace("'", "''") + "'"
+    command = (
+        f"& {quote(PROXY_MANAGER_PS1)} -Action Restore "
+        f"-GameExePath {quote(game_exe)} -RunDirectory {quote(run_directory)} -Confirm:$false"
+    )
+    return subprocess.run(
+        [
+            powershell,
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            command,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 class LiveFrameMonitorTests(unittest.TestCase):
@@ -256,8 +284,8 @@ class LiveFrameMonitorTests(unittest.TestCase):
     def test_run_manifest_module_fingerprint_attestation(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             manifest_path = Path(tmpdir) / "run-manifest.json"
-            expected_d3d12 = "a" * 64
-            expected_dxgi = "b" * 64
+            expected_d3d12 = "A" * 64
+            expected_dxgi = "B" * 64
             manifest_path.write_text(
                 json.dumps(
                     {
@@ -276,8 +304,8 @@ class LiveFrameMonitorTests(unittest.TestCase):
             state = lfm.LiveMonitorState(run_manifest=manifest)
             self.assertEqual(state.run_identity_report()["attestation_status"], "pending")
 
-            state.feed_line(f"MODULE_FINGERPRINT role=d3d12 sha256={expected_d3d12}")
-            state.feed_line(f"MODULE_FINGERPRINT role=dxgi_proxy sha256={expected_dxgi}")
+            state.feed_line(f"MODULE_FINGERPRINT role=d3d12 sha256={expected_d3d12.lower()}")
+            state.feed_line(f"MODULE_FINGERPRINT role=dxgi_proxy sha256={expected_dxgi.lower()}")
             self.assertEqual(state.run_identity_report()["attestation_status"], "verified")
 
             state.feed_line(f"MODULE_FINGERPRINT role=d3d12 sha256={'c' * 64}")
@@ -287,6 +315,18 @@ class LiveFrameMonitorTests(unittest.TestCase):
             identity = state.run_identity_report()
             self.assertEqual(identity["attestation_status"], "failed")
             self.assertEqual(identity["module_fingerprint_failures"]["dxgi"], "read-failed")
+
+            empty_manifest_state = lfm.LiveMonitorState(
+                run_manifest={
+                    "test_version": "invalid-empty-pins",
+                    "manifest_path": str(manifest_path),
+                    "expected_modules": {},
+                }
+            )
+            self.assertEqual(
+                empty_manifest_state.run_identity_report()["attestation_status"],
+                "pending",
+            )
 
     def test_configurable_present_target_isolated_from_present100(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -415,6 +455,94 @@ class LiveFrameMonitorTests(unittest.TestCase):
         self.assertIn("--stop-after-present 400", cmd_line)
         self.assertIn("--max-wait 180", cmd_line)
         self.assertIn("--run-manifest", cmd_line)
+
+    def test_proxy_manager_restores_missing_and_legacy_runtime_files(self) -> None:
+        powershell = shutil.which("powershell") or shutil.which("pwsh")
+        if not powershell or not PROXY_MANAGER_PS1.is_file():
+            self.skipTest("PowerShell or ProxyManager.ps1 not available in test environment")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            game_dir = root / "game"
+            patch_dir = game_dir / "D3D12On11Patch"
+            installed_overrides = patch_dir / "overrides"
+            restore_run = root / "run-no-proxy"
+            restore_root = restore_run / "restore-point"
+            game_dir.mkdir(parents=True)
+            restore_root.mkdir(parents=True)
+            installed_overrides.mkdir(parents=True)
+            game_exe = game_dir / "Hela-Win64-Shipping.exe"
+            game_exe.write_bytes(b"synthetic executable placeholder")
+            for name in ("d3d12.dll", "dxgi.dll"):
+                (game_dir / name).write_bytes(b"temporary installed proxy")
+            (installed_overrides / "temporary.cso").write_bytes(b"temporary override")
+
+            absent_runtime_manifest = {
+                "schema": "hela-proxy-restore/v1",
+                "game_directory": str(game_dir),
+                "created_utc": "2026-11-11T00:00:00Z",
+                "runtime": {
+                    "d3d12.dll": {"present": False, "sha256": None},
+                    "dxgi.dll": {"present": False, "sha256": None},
+                },
+                "overrides_directory_present": False,
+                "overrides": [],
+            }
+            (restore_root / "restore-manifest.json").write_text(
+                json.dumps(absent_runtime_manifest),
+                encoding="utf-8",
+            )
+
+            absent_restore = _run_proxy_manager_restore(powershell, game_exe, restore_run)
+            self.assertEqual(
+                absent_restore.returncode,
+                0,
+                absent_restore.stdout + "\n" + absent_restore.stderr,
+            )
+            self.assertFalse((game_dir / "d3d12.dll").exists())
+            self.assertFalse((game_dir / "dxgi.dll").exists())
+            self.assertFalse(installed_overrides.exists())
+
+            legacy_run = root / "run-legacy"
+            legacy_restore = legacy_run / "restore-point"
+            legacy_overrides = legacy_restore / "overrides"
+            legacy_overrides.mkdir(parents=True)
+            legacy_runtime = {}
+            for name in ("d3d12.dll", "dxgi.dll"):
+                content = f"original {name}".encode("ascii")
+                (legacy_restore / name).write_bytes(content)
+                legacy_runtime[name] = hashlib.sha256(content).hexdigest()
+            original_shader = b"original shader"
+            (legacy_overrides / "original.cso").write_bytes(original_shader)
+            (legacy_restore / "restore-manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "hela-proxy-restore/v1",
+                        "game_directory": str(game_dir),
+                        "created_utc": "2026-11-11T00:00:00Z",
+                        "runtime": legacy_runtime,
+                        "overrides": [
+                            {
+                                "path": "original.cso",
+                                "bytes": len(original_shader),
+                                "sha256": hashlib.sha256(original_shader).hexdigest(),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            legacy_restore_result = _run_proxy_manager_restore(powershell, game_exe, legacy_run)
+            self.assertEqual(
+                legacy_restore_result.returncode,
+                0,
+                legacy_restore_result.stdout + "\n" + legacy_restore_result.stderr,
+            )
+            self.assertEqual((game_dir / "d3d12.dll").read_bytes(), b"original d3d12.dll")
+            self.assertEqual((game_dir / "dxgi.dll").read_bytes(), b"original dxgi.dll")
+            self.assertEqual((installed_overrides / "original.cso").read_bytes(), original_shader)
+            self.assertFalse((installed_overrides / "temporary.cso").exists())
 
     def test_bmp_incomplete_vs_complete_inspection(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

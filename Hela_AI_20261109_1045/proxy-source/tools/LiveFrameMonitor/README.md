@@ -63,7 +63,9 @@ cartella run univoca, salva un restore point byte-per-byte, archivia gli output
 globali precedenti, avvia launcher e monitor sul Present richiesto con timeout
 massimo (180 secondi di default) e ripristina
 DLL e override originali in `finally`. Il restore point resta nella run se serve
-un recupero manuale. `Restore` valida quel restore point prima di applicarlo.
+un recupero manuale. Il restore conserva anche lo stato iniziale in cui le DLL
+proxy o la directory override non esistevano; `Restore` valida il restore point
+prima di applicarlo e resta compatibile con i manifest di ripristino precedenti.
 
 ```powershell
 $manager = "tools/LiveFrameMonitor/ProxyManager.ps1"

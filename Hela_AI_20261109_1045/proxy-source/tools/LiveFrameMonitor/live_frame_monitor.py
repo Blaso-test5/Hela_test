@@ -913,7 +913,10 @@ class LiveMonitorState:
             test_version = None
             manifest_path = None
         else:
-            expected_modules = self.run_manifest["expected_modules"]
+            expected_modules = {
+                role: digest.strip().lower()
+                for role, digest in self.run_manifest["expected_modules"].items()
+            }
             test_version = self.run_manifest["test_version"]
             manifest_path = self.run_manifest["manifest_path"]
             has_mismatch = any(
@@ -922,7 +925,7 @@ class LiveMonitorState:
                 for observed in digests
                 if role in expected_modules
             )
-            has_all_fingerprints = all(
+            has_all_fingerprints = bool(expected_modules) and all(
                 expected in self.module_fingerprint_observations.get(role, [])
                 for role, expected in expected_modules.items()
             )
