@@ -3,13 +3,14 @@
 ## Goal and status
 
 Continue the controlled investigation until Hela renders a visible game image
-on the GTX 950M. The goal is **not yet reached**. The v003 run still showed
-black source and backbuffer readbacks despite 66 target draws.
+on the GTX 950M. The goal is **not yet reached**: the v004 test produced a
+full-frame magenta image with forced shaders, not the game's normal visual
+output.
 
 The versioned proxy source now contains bounded target-draw diagnostics and
-pipeline statistics. The merged `d3d12` target compiled successfully, but
-the new DLL has **not** been installed or run on the GTX 950M. The previous
-checkpoint remains at [`checkpoint-20261110.md`](./checkpoint-20261110.md).
+pipeline statistics. The v004 DLL pair was run once, then the game directory
+was restored to v001. Hela is closed. The previous checkpoint remains at
+[`checkpoint-20261110.md`](./checkpoint-20261110.md).
 
 ## Diagnostic patch
 
@@ -45,23 +46,34 @@ DLL was kept outside the repository and is not installed. Its SHA-256 is
   discriminating value is the sampled texel content at draw time.
 - These are GTX 1050 Ti results, not proof of the GTX 950M's behavior.
 
+## GTX 950M v004 run — 2026-11-11
+
+The new diagnostic DLL pair was run with the v003 fullscreen/magenta
+overrides. Present #100 source and backbuffer readbacks are both uniformly
+magenta: 921,600/921,600 non-black pixels each. The source resource matches
+the recorded history (66 draws, zero skips, zero clears). Pipeline
+statistics report 921,600 PS invocations for one override and 230,400 for
+the other. The index values match between CPU shadow and D3D11 readback.
+
+This proves the forced test path can render across the full GTX 950M
+backbuffer; it does not prove that the real Hela pixel shader produces the
+game image. The target PS has t0 bound to a 1x1 texture, but its texel value
+was not captured. Full details and raw evidence are in
+[`950m-v004-target-draw-state-20261111`](./runs/20261111/950m-v004-target-draw-state-20261111/README.md).
+
 ## Run checklist
 
-1. Recheck that Hela is closed and verify the installed DLL hashes; do not
-   assume the November 10 installation state is unchanged.
-2. Preserve v001 and v003. Stage the merged build only in a new v004 version
-   directory; do not replace files while the game is running.
-3. Keep the v003 fullscreen/magenta shader overrides unchanged so this run
-   isolates the state instrumentation.
-4. Run once and retain the live proxy log plus the Present #100 source and
-   backbuffer readbacks. Compare the logged RTV/resource with the most recent
-   CopyResource source and check `TARGET_DRAW_STATS` for shader invocations.
-5. If the readbacks remain black, use the logged t0 resource identity to plan
-   a bounded texel readback; do not infer the texture contents from its
-   dimensions or SRV binding alone.
-6. Treat the captured state as evidence, not proof that fragments reached
-   memory. Choose the next intervention only after this correlation.
-7. Publish the source and checkpoint changes with the next meaningful run
+1. Keep v001, v003, and the tested v004 pair intact; verify Hela is closed
+   and confirm the installed hashes before changing anything.
+2. Prepare a bounded readback of the 1x1 t0 texel in the existing target
+   diagnostic. Keep only the fullscreen VS override for the next run so the
+   original PS is exercised.
+3. Run once, retain the live proxy log and Present #100 source/backbuffer
+   readbacks, and verify the t0 value against the actual shader output.
+4. Treat the diagnostic as evidence, not proof by itself. Choose the next
+   intervention only after correlating the texel, PS statistics, draw target,
+   and readback.
+5. Publish the source and checkpoint changes with the next meaningful run
    evidence.
 
 ## Tooling decision
