@@ -61,8 +61,8 @@ still verifies the runtime DLL fingerprints.
 DLL, set di override e manifest coincidano; `Run` richiede conferma, crea una
 cartella run univoca, salva un restore point byte-per-byte, archivia gli output
 globali precedenti, avvia launcher e monitor sul Present richiesto con timeout
-massimo (180 secondi di default) e ripristina
-DLL e override originali in `finally`. Il restore point resta nella run se serve
+massimo (180 secondi di default) e ripristina in `finally` lo stato installato
+precedente, che puo' gia' contenere DLL proxy iniettate. Il restore point resta nella run se serve
 un recupero manuale. Il restore conserva anche lo stato iniziale in cui le DLL
 proxy o la directory override non esistevano; `Restore` valida il restore point
 prima di applicarlo e resta compatibile con i manifest di ripristino precedenti.
@@ -71,16 +71,24 @@ prima di applicarlo e resta compatibile con i manifest di ripristino precedenti.
 $manager = "tools/LiveFrameMonitor/ProxyManager.ps1"
 $version = "D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\D3D12On11Patch\versions\950m-v015-no-shader-override-srv-diagnostics-20261111"
 $manifest = "evidence/GTX_950M/runs/20261111/950m-v015-no-shader-override-srv-diagnostics-20261111/run-manifest.json"
+$runRoot = "evidence/GTX_950M/runs"
 
 powershell -ExecutionPolicy Bypass -File $manager -Action Inventory
 powershell -ExecutionPolicy Bypass -File $manager -Action Prepare `
-  -VersionPath $version -ManifestPath $manifest -Present 400
+  -VersionPath $version -ManifestPath $manifest -RunRoot $runRoot -Present 400
 powershell -ExecutionPolicy Bypass -File $manager -Action Run `
-  -VersionPath $version -ManifestPath $manifest -Present 400
+  -VersionPath $version -ManifestPath $manifest -RunRoot $runRoot -Present 400
 ```
 
-Le run vengono archiviate sotto `evidence/GTX_950M/runs/<data>/<testVersion>-<UTC time>`;
-una collisione viene rifiutata, mai sovrascritta. Per un recupero esplicito:
+`-RunRoot` e' obbligatorio per `Prepare` e `Run`, cosi' il manager non puo'
+archiviare per errore una GPU nella cartella dell'altra. Per i test 1050 Ti,
+impostarlo a `evidence/GTX_1050TI/runs`. I percorsi relativi sono risolti
+rispetto alla root del progetto. Le run vengono salvate in
+`<RunRoot>/<data>/<testVersion>-<UTC time>`; una collisione viene rifiutata,
+mai sovrascritta. Se si usa una copia del manager esterna al tree Hela
+(ad esempio la copia attiva in `Plugin Nuovi`), passare un `RunRoot` assoluto
+verso la corretta cartella `evidence/GTX_*/runs`: il percorso relativo segue
+la posizione del manager, non quella di un altro checkout Hela. Per un recupero esplicito:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File $manager -Action Restore `

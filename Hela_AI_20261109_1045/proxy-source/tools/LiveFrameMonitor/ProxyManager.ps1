@@ -22,8 +22,14 @@ $RuntimeDir = Join-Path $PatchRoot "versions"
 $InstalledOverridesDir = Join-Path $PatchRoot "overrides"
 $LogPath = Join-Path $GameDir "d3d12on11.log"
 $ProjectRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $ScriptDir))
-if ([string]::IsNullOrWhiteSpace($RunRoot)) {
-    $RunRoot = Join-Path $ProjectRoot "evidence\GTX_950M\runs"
+if ($Action -in @("Prepare", "Run") -and [string]::IsNullOrWhiteSpace($RunRoot)) {
+    throw "-RunRoot is required for Prepare and Run. Specify the correct GPU evidence path."
+}
+if (-not [string]::IsNullOrWhiteSpace($RunRoot)) {
+    if (-not [IO.Path]::IsPathRooted($RunRoot)) {
+        $RunRoot = Join-Path $ProjectRoot $RunRoot
+    }
+    $RunRoot = [IO.Path]::GetFullPath($RunRoot)
 }
 
 if ($Action -in @("Prepare", "Run") -and $Present -lt 100 -or
@@ -404,7 +410,9 @@ function Move-IfPresent {
     )
     if (Test-Path -LiteralPath $Path -PathType Leaf) {
         $parent = Split-Path -Parent $Destination
-        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        if (-not (Test-Path -LiteralPath $parent -PathType Container)) {
+            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        }
         Move-Item -LiteralPath $Path -Destination $Destination
         return $true
     }
@@ -455,7 +463,11 @@ switch ($Action) {
             available_packages = Get-AvailablePackageInventory
             game_running = (@(Get-Process -Name "Hela-Win64-Shipping" -ErrorAction SilentlyContinue |
                 Where-Object { $_.Path -and $_.Path -ieq [IO.Path]::GetFullPath($GameExePath) }).Count -gt 0)
-            run_root = [IO.Path]::GetFullPath($RunRoot)
+            run_root = if ([string]::IsNullOrWhiteSpace($RunRoot)) {
+                $null
+            } else {
+                $RunRoot
+            }
         } | ConvertTo-Json -Depth 8
         return
     }

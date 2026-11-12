@@ -1,0 +1,12 @@
+﻿{
+    "schema":  "hela-proxy-manager-run/v1",
+    "run_id":  "1050ti-merged-proxy-build-20261112-111648166",
+    "test_version":  "1050ti-merged-proxy-build-20261112",
+    "started_utc":  "2026-11-12T11:16:48.1794520Z",
+    "package_path":  "D:\\SteamLibrary\\steamapps\\common\\Hela Demo\\Hela\\Binaries\\Win64\\D3D12On11Patch\\versions\\1050ti-merged-proxy-build-20261112",
+    "target_present":  100,
+    "status":  "failed",
+    "error":  "Run log does not attest the expected shader override \u002720e0826b236597a1.cso\u0027 (5d844557b3a5f78c108aca027b14432f3eba52791057234f7310c487926a3d3e)",
+    "completed_utc":  "2026-11-12T11:17:30.6140391Z",
+    "restored":  true
+}

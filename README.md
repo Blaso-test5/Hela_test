@@ -4,6 +4,17 @@ This repository records the Hela D3D12-to-D3D11 investigation. The native
 proxy and Shader Lab converter are separate projects, even though they are
 stored in the same local workspace.
 
+## Local workspace mapping on this PC
+
+- Hela_test checkout: `D:\Plugin_ChatGpt\GHIDRA MCP\Hela-Export\Repositories\Hela_test`
+- Hela shader export: `D:\Plugin_ChatGpt\GHIDRA MCP\Hela-Export`
+- Active native proxy source: `D:\Plugin_ChatGpt\GHIDRA MCP\Plugin Nuovi\sm6-to-sm5-mcp\d3d12on11`
+- Versioned, portable proxy source: `Hela_AI_20261109_1045\proxy-source` in this checkout
+
+The versioned proxy source is the update source for the active `d3d12on11`
+folder. Refreshing it adds or replaces maintained project files but does not
+delete local build outputs, backups, or other extra files.
+
 ## Get the latest files on another Windows PC
 
 For a new checkout:
@@ -41,7 +52,7 @@ versioned project files over it (this does not delete local files):
 
 ```powershell
 $Source = Join-Path (Get-Location) 'Hela_AI_20261109_1045\proxy-source'
-$Target = 'D:\Plugin_ChatGPT\GHIDRA MCP\Plugin Nuovi\sm6-to-sm5-mcp\d3d12on11'
+$Target = 'D:\Plugin_ChatGpt\GHIDRA MCP\Plugin Nuovi\sm6-to-sm5-mcp\d3d12on11'
 robocopy $Source $Target /E /R:2 /W:1
 ```
 
@@ -53,7 +64,7 @@ headers, tests, and tools. It intentionally excludes machine-specific
 ### Refresh the Shader Lab converter fix
 
 The TypeScript Shader Lab at
-`D:\Plugin_ChatGPT\GHIDRA MCP\Plugin Nuovi\sm6-to-sm5-mcp` is separate from
+`D:\Plugin_ChatGpt\GHIDRA MCP\Plugin Nuovi\sm6-to-sm5-mcp` is separate from
 the native proxy. The entry-point fix and its regression tests are included
 as source snapshots under
 `Hela_AI_20261109_1045\evidence\converter-source`. To apply them to an
@@ -61,7 +72,7 @@ existing Shader Lab checkout:
 
 ```powershell
 $Repo = (Get-Location).Path
-$Plugin = 'D:\Plugin_ChatGPT\GHIDRA MCP\Plugin Nuovi\sm6-to-sm5-mcp'
+$Plugin = 'D:\Plugin_ChatGpt\GHIDRA MCP\Plugin Nuovi\sm6-to-sm5-mcp'
 Copy-Item (Join-Path $Repo 'Hela_AI_20261109_1045\evidence\converter-source\hlsl-post.ts') `
   (Join-Path $Plugin 'src\hlsl-post.ts') -Force
 Copy-Item (Join-Path $Repo 'Hela_AI_20261109_1045\evidence\converter-source\test.ts') `

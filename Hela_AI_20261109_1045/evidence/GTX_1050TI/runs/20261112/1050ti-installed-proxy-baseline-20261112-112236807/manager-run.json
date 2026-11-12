@@ -1,0 +1,12 @@
+﻿{
+    "schema":  "hela-proxy-manager-run/v1",
+    "run_id":  "1050ti-installed-proxy-baseline-20261112-112236807",
+    "test_version":  "1050ti-installed-proxy-baseline-20261112",
+    "started_utc":  "2026-11-12T11:22:36.8194147Z",
+    "package_path":  "D:\\SteamLibrary\\steamapps\\common\\Hela Demo\\Hela\\Binaries\\Win64\\D3D12On11Patch\\versions\\1050ti-installed-proxy-baseline-20261112",
+    "target_present":  100,
+    "status":  "failed",
+    "error":  "Run log does not attest the expected d3d12 module fingerprint (41c3cd9e26edeb2251af273594e0b63038b297bf532dfb9ba8e0135013d07410)",
+    "completed_utc":  "2026-11-12T11:22:41.3004384Z",
+    "restored":  true
+}

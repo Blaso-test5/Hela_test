@@ -78,3 +78,53 @@ i valori b0 sono in `1050ti-cbv-readback-20261110-1942/cbv-readback-extract.txt`
 Il log completo del run CBV rimaneva nel log globale locale del gioco;
 `cbv-readback-extract.txt` conserva le righe pertinenti, incluso l'header e
 i marker target. Il profilo sintetico del run e' `run-profile.txt`.
+
+## Confronto con GTX 950M — evidenze aggiornate all'11 novembre
+
+I test controllati dimostrano su entrambe le GPU che il percorso di output
+puo' scrivere pixel: sulla 950M i run v004/v008 producono rispettivamente
+magenta e bianco a pieno frame; sulla 1050 Ti il run magenta e' a pieno frame
+e il test vertex-color produce una forma bianca. Questi sono controlli
+diagnostici, non rendering reale di Hela.
+
+| Aspetto | GTX 950M | GTX 1050 Ti |
+|---|---|---|
+| Pixel shader di gioco convertito | I run v005-v007 restano neri; v010 misura `COLOR.r=1` ma `t0.r=0` nello shader, nonostante il readback staging del t0 1x1 sia bianco. I test `Load`/`SampleLevel` mostrano risultati iniziali neri e variazioni dipendenti dal tempo; il campione tardivo di v011 e' limitato. | Il PS reale e' caricato ed eseguito per 1.044.480 invocazioni, ma source e backbuffer sono neri. I primi 16 byte di VS/PS b0 coincidono tra shadow CPU e CB D3D11; il texel osservato dallo shader non e' ancora misurato. |
+| Diagnostica senza override | v014/v015 sono neri; v015 registra 66 draw saltati sul RTV bersaglio, 947 VS skip nell'heartbeat finale e zero shader pronti (placeholder). | Non e' stato raccolto un run baseline equivalente senza override nel set del 10 novembre. |
+| Problemi corretti/misurati | I run gestiti hanno ripristinato e attestato DLL/override; gli errori SRV/OOM precedenti non si riproducono in v015, senza provarne la causa. | Il flush upload corregge l'IB; `CopyDescriptors` con size-array null ora copia un descriptor per range e `t0/s0` risultano bindati. |
+
+### Interpretazione comune e limiti
+
+La capacita' di scrivere nel target e nel backbuffer e' verificata su entrambe
+le GPU, quindi il nero del gioco non e' spiegato da un'incapacita' generale
+della GPU/proxy di produrre output. La 950M fornisce un indizio piu' specifico
+sul percorso di sampling: il valore di `t0` osservato dal PS differisce dal
+readback staging. Sulla 1050 Ti il descriptor e il sampler sono presenti, ma
+non e' stato misurato il valore campionato; il problema non va quindi
+considerato identico o gia' localizzato tra le due GPU.
+
+Il prossimo confronto utile e' acquisire, per lo stesso draw e Present,
+`t0.Load`/`SampleLevel` effettivo, coordinate UV e valore colore dal pixel
+shader, oltre a formato/risorsa e readback staging dello stesso SRV. Prima di
+eseguire un nuovo run, specificare sempre l'output GTX: il `ProxyManager.ps1`
+versionato ha come `RunRoot` predefinito `evidence\GTX_950M\runs`, che
+rischia di archiviare nel percorso errato i test fatti su questa 1050 Ti.
+
+### Allineamento sorgenti C++
+
+Il proxy-source aggiornato include le sonde GTX 950M per vertex buffer, input
+layout, texture e fingerprint insieme alle sonde 1050 Ti per root/table,
+descriptor e CBV. La cartella attiva e' stata riallineata a questo snapshot
+dopo averne archiviato i sorgenti precedenti in uno ZIP; il merge conserva
+anche il flush upload IB/VB e il fix `CopyDescriptors` verificati sulla 1050
+Ti. La nuova regressione `d3d11_structured_buffer_copy_smoke` e' inclusa nel
+CMake aggiornato.
+
+Il `ProxyManager.ps1` richiede ora un `-RunRoot` esplicito per `Prepare` e
+`Run`, evitando che un test su questa 1050 Ti finisca sotto `GTX_950M`.
+
+### Follow-up 12 novembre 2026
+
+La build aggiornata e i test manager sono stati verificati; i due tentativi live
+del 12 novembre sono terminati prima del primo Present. Evidenze e diagnosi
+sono nel [resoconto del 12 novembre](../20261112/README.md).

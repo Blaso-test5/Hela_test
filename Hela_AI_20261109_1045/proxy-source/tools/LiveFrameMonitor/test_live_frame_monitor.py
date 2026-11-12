@@ -91,6 +91,72 @@ def _run_proxy_manager_restore(
 
 
 class LiveFrameMonitorTests(unittest.TestCase):
+    def test_proxy_manager_requires_gpu_specific_run_root(self) -> None:
+        powershell = shutil.which("powershell") or shutil.which("pwsh")
+        if not powershell or not PROXY_MANAGER_PS1.is_file():
+            self.skipTest("PowerShell or ProxyManager.ps1 not available in test environment")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            game_exe = Path(tmpdir) / "Hela-Win64-Shipping.exe"
+            game_exe.write_bytes(b"synthetic executable placeholder")
+            result = subprocess.run(
+                [
+                    powershell,
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(PROXY_MANAGER_PS1),
+                    "-Action",
+                    "Prepare",
+                    "-GameExePath",
+                    str(game_exe),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout + "\n" + result.stderr)
+        self.assertIn("-RunRoot is required", result.stdout + "\n" + result.stderr)
+
+    def test_proxy_manager_skips_creating_existing_drive_root(self) -> None:
+        powershell = shutil.which("powershell") or shutil.which("pwsh")
+        if not powershell or not PROXY_MANAGER_PS1.is_file():
+            self.skipTest("PowerShell or ProxyManager.ps1 not available in test environment")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            game_exe = root / "Hela-Win64-Shipping.exe"
+            source = root / "source.txt"
+            destination = Path(root.anchor) / f"proxy-manager-move-{time.monotonic_ns()}.txt"
+            game_exe.write_bytes(b"synthetic executable placeholder")
+            source.write_text("move probe", encoding="ascii")
+            quote = lambda value: "'" + str(value).replace("'", "''") + "'"
+            command = (
+                "$ErrorActionPreference = 'Stop'; "
+                f". {quote(PROXY_MANAGER_PS1)} -Action Inventory -GameExePath {quote(game_exe)}; "
+                "$global:moveCalled = $false; "
+                "function Move-Item { $global:moveCalled = $true }; "
+                f"$moved = Move-IfPresent -Path {quote(source)} -Destination {quote(destination)}; "
+                "if (-not $moved -or -not $global:moveCalled) { throw 'Move-IfPresent did not restore the file' }"
+            )
+            result = subprocess.run(
+                [
+                    powershell,
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    command,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + "\n" + result.stderr)
+
     def test_file_creation_partial_append_and_truncation_reset(self) -> None:
         events = []
         state = lfm.LiveMonitorState(event_callback=lambda s, e: events.append((s, e)))
