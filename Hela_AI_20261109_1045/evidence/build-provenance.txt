@@ -168,3 +168,20 @@ absence, original log/readback restoration, shared override hashes, and
 process termination were verified. Captured stdout contained Sentry
 `sentry_key` query values; those values were redacted locally and stdout is
 not part of the published evidence.
+
+Placed-resource overlap mitigation and monitored-run preparation,
+2026-11-16:
+The versioned `proxy-source` now accepts overlapping `CreatePlacedResource`
+allocations and tracks each backing resource independently. This avoids
+returning `E_INVALIDARG` for overlapping ranges but does not implement shared
+heap aliasing; the D3D11 resources have independent backing, and aliasing/UAV
+barriers remain unimplemented.
+Built with CMake 3.31.9 and the Visual Studio 17 2022 generator. Release CTest
+passed 8/8, including a large-buffer/small-buffer overlap smoke test.
+  d3d12.dll size=392704 sha256=C41A23038CFCEAC77117E45499FD77EF0BB3A4859247CD434A2C4B52DCBF1063
+  dxgi.dll size=48128 sha256=3E116119E7C0A6043A231795B0696C0DE3F13463EA4A05F4D3A303976D8B3699
+These outputs remain in the local build directory and were not copied into
+the game directory or used in a Hela run. The November 16 crashed run's
+missing summary was reconstructed from retained artifacts as
+`runs\20261116\shader-dump-monitored-20261116-130331\run-result-reconstructed.json`;
+its TCP egress result remains unknown.

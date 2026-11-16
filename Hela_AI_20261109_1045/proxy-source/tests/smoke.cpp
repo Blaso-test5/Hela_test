@@ -688,7 +688,7 @@ static int RunTiledResourceSmoke(ID3D12Device* device) {
 
 static int RunPlacedResourceSmoke(ID3D12Device* device) {
     D3D12_HEAP_DESC heapDesc{};
-    heapDesc.SizeInBytes = 2 * D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+    heapDesc.SizeInBytes = 2 * 1024 * 1024;
     heapDesc.Properties.Type = D3D12_HEAP_TYPE_UPLOAD;
     heapDesc.Properties.CreationNodeMask = heapDesc.Properties.VisibleNodeMask = 1;
     heapDesc.Flags = D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES |
@@ -704,7 +704,7 @@ static int RunPlacedResourceSmoke(ID3D12Device* device) {
 
     D3D12_RESOURCE_DESC resourceDesc{};
     resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    resourceDesc.Width = 4096;
+    resourceDesc.Width = 1024 * 1024;
     resourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
     resourceDesc.Height = 1;
     resourceDesc.DepthOrArraySize = 1;
@@ -722,12 +722,14 @@ static int RunPlacedResourceSmoke(ID3D12Device* device) {
         return 31;
     }
 
+    D3D12_RESOURCE_DESC overlapDesc = resourceDesc;
+    overlapDesc.Width = 4096;
     ID3D12Resource* overlap = nullptr;
-    result = device->CreatePlacedResource(heap, 0, &resourceDesc,
+    result = device->CreatePlacedResource(heap, 0, &overlapDesc,
         D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, __uuidof(ID3D12Resource),
         reinterpret_cast<void**>(&overlap));
-    if (result != E_INVALIDARG || overlap) {
-        std::fprintf(stderr, "Overlapping active placement was not rejected: 0x%08lx\n", result);
+    if (FAILED(result) || !overlap) {
+        std::fprintf(stderr, "Overlapping placed resource failed: 0x%08lx\n", result);
         if (overlap) overlap->Release();
         first->Release();
         heap->Release();
@@ -735,8 +737,8 @@ static int RunPlacedResourceSmoke(ID3D12Device* device) {
     }
 
     ID3D12Resource* second = nullptr;
-    result = device->CreatePlacedResource(heap, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT,
-        &resourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+    result = device->CreatePlacedResource(heap, 1024 * 1024,
+        &overlapDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
         __uuidof(ID3D12Resource), reinterpret_cast<void**>(&second));
     if (FAILED(result)) {
         std::fprintf(stderr, "Non-overlapping placed resource failed: 0x%08lx\n", result);
@@ -757,6 +759,7 @@ static int RunPlacedResourceSmoke(ID3D12Device* device) {
     }
 
     first->Release();
+    overlap->Release();
     ID3D12Resource* reused = nullptr;
     result = device->CreatePlacedResource(heap, 0, &resourceDesc,
         D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, __uuidof(ID3D12Resource),

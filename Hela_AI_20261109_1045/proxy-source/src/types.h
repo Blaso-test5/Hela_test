@@ -95,14 +95,13 @@ struct HeapObj : Stub_ID3D12Heap {
     Ptr<ID3D11Buffer> tilePool;
     std::mutex tilePoolMutex;
     std::mutex placementMutex;
-    std::map<UINT64, PlacedRangeInfo> placedRanges;
+    std::vector<PlacedRangeInfo> placedRanges;
     HeapObj(Device* d, const D3D12_HEAP_DESC& x) : Stub_ID3D12Heap(d), hd(x) {}
     D3D12_HEAP_DESC STDMETHODCALLTYPE GetDesc() override { return hd; }
     HRESULT GetTilePool(ID3D11Buffer** out);
     HRESULT ReservePlacedRange(UINT64 offset, UINT64 size, const D3D12_RESOURCE_DESC* desc,
-        PlacedRangeInfo* outConflict = nullptr);
-    void BindPlacedResource(UINT64 offset, Resource* resource);
-    void ReleasePlacedRange(UINT64 offset, Resource* resource = nullptr);
+        Resource* resource, PlacedRangeInfo* outOverlap = nullptr);
+    void ReleasePlacedRange(UINT64 offset, Resource* resource);
 };
 
 inline UINT64 CurrentGpuTimestampNs() {

@@ -711,53 +711,26 @@ HRESULT STDMETHODCALLTYPE Device::CreatePlacedResource(ID3D12Heap* sourceHeap, U
         return E_INVALIDARG;
     }
 
-    PlacedRangeInfo conflict{};
-    const HRESULT reserveResult = heap->ReservePlacedRange(offset, allocation.SizeInBytes, desc, &conflict);
-    if (FAILED(reserveResult)) {
-        if (conflict.size) {
-            if (Cfg().diagnosticRenderTrace) {
-                TraceStats().placedOverlap.fetch_add(1, std::memory_order_relaxed);
-                Log("[RENDER_TRACE] [tid=%lu] CreatePlacedResource OVERLAP heap=%p "
-                    "req=[%llu..%llu) dim=%u size=%llux%ux%u format=%u flags=0x%x "
-                    "existing=[%llu..%llu) res=%p tid=%lu dim=%u size=%llux%ux%u "
-                    "mips=%u format=%u flags=0x%x result=0x%08lx",
-                    GetCurrentThreadId(), heap,
-                    static_cast<unsigned long long>(offset),
-                    static_cast<unsigned long long>(offset + allocation.SizeInBytes),
-                    desc->Dimension, static_cast<unsigned long long>(desc->Width),
-                    desc->Height, desc->DepthOrArraySize, desc->Format,
-                    static_cast<UINT>(desc->Flags),
-                    static_cast<unsigned long long>(conflict.offset),
-                    static_cast<unsigned long long>(conflict.offset + conflict.size),
-                    conflict.resource, conflict.creatorTid, conflict.dimension,
-                    static_cast<unsigned long long>(conflict.width), conflict.height,
-                    conflict.depthOrArray, conflict.mipLevels, conflict.format,
-                    static_cast<UINT>(conflict.flags), reserveResult);
-            } else {
-                Log("CreatePlacedResource overlapping placement rejected offset=%llu size=%llu result=0x%08lx",
-                    static_cast<unsigned long long>(offset),
-                    static_cast<unsigned long long>(allocation.SizeInBytes), reserveResult);
-            }
-        } else {
-            Log("CreatePlacedResource placement reservation failed offset=%llu size=%llu result=0x%08lx",
-                static_cast<unsigned long long>(offset),
-                static_cast<unsigned long long>(allocation.SizeInBytes), reserveResult);
-        }
-        return reserveResult;
-    }
-
     Resource* resource = nullptr;
     const HRESULT createResult = Resource::Create(this, &heap->hd.Properties, heap->hd.Flags,
         desc, &resource);
     if (FAILED(createResult)) {
-        heap->ReleasePlacedRange(offset);
         Log("CreatePlacedResource backing creation failed result=0x%08lx", createResult);
         return createResult;
     }
+
+    PlacedRangeInfo overlap{};
+    const HRESULT reserveResult = heap->ReservePlacedRange(
+        offset, allocation.SizeInBytes, desc, resource, &overlap);
+    if (FAILED(reserveResult)) {
+        resource->Release();
+        Log("CreatePlacedResource placement tracking failed result=0x%08lx", reserveResult);
+        return reserveResult;
+    }
+
     resource->placedHeap = Ptr<ID3D12Heap>(heap);
     resource->placedOffset = offset;
     resource->placedSize = allocation.SizeInBytes;
-    heap->BindPlacedResource(offset, resource);
     const HRESULT queryResult = resource->QueryInterface(riid, out);
     resource->Release();
     Log("CreatePlacedResource result=0x%08lx", queryResult);

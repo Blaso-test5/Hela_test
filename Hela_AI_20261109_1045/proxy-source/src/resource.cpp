@@ -294,27 +294,23 @@ HRESULT HeapObj::GetTilePool(ID3D11Buffer** out) {
 }
 
 HRESULT HeapObj::ReservePlacedRange(UINT64 offset, UINT64 size, const D3D12_RESOURCE_DESC* desc,
-    PlacedRangeInfo* outConflict) {
-    if (outConflict) *outConflict = {};
-    if (!desc) return E_INVALIDARG;
+    Resource* resource, PlacedRangeInfo* outOverlap) {
+    if (outOverlap) *outOverlap = {};
+    if (!desc || !resource) return E_INVALIDARG;
     if (!size || offset > UINT64_MAX - size) return E_INVALIDARG;
 
     std::lock_guard<std::mutex> lock(placementMutex);
-    const auto next = placedRanges.lower_bound(offset);
-    if (next != placedRanges.end() && offset + size > next->first) {
-        if (outConflict) *outConflict = next->second;
-        return E_INVALIDARG;
-    }
-    if (next != placedRanges.begin()) {
-        const auto previous = std::prev(next);
-        if (previous->second.offset + previous->second.size > offset) {
-            if (outConflict) *outConflict = previous->second;
-            return E_INVALIDARG;
+    for (const auto& placed : placedRanges) {
+        if (offset < placed.offset + placed.size && placed.offset < offset + size) {
+            if (outOverlap) *outOverlap = placed;
+            break;
         }
     }
+
     PlacedRangeInfo info{};
     info.offset = offset;
     info.size = size;
+    info.resource = resource;
     info.dimension = desc->Dimension;
     info.width = desc->Width;
     info.height = desc->Height;
@@ -324,24 +320,28 @@ HRESULT HeapObj::ReservePlacedRange(UINT64 offset, UINT64 size, const D3D12_RESO
     info.flags = desc->Flags;
     info.creatorTid = GetCurrentThreadId();
     try {
-        if (!placedRanges.emplace(offset, info).second)
-            return E_INVALIDARG;
+        placedRanges.push_back(info);
     } catch (const std::bad_alloc&) {
         return E_OUTOFMEMORY;
     }
-    return S_OK;
-}
 
-void HeapObj::BindPlacedResource(UINT64 offset, Resource* resource) {
-    if (!resource) return;
-    std::lock_guard<std::mutex> lock(placementMutex);
-    auto found = placedRanges.find(offset);
-    if (found == placedRanges.end()) {
-        Log("[RENDER_TRACE] [tid=%lu] placement bind missing heap=%p offset=%llu resource=%p",
-            GetCurrentThreadId(), this, static_cast<unsigned long long>(offset), resource);
-        return;
+    if (outOverlap && outOverlap->size) {
+        if (Cfg().diagnosticRenderTrace) {
+            TraceStats().placedOverlap.fetch_add(1, std::memory_order_relaxed);
+            Log("[RENDER_TRACE] [tid=%lu] CreatePlacedResource ALIAS_ACCEPTED heap=%p "
+                "req=[%llu..%llu) res=%p existing=[%llu..%llu) existing-res=%p "
+                "backing=independent-d3d11 result=0x%08lx",
+                GetCurrentThreadId(), this,
+                static_cast<unsigned long long>(offset),
+                static_cast<unsigned long long>(offset + size), resource,
+                static_cast<unsigned long long>(outOverlap->offset),
+                static_cast<unsigned long long>(outOverlap->offset + outOverlap->size),
+                outOverlap->resource, S_OK);
+        } else {
+            Log("CreatePlacedResource overlapping placement accepted; D3D11 backing is independent");
+        }
     }
-    found->second.resource = resource;
+
     if (Cfg().diagnosticRenderTrace) {
         auto& stats = TraceStats();
         stats.placedOk.fetch_add(1, std::memory_order_relaxed);
@@ -349,25 +349,32 @@ void HeapObj::BindPlacedResource(UINT64 offset, Resource* resource) {
         Log("[RENDER_TRACE] [tid=%lu] CreatePlacedResource OK heap=%p res=%p range=[%llu..%llu) "
             "dim=%u size=%llux%ux%u mips=%u format=%u flags=0x%x live=%zu",
             GetCurrentThreadId(), this, resource,
-            static_cast<unsigned long long>(found->second.offset),
-            static_cast<unsigned long long>(found->second.offset + found->second.size),
-            found->second.dimension, static_cast<unsigned long long>(found->second.width),
-            found->second.height, found->second.depthOrArray, found->second.mipLevels,
-            found->second.format, static_cast<UINT>(found->second.flags), placedRanges.size());
+            static_cast<unsigned long long>(info.offset),
+            static_cast<unsigned long long>(info.offset + info.size),
+            info.dimension, static_cast<unsigned long long>(info.width),
+            info.height, info.depthOrArray, info.mipLevels,
+            info.format, static_cast<UINT>(info.flags), placedRanges.size());
     }
+    return S_OK;
 }
 
 void HeapObj::ReleasePlacedRange(UINT64 offset, Resource* resource) {
     std::lock_guard<std::mutex> lock(placementMutex);
-    auto found = placedRanges.find(offset);
-    if (found == placedRanges.end()) return;
-    if (resource && found->second.resource && found->second.resource != resource) {
-        Log("[RENDER_TRACE] [tid=%lu] ReleasePlacedRange resource mismatch heap=%p offset=%llu expected=%p got=%p",
-            GetCurrentThreadId(), this, static_cast<unsigned long long>(offset),
-            found->second.resource, resource);
+    const auto found = std::find_if(placedRanges.begin(), placedRanges.end(),
+        [offset, resource](const PlacedRangeInfo& placed) {
+            return placed.offset == offset && placed.resource == resource;
+        });
+    if (found == placedRanges.end()) {
+        const auto sameOffset = std::find_if(placedRanges.begin(), placedRanges.end(),
+            [offset](const PlacedRangeInfo& placed) { return placed.offset == offset; });
+        if (sameOffset != placedRanges.end()) {
+            Log("[RENDER_TRACE] [tid=%lu] ReleasePlacedRange resource mismatch heap=%p offset=%llu expected=%p got=%p",
+                GetCurrentThreadId(), this, static_cast<unsigned long long>(offset),
+                sameOffset->resource, resource);
+        }
         return;
     }
-    const PlacedRangeInfo released = found->second;
+    const PlacedRangeInfo released = *found;
     placedRanges.erase(found);
     if (Cfg().diagnosticRenderTrace && released.resource) {
         auto& stats = TraceStats();
