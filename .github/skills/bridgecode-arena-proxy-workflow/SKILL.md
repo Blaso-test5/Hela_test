@@ -43,6 +43,33 @@ Use this workflow for proxy, Proxy Manager, shader-conversion, and Hela-render i
 3. Build and test in an isolated worktree or directory first. Record the artifact identifier, files reviewed, test results, and any merge decisions.
 4. Merge only the necessary files into the project, preserving local changes and the active injected DLLs. Create the user's requested conservative ZIP backup before replacing runtime DLLs.
 
+## 6. Diagnose BridgeCode MCP timeouts and duplicate sends
+
+- Treat a BridgeCode slow-tool notification as evidence of the current stage, not as proof that the operation was cancelled. Do not retry the same MCP call while it may still be running; concurrent searches can duplicate work and make an index build slower.
+- For `bridgecode_search_code` warnings in `caricamento dell’indice workspace`, first establish which VS Code workspace and chat/project root the failing MCP client uses. `bridgecode_status` reports the active BridgeCode browser session, not necessarily the separate chat or workspace that produced another client's timeout.
+- The project index is cached by workspace root for the lifetime of the extension host. A different chat with the same root should reuse it once built; a different `session.projectRoot`, an uncached project root, or simultaneous first requests can trigger another full scan.
+- `FileIndex.buildAsync()` still walks eligible directories and reads every eligible file up to 200 KB to create previews. The 25 MB search budget applies after indexing, so it does not cap or accelerate the initial index build. Excluded directories/extensions are defined in `ContextBuilder.ts`.
+- If the warning persists, record the exact stage, workspace root, whether this is the first search after selecting that root, and whether concurrent MCP requests were launched. Avoid repeated `bridgecode_list_files` or search calls as a diagnostic; inspect local logs and the selected project configuration first.
+- Never infer that a prompt was unsent from a timeout alone. Check BridgeCode status and read the last response before considering a retry. If generation is active, wait; do not resend or cancel without explicit user direction.
+- To verify duplicate-send prevention, run one short, harmless prompt in an isolated/free chat, then check the user/assistant message counts and final response. A successful single MCP test and a separate manual GUI test showed one user message and one reply each; this is evidence for those runs, not a guarantee for every model, network error, or Arena state.
+
+## 7. Resume work in a blank Arena chat
+
+- If the user asks to continue and status shows a ready browser but no active chat, do not ask them to recreate the context. Compose a compact handoff from the current worktree and verified session notes, then use `bridgecode_switch_to_new_chat` to create a fresh chat and send one focused prompt.
+- Include the project goal, current change, tests already run, limits/constraints, and the precise question. Attach only the smallest relevant excerpts from real project files; do not send entire files by default.
+- For `files`, search first with `bridgecode_search_code`, then read the exact same paths and line ranges with `bridgecode_read_excerpt`. For `codeFiles`, read those exact ranges with `bridgecode_read_active_code_file` from the active Code tab. If a new file is absent from the index or Code is not active, state that clearly and summarize its relevant logic in the handoff instead of claiming it was attached.
+- If status says busy, or a send is unconfirmed/blocked, do not open another chat or retry. Check the current status and last response once; if the request cannot proceed, stop and report what is missing.
+- Keep game-captured shader outputs (for example HLSL or `.cso`) out of Arena prompts unless the user explicitly authorizes those specific artifacts. Prefer proxy/tool source excerpts.
+- When a new, repeatable Hela/Arena action or correction is established and the user wants it remembered, update this skill and the Hela repository copy if present. Record only verified steps, constraints, and outcomes; do not preserve secrets or raw game shader artifacts.
+
+## 8. Shader-use ledger review lessons
+
+- Treat ledger entries as proxy draw/dispatch calls observed, not proof of GPU completion or visual contribution. Present values are process-wide counters, not frame identifiers; an RTV pointing at the backbuffer is not proof that the draw affected its contents.
+- Define and label the count unit for `ExecuteIndirect`: executed paths can record each embedded command, while a skipped call may only be known as one API invocation. Do not compare those counts as if they were equivalent; count skipped commands only when the count is known.
+- Check every early return in direct and indirect execution paths. Rejected arguments or unavailable backing resources are not shader executions; either record a separate diagnostic counter/log or document the gap.
+- Mark snapshots as windows since the previous dump when a heartbeat resets the ledger. Do not label window totals as cumulative process totals.
+- A top-N summary can hide rare skipped or missing-stage groups. Prefer those groups when truncating, and expose omitted/overflow totals. Test the invariant per execution type: tracked entries + omitted entries + overflow equals the reported total.
+
 ## Hela-specific safeguards
 
 - Check the current GPU and keep evidence separated under `evidence\GTX_950M` and `evidence\GTX_1050TI`.
@@ -51,3 +78,12 @@ Use this workflow for proxy, Proxy Manager, shader-conversion, and Hela-render i
 - Correlate shader, resource, draw, and Present readbacks from the same run. A forced-color diagnostic proves the output path only, not real-game rendering.
 - Preserve injected proxy DLLs. Do not restore original DLLs unless explicitly requested; make a conservative ZIP backup before replacing injects.
 - Keep diagnostics bounded and reversible. Do not infer a functional fix from a model suggestion without measurements and tests.
+
+### Reproducing a known-good Hela run
+
+- Reproduce the complete recorded launch profile, including environment variables and exact runtime DLL hashes; matching only the DLLs is not sufficient.
+- Stage each shader override in a run-specific directory before launching a fresh Hela process. Set `D3D12ON11_OVERRIDES` and `D3D12ON11_DUMP` to run-specific absolute paths and set `D3D12ON11_DUMP_SHADERS=0` when matching a profile that disabled shader dumping. Never overwrite or clean the shared patch dump as a side effect of a test.
+- Remove or back up external readback destinations before launch, retain a run-local copy of every newly written BMP even when its hash matches an earlier image, and restore the original external files afterward. The run log and write time establish freshness; equal image hashes do not mean the capture is stale.
+- Match the proxy's actual log syntax when detecting captures (for example, `[READBACK_FULL] Present #100 saved READBACK_SRC`). Distinguish the full-frame BMP measurement from the proxy's later sampled-point percentages; they are not interchangeable.
+- Treat `SHADER READY` for each target, successful Present, fresh readback, pixel result, process exit code, and restoration as separate facts. Do not infer a slot or root cause from a shared black #100 image, unequal run durations, or an unexplained nonzero exit code.
+- After every run, verify the game-root DLL state, shared override hashes/count, original log/readbacks, and that no Hela process remains.
