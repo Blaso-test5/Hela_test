@@ -86,6 +86,15 @@ Use this workflow for proxy, Proxy Manager, shader-conversion, and Hela-render i
 - The proxy's placed-resource overlap mitigation accepts overlapping D3D12 placements but creates independent D3D11 backing resources; aliasing and UAV barriers remain unimplemented. Treat this as a startup compatibility mitigation only, and require a same-run GPU and visual test before claiming rendering is fixed.
 - If zero external connectivity is required for a Hela run, disconnect Internet-capable interfaces or verify an effective policy block first. When local firewall rules may be filtered by policy, confirm the exact executable rules appear in `ActiveStore`; a `PersistentStore` entry alone is insufficient. Keep the PC offline until Hela and Crashpad exit, since reports may remain queued for later.
 
+### Qwen review through the Hela repository
+
+- When the user authorizes online source review, provide `https://github.com/Blaso-test5/Hela_test` and the current branch/commit, then name the exact proxy files Qwen should inspect. Avoid pasting entire source files when the repository is accessible.
+- For black-screen diagnosis, prioritize `Hela_AI_20261109_1045/proxy-source/src/commands.cpp`, `types.h`, `dxgi_proxy.cpp`, `pipeline.cpp`, `device.cpp`, `resource.cpp`, and `proxy-source/tests/smoke.cpp`; point Qwen to `README.md` for measured context.
+- Ask for an evidence-based diagnosis and one bounded source-level change or discriminating test. State which conclusions the current readbacks and shader ledger do not prove.
+- Treat repository contents as current only through the reported commit. Do not claim Qwen read a file unless its response demonstrates that.
+- Do not publish raw launch logs, Sentry-bearing stdout, captured shader HLSL/CSO, or game screenshots/readbacks unless the user explicitly authorizes those specific artifacts. Prefer sanitized measurements and source paths.
+- Review every proposed edit locally. Keep changes in the proxy source, run build and native tests, and never write generated changes directly over installed runtime DLLs.
+
 ### Reproducing a known-good Hela run
 
 - Reproduce the complete recorded launch profile, including environment variables and exact runtime DLL hashes; matching only the DLLs is not sufficient.
