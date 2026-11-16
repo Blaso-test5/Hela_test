@@ -1,0 +1,169 @@
+﻿{
+    "runId":  "shader-use-ledger-baseline-20261116-115534",
+    "endedAt":  "2026-11-16T11:57:23.7870279+01:00",
+    "exitCode":  16384,
+    "exitCodeHex":  "00004000",
+    "timeoutReached":  false,
+    "runError":  null,
+    "successfulPresentCalls":  2294,
+    "shaderUseSummaryCount":  20,
+    "drawShaderUseRecords":  46,
+    "computeShaderUseRecords":  2,
+    "shaderUseSummary":  [
+                             "[11:56:39.631] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=18 draw_commands=47 dispatch_commands=0 groups=3 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:56:41.632] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=96 draw_commands=218 dispatch_commands=0 groups=3 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:56:43.632] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=210 draw_commands=319 dispatch_commands=0 groups=3 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:56:45.676] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=288 draw_commands=193 dispatch_commands=0 groups=3 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:56:47.676] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=408 draw_commands=240 dispatch_commands=0 groups=2 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:56:49.676] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=531 draw_commands=246 dispatch_commands=0 groups=2 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:56:51.676] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=654 draw_commands=246 dispatch_commands=0 groups=2 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:56:53.677] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=772 draw_commands=237 dispatch_commands=0 groups=2 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:56:55.677] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=895 draw_commands=245 dispatch_commands=0 groups=2 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:56:57.678] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=1012 draw_commands=234 dispatch_commands=0 groups=2 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:56:59.678] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=1121 draw_commands=220 dispatch_commands=0 groups=2 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:57:01.678] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=1243 draw_commands=242 dispatch_commands=0 groups=2 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:57:03.679] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=1366 draw_commands=246 dispatch_commands=0 groups=2 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:57:05.679] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=1488 draw_commands=244 dispatch_commands=0 groups=2 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:57:07.680] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=1609 draw_commands=242 dispatch_commands=0 groups=2 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:57:09.680] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=1730 draw_commands=242 dispatch_commands=0 groups=2 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:57:11.680] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=1853 draw_commands=246 dispatch_commands=0 groups=2 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:57:13.681] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=1970 draw_commands=234 dispatch_commands=0 groups=2 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:57:15.682] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=2088 draw_commands=295 dispatch_commands=0 groups=3 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r",
+                             "[11:57:17.682] [tid=7012] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=2210 draw_commands=304 dispatch_commands=3 groups=5 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0\r"
+                         ],
+    "freshPresent100SourceReadback":  true,
+    "freshPresent100BackbufferReadback":  true,
+    "sampledPointsAtPresent100":  "[11:56:41.797] [tid=26644] [READBACK_SRC]   Non-black pixels: 0/100 (0.0%)\r",
+    "capturedReadbacks":  [
+                              {
+                                  "name":  "HelaReadback_Present100_source.bmp",
+                                  "bytes":  2764854,
+                                  "lastWriteTime":  "2026-11-16T11:56:41.8083487+01:00",
+                                  "sha256":  "d43ec90910e666b315661be75dfea0af9722ff471aa30593999567dffc53ac9c"
+                              },
+                              {
+                                  "name":  "HelaReadback_Present100_backbuffer.bmp",
+                                  "bytes":  2764854,
+                                  "lastWriteTime":  "2026-11-16T11:56:41.8472766+01:00",
+                                  "sha256":  "d43ec90910e666b315661be75dfea0af9722ff471aa30593999567dffc53ac9c"
+                              }
+                          ],
+    "runtimeD3d12":  "75f724601e37856d04227fc3b17eaf72a80bcd0355ad62d5ca783e5ca88ece25",
+    "runtimeDxgi":  "f2728c8c51049a448987b3a087b9025ef06efe1061cb3070a9fdfdee7bea365e",
+    "overrideCount":  8,
+    "restore":  {
+                    "runtimeDllsAbsent":  true,
+                    "originalLogRestored":  true,
+                    "externalReadbacksRestored":  true,
+                    "sharedOverridesUnchanged":  true,
+                    "gameProcessRunning":  false,
+                    "errors":  [
+
+                               ]
+                },
+    "ledgerConservation":  {
+                               "windows":  20,
+                               "failures":  0,
+                               "drawCommandsReported":  4740,
+                               "drawCommandsDetailed":  4740,
+                               "dispatchCommandsReported":  3,
+                               "dispatchCommandsDetailed":  3,
+                               "omittedCommands":  0,
+                               "overflowCommands":  0
+                           },
+    "aggregatedShaderUse":  [
+                                {
+                                    "type":  "draw",
+                                    "outcome":  "executed",
+                                    "vs":  "20e0826b236597a1",
+                                    "ps":  "44b0a992c2304254",
+                                    "gs":  "0000000000000000",
+                                    "hs":  "0000000000000000",
+                                    "ds":  "0000000000000000",
+                                    "missingMask":  "0x00",
+                                    "graphicsPsoBound":  true,
+                                    "rtvIsBackbuffer":  false,
+                                    "commands":  2209
+                                },
+                                {
+                                    "type":  "draw",
+                                    "outcome":  "executed",
+                                    "vs":  "20e0826b236597a1",
+                                    "ps":  "d77600bde0076c33",
+                                    "gs":  "0000000000000000",
+                                    "hs":  "0000000000000000",
+                                    "ds":  "0000000000000000",
+                                    "missingMask":  "0x00",
+                                    "graphicsPsoBound":  true,
+                                    "rtvIsBackbuffer":  false,
+                                    "commands":  2209
+                                },
+                                {
+                                    "type":  "draw",
+                                    "outcome":  "skipped",
+                                    "vs":  "4ce363172cfd70be",
+                                    "ps":  "4c1bc8bf7e457acd",
+                                    "gs":  "0000000000000000",
+                                    "hs":  "0000000000000000",
+                                    "ds":  "0000000000000000",
+                                    "missingMask":  "0x03",
+                                    "missingStages":  [
+                                                          "VS",
+                                                          "PS"
+                                                      ],
+                                    "graphicsPsoBound":  true,
+                                    "rtvIsBackbuffer":  false,
+                                    "commands":  322
+                                },
+                                {
+                                    "type":  "dispatch",
+                                    "outcome":  "skipped",
+                                    "cs":  "bb592abf5ce2bad1",
+                                    "missingMask":  "0x20",
+                                    "missingStages":  [
+                                                          "CS"
+                                                      ],
+                                    "commands":  2
+                                },
+                                {
+                                    "type":  "dispatch",
+                                    "outcome":  "skipped",
+                                    "cs":  "c71574a8f462e2c1",
+                                    "missingMask":  "0x20",
+                                    "missingStages":  [
+                                                          "CS"
+                                                      ],
+                                    "commands":  1
+                                }
+                            ],
+    "fullFramePixelStats":  [
+                                {
+                                    "name":  "HelaReadback_Present100_source.bmp",
+                                    "width":  1280,
+                                    "height":  720,
+                                    "bitsPerPixel":  24,
+                                    "nonBlackRgbPixels":  0,
+                                    "totalPixels":  921600,
+                                    "sha256":  "d43ec90910e666b315661be75dfea0af9722ff471aa30593999567dffc53ac9c"
+                                },
+                                {
+                                    "name":  "HelaReadback_Present100_backbuffer.bmp",
+                                    "width":  1280,
+                                    "height":  720,
+                                    "bitsPerPixel":  24,
+                                    "nonBlackRgbPixels":  0,
+                                    "totalPixels":  921600,
+                                    "sha256":  "d43ec90910e666b315661be75dfea0af9722ff471aa30593999567dffc53ac9c"
+                                }
+                            ],
+    "coverageCaveat":  {
+                           "lastEmittedSummaryPresentCount":  2210,
+                           "successfulPresentCalls":  2294,
+                           "presentCallsAfterLastSummary":  84,
+                           "shutdownSnapshotEmitted":  false
+                       },
+    "stdoutSanitization":  {
+                               "sentryKeyFieldsRedacted":  4,
+                               "rawStdoutPublished":  false
+                           }
+}

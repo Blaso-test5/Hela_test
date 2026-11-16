@@ -177,6 +177,7 @@ struct PipelineState : Stub_ID3D12PipelineState {
     bool compute = false, missingShader = false, missingVs = false, missingCs = false;
     UINT missingShaderStages = 0;
     uint64_t shaderHash = 0, pixelShaderHash = 0;
+    uint64_t geometryShaderHash = 0, hullShaderHash = 0, domainShaderHash = 0;
     Ptr<ID3D11VertexShader> vs; Ptr<ID3D11PixelShader> ps; Ptr<ID3D11GeometryShader> gs;
     Ptr<ID3D11HullShader> hs; Ptr<ID3D11DomainShader> ds; Ptr<ID3D11ComputeShader> cs;
     Ptr<ID3D11InputLayout> il;
@@ -234,9 +235,13 @@ struct ExecState {
     bool graphicsPlaceholderVs = false;
     bool computePlaceholderCs = false;
     UINT graphicsMissingShaderStages = 0;
+    UINT computeMissingShaderStages = 0;
     uintptr_t graphicsPipelineIdentity = 0;
     uint64_t graphicsShaderHash = 0;
     uint64_t graphicsPixelShaderHash = 0;
+    uint64_t graphicsGeometryShaderHash = 0;
+    uint64_t graphicsHullShaderHash = 0;
+    uint64_t graphicsDomainShaderHash = 0;
     uint64_t computeShaderHash = 0;
     bool hasVertexBuffer = false;
     bool hasIndexBuffer = false;

@@ -130,3 +130,41 @@ Steam, with Shader Model 6.7 and the target SM5 overrides. The run reached
 Present #100 and emitted the per-resource history; it did not enable pixel
 readback. See `evidence\GTX_950M\source-history-test-summary.txt` for
 results and interpretation limits.
+
+Shader-use ledger portable source and GTX 1050 Ti validation, 2026-11-16:
+The portable `proxy-source` snapshot was updated from
+`sm6-to-sm5-mcp` commit `23b73f6` so it includes the graphics/compute shader
+ledger and its native smoke test. A clean Release build was configured with
+Visual Studio 17 2022, MSVC 19.44.35207, and Windows SDK 10.0.26100.0 in
+`build-proxy-ledger-20261116`. CTest passed 8/8.
+  d3d12.dll size=393216 sha256=75F724601E37856D04227FC3B17EAF72A80BCD0355AD62D5CA783E5CA88ECE25
+  dxgi.dll size=48128 sha256=F2728C8C51049A448987B3A087B9025EF06EFE1061CB3070A9FDFDEE7BEA365E
+
+The controlled direct launch used the GTX 1050 Ti, the eight run-local
+baseline overrides, and the complete environment/arguments recorded in
+`evidence\GTX_1050TI\runs\20261116\shader-use-ledger-baseline-20261116-115534\run-manifest.json`.
+The full proxy log and result are in that run's `baseline` directory.
+The run produced 20 heartbeat windows containing 4,740 draw commands and
+3 dispatch commands; per-window recorded + omitted + overflow totals matched
+for both execution types, with no omitted or overflow commands. Aggregated
+records were:
+  executed VS `20e0826b236597a1` + PS `44b0a992c2304254`: 2,209 draws
+  executed VS `20e0826b236597a1` + PS `d77600bde0076c33`: 2,209 draws
+  skipped VS `4ce363172cfd70be` + PS `4c1bc8bf7e457acd`, missing mask `0x03`
+    (VS and PS): 322 draws
+  skipped CS `bb592abf5ce2bad1`, missing mask `0x20` (CS): 2 dispatches
+  skipped CS `c71574a8f462e2c1`, missing mask `0x20` (CS): 1 dispatch
+No nonzero GS/HS/DS hashes were observed. All draw records had
+`rtv_is_backbuffer=0`, so they do not establish direct backbuffer rendering.
+
+Fresh full-frame source and backbuffer captures were written at Present #100.
+Both were 1280x720, 24-bit BMPs with 0/921,600 non-black pixels; the sampled
+source points were also 0/100. This does not verify gameplay or prove which
+shader contributed visually. The process exited with `0x00004000` after 2,294
+successful Presents without reaching the timeout; the last emitted ledger
+window ended at process-wide Present count 2,210, leaving 84 later Presents
+without a final emitted snapshot. The exit cause remains unknown. Runtime DLL
+absence, original log/readback restoration, shared override hashes, and
+process termination were verified. Captured stdout contained Sentry
+`sentry_key` query values; those values were redacted locally and stdout is
+not part of the published evidence.

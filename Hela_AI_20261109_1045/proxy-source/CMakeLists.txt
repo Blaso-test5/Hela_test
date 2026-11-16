@@ -106,4 +106,10 @@ if(BUILD_TESTING)
   target_include_directories(d3d12on11_crash_handler_smoke PRIVATE src generated)
   target_link_libraries(d3d12on11_crash_handler_smoke PRIVATE dbghelp)
   add_test(NAME d3d12on11_crash_handler_smoke COMMAND d3d12on11_crash_handler_smoke)
+
+  add_executable(d3d12on11_shader_use_ledger_smoke tests/shader_use_ledger_smoke.cpp)
+  target_compile_features(d3d12on11_shader_use_ledger_smoke PRIVATE cxx_std_17)
+  target_include_directories(d3d12on11_shader_use_ledger_smoke PRIVATE src)
+  add_test(NAME d3d12on11_shader_use_ledger_smoke
+    COMMAND d3d12on11_shader_use_ledger_smoke)
 endif()

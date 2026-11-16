@@ -728,6 +728,10 @@ void RecordDrawExecution(ExecState& state, bool indexed, const char* operation,
     auto& stats = TraceStats();
     const uint64_t drawIndex = stats.drawExec.fetch_add(1, std::memory_order_relaxed) + 1;
     ++state.drawsExecuted;
+    RecordDrawShaderUse(state.graphicsShaderHash, state.graphicsPixelShaderHash,
+        state.graphicsGeometryShaderHash, state.graphicsHullShaderHash,
+        state.graphicsDomainShaderHash, state.graphicsMissingShaderStages,
+        state.hasGraphicsPipeline, false, state.rtvBackbuffer);
     bool hasRtv = false;
     for (UINT i = 0; i < state.numRtv && i < ARRAYSIZE(state.rtvs); ++i)
         hasRtv = hasRtv || static_cast<bool>(state.rtvs[i]);
@@ -787,9 +791,13 @@ void LogBackbufferCopy(const char* operation, const Resource* destination,
 }
 
 void LogSkippedDraw(ExecState& state, const char* operation,
-    UINT arg0, UINT arg1) {
+    UINT arg0, UINT arg1, uint64_t skippedDrawCount = 1) {
     if (!Cfg().diagnosticRenderTrace) return;
     ++state.drawsSkipped;
+    RecordDrawShaderUse(state.graphicsShaderHash, state.graphicsPixelShaderHash,
+        state.graphicsGeometryShaderHash, state.graphicsHullShaderHash,
+        state.graphicsDomainShaderHash, state.graphicsMissingShaderStages,
+        state.hasGraphicsPipeline, true, state.rtvBackbuffer, skippedDrawCount);
     for (UINT i = 0; i < state.numRtv && i < ARRAYSIZE(state.rtvs); ++i) {
         ID3D11Resource* resource = state.rtvResources[i].Get();
         if (!resource) continue;
@@ -866,9 +874,13 @@ void DumpBackbufferSourceHistoryImpl() {
     }
 }
 
-void RecordDispatchExecution() {
-    if (Cfg().diagnosticRenderTrace)
-        TraceStats().dispatchExec.fetch_add(1, std::memory_order_relaxed);
+void RecordDispatchExecution(ExecState& state, bool skipped,
+    uint64_t dispatchCount = 1) {
+    if (!Cfg().diagnosticRenderTrace) return;
+    if (!skipped)
+        TraceStats().dispatchExec.fetch_add(dispatchCount, std::memory_order_relaxed);
+    RecordComputeShaderUse(state.computeShaderHash,
+        state.computeMissingShaderStages, skipped, dispatchCount);
 }
 
 HRESULT WaitForQuery(Device* device, ID3D11Query* query, void* data, UINT dataSize) {
@@ -1415,9 +1427,13 @@ void ApplyPipeline(ExecState& state, PipelineState* pipeline) {
         state.graphicsPlaceholderVs = false;
         state.computePlaceholderCs = false;
         state.graphicsMissingShaderStages = 0;
+        state.computeMissingShaderStages = 0;
         state.graphicsPipelineIdentity = 0;
         state.graphicsShaderHash = 0;
         state.graphicsPixelShaderHash = 0;
+        state.graphicsGeometryShaderHash = 0;
+        state.graphicsHullShaderHash = 0;
+        state.graphicsDomainShaderHash = 0;
         state.computeShaderHash = 0;
         return;
     }
@@ -1428,10 +1444,14 @@ void ApplyPipeline(ExecState& state, PipelineState* pipeline) {
     state.graphicsPlaceholderVs = !pipeline->compute && pipeline->missingVs;
     state.computePlaceholderCs = pipeline->compute && pipeline->missingCs;
     state.graphicsMissingShaderStages = pipeline->compute ? 0 : pipeline->missingShaderStages;
+    state.computeMissingShaderStages = pipeline->compute ? pipeline->missingShaderStages : 0;
     state.graphicsPipelineIdentity = pipeline->compute
         ? 0 : reinterpret_cast<uintptr_t>(pipeline);
     state.graphicsShaderHash = pipeline->compute ? 0 : pipeline->shaderHash;
     state.graphicsPixelShaderHash = pipeline->compute ? 0 : pipeline->pixelShaderHash;
+    state.graphicsGeometryShaderHash = pipeline->compute ? 0 : pipeline->geometryShaderHash;
+    state.graphicsHullShaderHash = pipeline->compute ? 0 : pipeline->hullShaderHash;
+    state.graphicsDomainShaderHash = pipeline->compute ? 0 : pipeline->domainShaderHash;
     state.computeShaderHash = pipeline->compute ? pipeline->shaderHash : 0;
     if (pipeline->missingShader)
         Log("Skipped execution for PSO placeholder with missing SM5 shader override");
@@ -1611,9 +1631,13 @@ void STDMETHODCALLTYPE CommandList::ClearState(ID3D12PipelineState* initialState
         state.graphicsPlaceholderVs = false;
         state.computePlaceholderCs = false;
         state.graphicsMissingShaderStages = 0;
+        state.computeMissingShaderStages = 0;
         state.graphicsPipelineIdentity = 0;
         state.graphicsShaderHash = 0;
         state.graphicsPixelShaderHash = 0;
+        state.graphicsGeometryShaderHash = 0;
+        state.graphicsHullShaderHash = 0;
+        state.graphicsDomainShaderHash = 0;
         state.computeShaderHash = 0;
         state.c->ClearState();
         if (keep) {
@@ -1685,11 +1709,12 @@ void STDMETHODCALLTYPE CommandList::Dispatch(UINT x, UINT y, UINT z) {
                 else
                     stats.dispatchSkipNoPso.fetch_add(1, std::memory_order_relaxed);
             }
+            RecordDispatchExecution(state, true);
             return;
         }
         BindRootSnapshot(state, snapshot, true);
         state.c->Dispatch(x, y, z);
-        RecordDispatchExecution();
+        RecordDispatchExecution(state, false);
         FlushStructWrites(state);
     });
 }
@@ -1737,7 +1762,8 @@ void STDMETHODCALLTYPE CommandList::ExecuteIndirect(ID3D12CommandSignature* sour
     Add([=](ExecState& state) {
         if (compute ? state.skipDispatches : state.skipDraws) {
             if (!compute)
-                LogSkippedDraw(state, "ExecuteIndirect", maxCommandCount, byteStride);
+                LogSkippedDraw(state, "ExecuteIndirect", maxCommandCount, byteStride,
+                    maxCommandCount);
             if (Cfg().diagnosticRenderTrace) {
                 auto& stats = TraceStats();
                 if (compute && state.computePlaceholderCs)
@@ -1749,6 +1775,7 @@ void STDMETHODCALLTYPE CommandList::ExecuteIndirect(ID3D12CommandSignature* sour
                 else
                     stats.drawSkipPlaceholderOther.fetch_add(1, std::memory_order_relaxed);
             }
+            if (compute) RecordDispatchExecution(state, true, maxCommandCount);
             return;
         }
         auto* commandSignature = dynamic_cast<CommandSignature*>(signatureKeep.Get());
@@ -1769,7 +1796,7 @@ void STDMETHODCALLTYPE CommandList::ExecuteIndirect(ID3D12CommandSignature* sour
             switch (argumentType) {
             case D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH:
                 state.c->DispatchIndirect(argumentBuffer, offset);
-                RecordDispatchExecution();
+                RecordDispatchExecution(state, false);
                 break;
             case D3D12_INDIRECT_ARGUMENT_TYPE_DRAW:
                 state.c->DrawInstancedIndirect(argumentBuffer, offset);

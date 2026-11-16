@@ -61,6 +61,20 @@ headers, tests, and tools. It intentionally excludes machine-specific
 `build*` outputs and backups. Build provenance and tested DLL hashes are in
 `Hela_AI_20261109_1045\evidence\build-provenance.txt`.
 
+### Shader-use telemetry
+
+With diagnostic render tracing enabled, the proxy reports bounded graphics
+draw records for VS/PS/GS/HS/DS and compute dispatch records for CS. The
+ledger distinguishes executed from skipped calls and includes missing-stage
+masks. It retains up to 512 groups and prints at most 64 per heartbeat.
+
+Each summary is a window since the previous two-second heartbeat, not a
+cumulative total. Present counts are process-wide counters, not frame IDs.
+`executed` means the proxy emitted the D3D11 call; `rtv_is_backbuffer` only
+describes the bound RTV. Neither proves GPU completion or visible contribution
+to a frame. Correlate ledger output with resources, Present readbacks, and
+visual validation from the same run.
+
 ### Refresh the Shader Lab converter fix
 
 The TypeScript Shader Lab at

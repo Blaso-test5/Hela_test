@@ -78,6 +78,7 @@ Use this workflow for proxy, Proxy Manager, shader-conversion, and Hela-render i
 - Correlate shader, resource, draw, and Present readbacks from the same run. A forced-color diagnostic proves the output path only, not real-game rendering.
 - Preserve injected proxy DLLs. Do not restore original DLLs unless explicitly requested; make a conservative ZIP backup before replacing injects.
 - Keep diagnostics bounded and reversible. Do not infer a functional fix from a model suggestion without measurements and tests.
+- Review Hela launch stdout before retaining or sharing it: the embedded Sentry reporter can print `sentry_key` query values. Redact them before archival; never send raw stdout to Arena or commit it.
 
 ### Reproducing a known-good Hela run
 

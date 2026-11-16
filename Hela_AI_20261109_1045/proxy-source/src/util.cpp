@@ -1,4 +1,5 @@
 #include "types.h"
+#include "shader_use_ledger.h"
 #include <bcrypt.h>
 #include <sys/stat.h>
 #include <direct.h>
@@ -14,6 +15,7 @@ static std::mutex g_logMu;
 static FILE* g_logFile = nullptr;
 static std::string g_logPath;
 static bool g_logOpenFailureReported = false;
+static d3d12on11::ShaderUseLedger g_shaderUseLedger;
 
 static std::string EnvOr(const char* name, const std::string& def) {
     char buf[1024];
@@ -144,6 +146,7 @@ void LoadConfig(HMODULE self) {
                         static_cast<unsigned long long>(s.placedOverlap.load(std::memory_order_relaxed)),
                         static_cast<unsigned long long>(s.placedReleased.load(std::memory_order_relaxed)),
                         static_cast<long long>(s.placedLive.load(std::memory_order_relaxed)));
+                    DumpShaderUseSummary();
                 }
             }).detach();
         } catch (const std::system_error& error) {
@@ -163,6 +166,95 @@ void TraceApi(const char* apiName) {
     stats.lastApiName.store(apiName, std::memory_order_relaxed);
     stats.lastApiTickMs.store(GetTickCount64(), std::memory_order_relaxed);
     stats.lastApiTid.store(GetCurrentThreadId(), std::memory_order_relaxed);
+}
+
+void RecordDrawShaderUse(uint64_t vsHash, uint64_t psHash, uint64_t gsHash,
+    uint64_t hsHash, uint64_t dsHash, UINT missingStageMask,
+    bool hasGraphicsPipeline, bool skipped, bool backbuffer,
+    uint64_t executionCount) {
+    if (!Cfg().diagnosticRenderTrace) return;
+    const uint64_t presentCall =
+        TraceStats().presentCount.load(std::memory_order_relaxed);
+    d3d12on11::ShaderUseKey key;
+    key.vsHash = vsHash;
+    key.psHash = psHash;
+    key.gsHash = gsHash;
+    key.hsHash = hsHash;
+    key.dsHash = dsHash;
+    key.missingStageMask = missingStageMask;
+    key.hasGraphicsPipeline = hasGraphicsPipeline;
+    key.skipped = skipped;
+    key.backbuffer = backbuffer;
+    g_shaderUseLedger.Record(key, presentCall, executionCount);
+}
+
+void RecordComputeShaderUse(uint64_t csHash, UINT missingStageMask, bool skipped,
+    uint64_t executionCount) {
+    if (!Cfg().diagnosticRenderTrace) return;
+    const uint64_t presentCall =
+        TraceStats().presentCount.load(std::memory_order_relaxed);
+    d3d12on11::ShaderUseKey key;
+    key.compute = true;
+    key.csHash = csHash;
+    key.missingStageMask = missingStageMask;
+    key.skipped = skipped;
+    g_shaderUseLedger.Record(key, presentCall, executionCount);
+}
+
+void DumpShaderUseSummary() {
+    if (!Cfg().diagnosticRenderTrace) return;
+    constexpr size_t maxLoggedGroups = 64;
+    const auto snapshot = g_shaderUseLedger.TakeSnapshot(maxLoggedGroups);
+    if (!snapshot.totalDraws && !snapshot.totalDispatches) return;
+
+    const uint64_t presentCall =
+        TraceStats().presentCount.load(std::memory_order_relaxed);
+    Log("[SHADER_USE_SUMMARY] window=since_previous_heartbeat "
+        "present_calls_process_wide=%llu draw_commands=%llu dispatch_commands=%llu "
+        "groups=%zu omitted_groups=%llu omitted_draw_commands=%llu "
+        "omitted_dispatch_commands=%llu overflow_draw_commands=%llu "
+        "overflow_dispatch_commands=%llu",
+        static_cast<unsigned long long>(presentCall),
+        static_cast<unsigned long long>(snapshot.totalDraws),
+        static_cast<unsigned long long>(snapshot.totalDispatches),
+        snapshot.entries.size(),
+        static_cast<unsigned long long>(snapshot.omittedGroups),
+        static_cast<unsigned long long>(snapshot.omittedDraws),
+        static_cast<unsigned long long>(snapshot.omittedDispatches),
+        static_cast<unsigned long long>(snapshot.overflowDraws),
+        static_cast<unsigned long long>(snapshot.overflowDispatches));
+
+    for (const auto& entry : snapshot.entries) {
+        if (entry.key.compute) {
+            Log("[COMPUTE_SHADER_USE] outcome=%s cs=%016llx missing_mask=0x%02x "
+                "dispatch_commands=%llu first_observed_present_count_process_wide=%llu "
+                "last_observed_present_count_process_wide=%llu",
+                entry.key.skipped ? "skipped" : "executed",
+                static_cast<unsigned long long>(entry.key.csHash),
+                entry.key.missingStageMask,
+                static_cast<unsigned long long>(entry.count.executions),
+                static_cast<unsigned long long>(entry.count.firstPresentCall),
+                static_cast<unsigned long long>(entry.count.lastPresentCall));
+        } else {
+            Log("[DRAW_SHADER_USE] outcome=%s vs=%016llx ps=%016llx gs=%016llx "
+                "hs=%016llx ds=%016llx missing_mask=0x%02x "
+                "graphics_pso_bound=%u rtv_is_backbuffer=%u draw_commands=%llu "
+                "first_observed_present_count_process_wide=%llu "
+                "last_observed_present_count_process_wide=%llu",
+                entry.key.skipped ? "skipped" : "executed",
+                static_cast<unsigned long long>(entry.key.vsHash),
+                static_cast<unsigned long long>(entry.key.psHash),
+                static_cast<unsigned long long>(entry.key.gsHash),
+                static_cast<unsigned long long>(entry.key.hsHash),
+                static_cast<unsigned long long>(entry.key.dsHash),
+                entry.key.missingStageMask,
+                entry.key.hasGraphicsPipeline ? 1u : 0u,
+                entry.key.backbuffer ? 1u : 0u,
+                static_cast<unsigned long long>(entry.count.executions),
+                static_cast<unsigned long long>(entry.count.firstPresentCall),
+                static_cast<unsigned long long>(entry.count.lastPresentCall));
+        }
+    }
 }
 
 void Log(const char* fmt, ...) {

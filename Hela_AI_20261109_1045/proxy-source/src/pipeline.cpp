@@ -423,6 +423,9 @@ HRESULT PipelineState::CreateGraphics(Device* device, const D3D12_GRAPHICS_PIPEL
     pipeline->sampleMask = desc->SampleMask;
     pipeline->missingShader = anyMissingOverride;
     pipeline->missingShaderStages = missingShaderStages;
+    pipeline->geometryShaderHash = ShaderHash(desc->GS);
+    pipeline->hullShaderHash = ShaderHash(desc->HS);
+    pipeline->domainShaderHash = ShaderHash(desc->DS);
     if (Cfg().diagnosticRenderTrace) {
         auto& stats = TraceStats();
         stats.psoGraphics.fetch_add(1, std::memory_order_relaxed);

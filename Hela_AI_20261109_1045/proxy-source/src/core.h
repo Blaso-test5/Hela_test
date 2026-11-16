@@ -71,6 +71,13 @@ void Log(const char* fmt, ...);
 bool Sha256Hex(const void* data, size_t size, std::string& result);
 void LogModuleFingerprint(const char* role, HMODULE module);
 void Unimpl(const char* name);   // registra una sola volta ogni metodo non implementato
+void RecordDrawShaderUse(uint64_t vsHash, uint64_t psHash, uint64_t gsHash,
+    uint64_t hsHash, uint64_t dsHash, UINT missingStageMask,
+    bool hasGraphicsPipeline, bool skipped, bool backbuffer,
+    uint64_t executionCount = 1);
+void RecordComputeShaderUse(uint64_t csHash, UINT missingStageMask, bool skipped,
+    uint64_t executionCount = 1);
+void DumpShaderUseSummary();
 
 struct RenderTraceStats {
     std::atomic<uint64_t> startTickMs{0};
