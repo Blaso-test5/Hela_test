@@ -5,6 +5,7 @@
 int main() {
     using d3d12on11::ShaderUseKey;
     using d3d12on11::ShaderUseLedger;
+    using d3d12on11::ShaderUseEventRing;
 
     ShaderUseLedger ledger;
     ShaderUseKey executed{};
@@ -65,6 +66,15 @@ int main() {
     assert(trackedDispatches + snapshot.omittedDispatches +
         snapshot.overflowDispatches == snapshot.totalDispatches);
 
+    const auto recentEvents = ledger.RecentEvents(ShaderUseEventRing::Capacity);
+    assert(recentEvents.size() == 4);
+    assert(recentEvents[0].ordinal == 1);
+    assert(recentEvents[0].presentCall == 3);
+    assert(recentEvents[0].executionCount == 2);
+    assert(!recentEvents[0].key.skipped);
+    assert(recentEvents[2].key.skipped);
+    assert(recentEvents[3].key.compute);
+
     snapshot = ledger.TakeSnapshot(0);
     assert(snapshot.totalDraws == 0);
     assert(snapshot.totalDispatches == 0);
@@ -98,6 +108,12 @@ int main() {
         snapshot.totalDraws);
     assert(trackedDispatches + snapshot.omittedDispatches +
         snapshot.overflowDispatches == snapshot.totalDispatches);
+    const auto overflowEvent = ledger.RecentEvents(1);
+    assert(overflowEvent.size() == 1);
+    assert(overflowEvent[0].ordinal ==
+        4 + ShaderUseLedger::MaxTrackedGroups + 1);
+    assert(overflowEvent[0].key.compute);
+    assert(overflowEvent[0].key.csHash == ShaderUseLedger::MaxTrackedGroups + 1);
 
     ShaderUseLedger priorityLedger;
     ShaderUseKey common{};
@@ -121,6 +137,22 @@ int main() {
     assert(snapshot.entries.size() == 2);
     assert(snapshot.entries[0].key.hasGraphicsPipeline !=
         snapshot.entries[1].key.hasGraphicsPipeline);
+
+    ShaderUseEventRing eventRing;
+    for (uint64_t i = 1; i <= ShaderUseEventRing::Capacity + 1; ++i) {
+        ShaderUseKey key{};
+        key.compute = (i % 2) == 0;
+        key.skipped = (i % 3) == 0;
+        eventRing.Record(key, i + 10, i);
+    }
+    const auto tail = eventRing.Tail(ShaderUseEventRing::Capacity + 1);
+    assert(tail.size() == ShaderUseEventRing::Capacity);
+    assert(tail.front().ordinal == 2);
+    assert(tail.front().presentCall == 12);
+    assert(tail.back().ordinal == ShaderUseEventRing::Capacity + 1);
+    assert(tail.back().executionCount == ShaderUseEventRing::Capacity + 1);
+    assert(!tail.back().key.compute);
+    assert(eventRing.Tail(0).empty());
 
     return 0;
 }

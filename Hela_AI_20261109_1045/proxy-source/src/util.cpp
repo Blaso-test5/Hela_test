@@ -257,6 +257,56 @@ void DumpShaderUseSummary() {
     }
 }
 
+void DumpRecentShaderUseEvents(uint64_t readbackPresentCount) {
+    if (!Cfg().diagnosticRenderTrace) return;
+
+    constexpr size_t maxLoggedEvents = d3d12on11::ShaderUseEventRing::Capacity;
+    const auto events = g_shaderUseLedger.RecentEvents(maxLoggedEvents);
+    const uint64_t presentCallsReturned =
+        TraceStats().presentCount.load(std::memory_order_relaxed);
+    Log("[SHADER_USE_RECENT] readback_present_count=%llu "
+        "present_calls_returned=%llu record_events=%zu first_ordinal=%llu "
+        "last_ordinal=%llu capacity=%zu gpu_completion=not_waited",
+        static_cast<unsigned long long>(readbackPresentCount),
+        static_cast<unsigned long long>(presentCallsReturned),
+        events.size(),
+        static_cast<unsigned long long>(events.empty() ? 0 : events.front().ordinal),
+        static_cast<unsigned long long>(events.empty() ? 0 : events.back().ordinal),
+        maxLoggedEvents);
+
+    for (const auto& event : events) {
+        const auto& key = event.key;
+        if (key.compute) {
+            Log("[SHADER_USE_EVENT] ordinal=%llu observed_present_calls_returned=%llu "
+                "kind=dispatch outcome=%s execution_count=%llu cs=%016llx "
+                "missing_mask=0x%02x",
+                static_cast<unsigned long long>(event.ordinal),
+                static_cast<unsigned long long>(event.presentCall),
+                key.skipped ? "skipped" : "executed",
+                static_cast<unsigned long long>(event.executionCount),
+                static_cast<unsigned long long>(key.csHash),
+                key.missingStageMask);
+        } else {
+            Log("[SHADER_USE_EVENT] ordinal=%llu observed_present_calls_returned=%llu "
+                "kind=draw outcome=%s execution_count=%llu vs=%016llx ps=%016llx "
+                "gs=%016llx hs=%016llx ds=%016llx missing_mask=0x%02x "
+                "graphics_pso_bound=%u rtv_is_backbuffer=%u",
+                static_cast<unsigned long long>(event.ordinal),
+                static_cast<unsigned long long>(event.presentCall),
+                key.skipped ? "skipped" : "executed",
+                static_cast<unsigned long long>(event.executionCount),
+                static_cast<unsigned long long>(key.vsHash),
+                static_cast<unsigned long long>(key.psHash),
+                static_cast<unsigned long long>(key.gsHash),
+                static_cast<unsigned long long>(key.hsHash),
+                static_cast<unsigned long long>(key.dsHash),
+                key.missingStageMask,
+                key.hasGraphicsPipeline ? 1u : 0u,
+                key.backbuffer ? 1u : 0u);
+        }
+    }
+}
+
 void Log(const char* fmt, ...) {
     if (!g_cfg.log) return;
     std::lock_guard<std::mutex> l(g_logMu);

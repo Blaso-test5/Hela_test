@@ -13,13 +13,20 @@ param(
     [int]$TargetPresent = 1400,
     [ValidateRange(60, 300)]
     [int]$TimeoutSeconds = 120,
-    [string[]]$AdditionalCandidateHashes = @()
+    [ValidateRange(0, 120)]
+    [int]$ObserveAfterReadbackSeconds = 0,
+    [string[]]$AdditionalCandidateHashes = @(),
+    [switch]$PreflightOnly
 )
 
 $ErrorActionPreference = 'Stop'
 
-$gameRoot = [System.IO.Path]::GetFullPath($GameDirectory)
 $runRoot = [System.IO.Path]::GetFullPath($RunDirectory)
+$diagnosticName = 'powershell-error-' + [System.DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '.json'
+$diagnosticPath = Join-Path $runRoot $diagnosticName
+$diagnosticStage = 'initialization'
+try {
+$gameRoot = [System.IO.Path]::GetFullPath($GameDirectory)
 $externalReadbackRoot = [System.IO.Path]::GetFullPath($ExternalReadbackDirectory)
 $proxyReadbackRoot = [System.IO.Path]::GetPathRoot('D:\')
 $proxySourceRoot = Split-Path -Parent $PSScriptRoot
@@ -33,6 +40,7 @@ $overrides = Join-Path $runRoot 'baseline\overrides'
 $dumpDirectory = Join-Path $runRoot 'baseline\dump'
 $gameLog = Join-Path $gameBin 'd3d12on11.log'
 $networkLog = Join-Path $runRoot 'network-observations.jsonl'
+$runEvidenceModule = Join-Path $PSScriptRoot 'HelaRunEvidence.psm1'
 $preState = Join-Path $runRoot 'pre-state'
 $externalReadbackNames = @(
     'HelaReadback_Present100_source.bmp',
@@ -44,8 +52,8 @@ $baselineRun = Join-Path $packageRoot 'evidence\GTX_1050TI\runs\20261116\placed-
 $candidateRun = Join-Path $packageRoot 'evidence\GTX_1050TI\runs\20261116\placed-resource-overlap-monitored-20261116-132140\analysis\local-cs-sm5-candidates'
 $additionalCandidateRun = Join-Path $packageRoot 'shaders\overrides'
 $expectedDllHashes = @{
-    'd3d12.dll' = 'C41A23038CFCEAC77117E45499FD77EF0BB3A4859247CD434A2C4B52DCBF1063'
-    'dxgi.dll' = '3E116119E7C0A6043A231795B0696C0DE3F13463EA4A05F4D3A303976D8B3699'
+    'd3d12.dll' = '14DFBA07E9A37B1C8ADBC7FE11DE6BA14EE0AB3968E953B85A097D32DBF69E98'
+    'dxgi.dll' = '09D13C05BF198C74B4190A9CB1BE1C96966A0ECE7641D8621C08A00465E0F857'
 }
 
 function Get-ProcessPaths {
@@ -103,9 +111,13 @@ function Get-SanitizedLogText {
 if (-not [System.IO.File]::Exists($gameExe) -or
     -not [System.IO.File]::Exists($crashpadExe) -or
     -not [System.IO.File]::Exists($blockScript) -or
-    -not [System.IO.File]::Exists($watchScript)) {
+    -not [System.IO.File]::Exists($watchScript) -or
+    -not [System.IO.File]::Exists($runEvidenceModule)) {
     throw 'Required Hela executable or safety tool is missing.'
 }
+$diagnosticStage = 'module-load'
+Import-Module -Name $runEvidenceModule -Force
+$diagnosticStage = 'run-directory-validation'
 if (-not [System.IO.Directory]::Exists($RunDirectory) -or
     -not [System.IO.Directory]::Exists($overrides) -or
     -not [System.IO.Directory]::Exists($dumpDirectory)) {
@@ -124,17 +136,41 @@ if ($TargetPresent -lt 100 -or ($TargetPresent % 100) -ne 0) {
     throw 'TargetPresent must be a positive multiple of 100.'
 }
 
+$diagnosticStage = 'firewall-verification'
 $powershellExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-$blockOutput = @(
-    & $powershellExe -NoProfile -ExecutionPolicy Bypass -File $blockScript `
-        -GameDirectory $gameRoot 2>&1
-)
-$blockExitCode = $LASTEXITCODE
+$previousErrorActionPreference = $ErrorActionPreference
+try {
+    $ErrorActionPreference = 'Continue'
+    $blockOutput = @(
+        & $powershellExe -NoProfile -ExecutionPolicy Bypass -File $blockScript `
+            -GameDirectory $gameRoot 2>&1
+    )
+    $blockExitCode = $LASTEXITCODE
+}
+finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+}
 $blockOutput | ForEach-Object { Write-Output $_ }
 if ($blockExitCode -ne 0) {
-    throw 'The effective firewall block did not verify in this PowerShell context; Hela was not started.'
+    $helperError = ($blockOutput | ForEach-Object { [string]$_ }) -join [System.Environment]::NewLine
+    throw "The effective firewall block did not verify in this PowerShell context (helper exit code $blockExitCode); Hela was not started. $helperError"
+}
+$blockVerification = $null
+$verificationPrefix = 'HELA_EGRESS_VERIFICATION '
+foreach ($line in $blockOutput) {
+    $text = [string]$line
+    if ($text.StartsWith($verificationPrefix, [System.StringComparison]::Ordinal)) {
+        $blockVerification = ConvertFrom-Json -InputObject $text.Substring($verificationPrefix.Length) -ErrorAction Stop
+        break
+    }
+}
+if (-not (Test-HelaFirewallVerification `
+            -Verification $blockVerification `
+            -ExpectedPrograms @($gameExe, $crashpadExe))) {
+    throw 'The firewall helper did not confirm both expected executable rules in ActiveStore; Hela was not started.'
 }
 
+$diagnosticStage = 'gpu-verification'
 $gpu = @(
     Get-CimInstance Win32_VideoController |
         Where-Object { $_.Name -eq 'NVIDIA GeForce GTX 1050 Ti' }
@@ -143,6 +179,7 @@ if ($gpu.Count -eq 0) {
     throw 'GTX 1050 Ti was not found; refusing to write evidence under the wrong GPU directory.'
 }
 
+$diagnosticStage = 'override-validation'
 $requiredCandidateHashes = @(
     'bb592abf5ce2bad1',
     'c71574a8f462e2c1',
@@ -202,6 +239,7 @@ foreach ($hash in $additionalHashes) {
 }
 
 $dllHashesBefore = @{}
+$diagnosticStage = 'runtime-validation'
 foreach ($dllName in $expectedDllHashes.Keys) {
     $dllPath = Join-Path $gameBin $dllName
     if (-not [System.IO.File]::Exists($dllPath)) {
@@ -214,6 +252,7 @@ foreach ($dllName in $expectedDllHashes.Keys) {
     $dllHashesBefore[$dllName] = $hash
 }
 
+$diagnosticStage = 'run-output-validation'
 if ((Get-ProcessPaths).Count -gt 0) {
     throw 'Hela or Crashpad is already running from this game directory.'
 }
@@ -231,6 +270,20 @@ if ([System.IO.Directory]::Exists($preState)) {
     throw "Pre-state directory already exists; refusing to overwrite: $preState"
 }
 
+if ($PreflightOnly) {
+    [ordered]@{
+        status = 'preflight-passed'
+        gameStarted = $false
+        gameDirectory = $gameRoot
+        runDirectory = $runRoot
+        gpu = $gpu[0].Name
+        stagedOverrideCount = $stagedFiles.Count
+        dllHashes = $dllHashesBefore
+        firewall = $blockVerification
+    } | ConvertTo-Json -Depth 6
+    return
+}
+
 $sharedOverrides = Join-Path $gameBin 'D3D12On11Patch\overrides'
 $sharedOverrideManifest = @(Get-OverrideManifest -Directory $sharedOverrides)
 $originalLogExists = [System.IO.File]::Exists($gameLog)
@@ -244,11 +297,21 @@ $runError = $null
 $timeoutReached = $false
 $targetReadbackReady = $false
 $targetReadbackLogged = $false
+$menuObservation = [ordered]@{
+    requestedSeconds = $ObserveAfterReadbackSeconds
+    attempted = $false
+    elapsedSeconds = 0
+    processExitedBeforeWindow = $null
+    processExitedDuringWindow = $null
+    menuReached = 'undetermined'
+    menuSignalMatched = $false
+}
 $gameExitCode = $null
 $presentCount = 0
 $readbackFiles = @()
 $restoreErrors = @()
 
+$diagnosticStage = 'run-and-restoration'
 try {
     [System.IO.Directory]::CreateDirectory($preState) | Out-Null
     $preStateReadbacks = Join-Path $preState 'external-readbacks'
@@ -281,7 +344,7 @@ try {
         '-File', (Get-QuotedArgument $watchScript),
         '-GameDirectory', (Get-QuotedArgument $gameRoot),
         '-OutputPath', (Get-QuotedArgument $networkLog),
-        '-DurationSeconds', [string]($TimeoutSeconds + 30),
+        '-DurationSeconds', [string]($TimeoutSeconds + $ObserveAfterReadbackSeconds + 30),
         '-PostExitSeconds', '5'
     ) -join ' '
     $watcherProcess = Start-Process -FilePath $powershellExe `
@@ -363,6 +426,26 @@ try {
 
     if (-not $gameProcess.HasExited -and -not $targetReadbackReady) {
         $timeoutReached = $true
+    }
+    if ($ObserveAfterReadbackSeconds -gt 0 -and $targetReadbackReady) {
+        if ($gameProcess.HasExited) {
+            $menuObservation.processExitedBeforeWindow = $true
+        }
+        else {
+            $menuObservation.attempted = $true
+            $observationStartedUtc = [System.DateTime]::UtcNow
+            $observationDeadline = $observationStartedUtc.AddSeconds($ObserveAfterReadbackSeconds)
+            while ([System.DateTime]::UtcNow -lt $observationDeadline) {
+                if ($gameProcess.HasExited) {
+                    break
+                }
+                Start-Sleep -Milliseconds 500
+            }
+            $menuObservation.elapsedSeconds = [Math]::Round(
+                ([System.DateTime]::UtcNow - $observationStartedUtc).TotalSeconds,
+                1)
+            $menuObservation.processExitedDuringWindow = $gameProcess.HasExited
+        }
     }
     if (-not $gameProcess.HasExited) {
         $null = $gameProcess.CloseMainWindow()
@@ -590,6 +673,16 @@ elseif ($timeoutReached) {
 else {
     'process-exited-before-target-readback'
 }
+$networkSummary = Get-HelaNetworkObservationSummary -Path $networkLog
+$firewallVerdict = Get-HelaFirewallVerdict `
+    -ConfigurationVerified ($blockExitCode -eq 0 -and $null -ne $blockVerification) `
+    -NetworkSummary $networkSummary
+$firewallDetail = [ordered]@{
+    verdict = $firewallVerdict
+    configurationVerification = $blockVerification
+    trafficObservation = $networkSummary
+    limitation = 'No TCP connection observed is not proof of zero egress. The monitor is process-scoped, polling-based, and does not observe UDP or payload; Established indicates a TCP handshake, not payload delivery or remote acceptance.'
+}
 $result = [ordered]@{
     runId = [System.IO.Path]::GetFileName($RunDirectory)
     gpu = 'GTX 1050 Ti'
@@ -599,6 +692,7 @@ $result = [ordered]@{
     timeoutSeconds = $TimeoutSeconds
     timeoutReached = $timeoutReached
     successfulPresentCalls = $presentCount
+    postReadbackObservation = $menuObservation
     targetReadbackLogged = $targetReadbackLogged
     targetReadbackSourceSaved = [System.IO.File]::Exists((Join-Path $RunDirectory "HelaReadback_Present$($TargetPresent)_source.bmp"))
     targetReadbackBackbufferSaved = [System.IO.File]::Exists((Join-Path $RunDirectory "HelaReadback_Present$($TargetPresent)_backbuffer.bmp"))
@@ -609,7 +703,8 @@ $result = [ordered]@{
     originalProxyLogRestored = $originalLogRestored
     externalReadbacksRestored = $readbacksRestored
     gameProcessesRunning = $gameProcessesRunning
-    firewallCheck = 'passed in the PowerShell context used to launch the run'
+    firewallCheck = $firewallVerdict
+    firewall = $firewallDetail
     networkLog = $networkLog
     runError = $runError
     restoreErrors = $restoreErrors
@@ -624,4 +719,30 @@ if ($runError -or $restoreErrors.Count -gt 0 -or
     -not $dllsUnchanged -or -not $sharedOverridesUnchanged -or
     $gameProcessesRunning) {
     throw 'Run or restoration verification failed; inspect run-result.json and restoreErrors.'
+}
+}
+catch {
+    $errorRecord = $_
+    $diagnostic = [ordered]@{
+        schema = 'hela-powershell-error/v1'
+        timestampUtc = [System.DateTime]::UtcNow.ToString('o')
+        stage = $diagnosticStage
+        message = $errorRecord.Exception.Message
+        exceptionType = $errorRecord.Exception.GetType().FullName
+        fullyQualifiedErrorId = $errorRecord.FullyQualifiedErrorId
+        category = [string]$errorRecord.CategoryInfo
+        scriptStackTrace = $errorRecord.ScriptStackTrace
+        positionMessage = if ($errorRecord.InvocationInfo) { $errorRecord.InvocationInfo.PositionMessage } else { $null }
+    }
+    try {
+        if ([System.IO.Directory]::Exists($RunDirectory)) {
+            $diagnostic | ConvertTo-Json -Depth 6 |
+                Set-Content -LiteralPath $diagnosticPath -Encoding UTF8
+        }
+    }
+    catch {
+        [Console]::Error.WriteLine("Could not save PowerShell diagnostic '$diagnosticPath': $($_.Exception.Message)")
+    }
+    [Console]::Error.WriteLine("Hela runner failed at stage '$diagnosticStage'. See '$diagnosticPath'. $($errorRecord.Exception.Message)")
+    throw
 }

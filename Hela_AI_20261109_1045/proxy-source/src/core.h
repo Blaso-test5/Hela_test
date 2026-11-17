@@ -78,6 +78,7 @@ void RecordDrawShaderUse(uint64_t vsHash, uint64_t psHash, uint64_t gsHash,
 void RecordComputeShaderUse(uint64_t csHash, UINT missingStageMask, bool skipped,
     uint64_t executionCount = 1);
 void DumpShaderUseSummary();
+void DumpRecentShaderUseEvents(uint64_t readbackPresentCount);
 
 struct RenderTraceStats {
     std::atomic<uint64_t> startTickMs{0};

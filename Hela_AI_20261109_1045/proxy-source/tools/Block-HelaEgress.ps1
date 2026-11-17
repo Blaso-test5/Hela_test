@@ -10,6 +10,9 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $gameRoot = [System.IO.Path]::GetFullPath($GameDirectory)
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = [Security.Principal.WindowsPrincipal]::new($identity)
+$isAdministrator = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 $targets = @(
     [pscustomobject]@{
         DisplayName = 'Hela project - block game outbound'
@@ -129,9 +132,7 @@ function Find-ValidRule {
 }
 
 if ($Apply) {
-    $principal = [Security.Principal.WindowsPrincipal]::new(
-        [Security.Principal.WindowsIdentity]::GetCurrent())
-    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    if (-not $isAdministrator) {
         Write-Error 'Applying firewall rules requires an elevated PowerShell window; no rules were changed.'
         exit 4
     }
@@ -192,7 +193,62 @@ foreach ($target in $targets) {
     Write-Output "Verified effective outbound block: $($target.Program)"
 }
 
+$ruleSummaries = @(
+    foreach ($target in $targets) {
+        $rule = Find-ValidRule -PolicyStore ActiveStore -Target $target
+        $persistentRuleCount = @(
+            Get-NetFirewallRule -PolicyStore PersistentStore `
+                -DisplayName $target.DisplayName -ErrorAction SilentlyContinue
+        ).Count
+        $protocol = $null
+        $localAddress = $null
+        $remoteAddress = $null
+        $localPort = $null
+        $remotePort = $null
+        if ($rule) {
+            $addressFilter = @(Get-NetFirewallAddressFilter -AssociatedNetFirewallRule $rule)
+            $portFilter = @(Get-NetFirewallPortFilter -AssociatedNetFirewallRule $rule)
+            $localAddress = @($addressFilter[0].LocalAddress | ForEach-Object { [string]$_ })
+            $remoteAddress = @($addressFilter[0].RemoteAddress | ForEach-Object { [string]$_ })
+            $protocol = [string]$portFilter[0].Protocol
+            $localPort = @($portFilter[0].LocalPort | ForEach-Object { [string]$_ })
+            $remotePort = @($portFilter[0].RemotePort | ForEach-Object { [string]$_ })
+        }
+        [ordered]@{
+            displayName = $target.DisplayName
+            program = $target.Program
+            activeRuleFound = [bool]$rule
+            persistentNamedRuleCount = $persistentRuleCount
+            enabled = if ($rule) { [string]$rule.Enabled } else { $null }
+            direction = if ($rule) { [string]$rule.Direction } else { $null }
+            action = if ($rule) { [string]$rule.Action } else { $null }
+            profile = if ($rule) { [string]$rule.Profile } else { $null }
+            protocol = $protocol
+            localAddress = $localAddress
+            remoteAddress = $remoteAddress
+            localPort = $localPort
+            remotePort = $remotePort
+        }
+    }
+)
+$verification = [ordered]@{
+    schema = 'hela-egress-verification/1'
+    policyStore = 'ActiveStore'
+    administrator = $isAdministrator
+    profiles = @(
+        $profiles | ForEach-Object {
+            [ordered]@{
+                name = [string]$_.Name
+                enabled = [bool]$_.Enabled
+                allowLocalFirewallRules = [bool]$_.AllowLocalFirewallRules
+            }
+        }
+    )
+    rules = $ruleSummaries
+}
+Write-Output ('HELA_EGRESS_VERIFICATION ' + (ConvertTo-Json -InputObject $verification -Compress -Depth 6))
+
 if ($LaunchGame) {
-    Write-Output 'Firewall checks passed; launching Hela directly.'
+    Write-Output 'ActiveStore rule checks passed; launching Hela directly.'
     Start-Process -FilePath $targets[0].Program
 }

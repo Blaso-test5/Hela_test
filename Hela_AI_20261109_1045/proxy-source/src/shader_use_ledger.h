@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -33,6 +34,50 @@ struct ShaderUseKey {
     }
 };
 
+struct ShaderUseEvent {
+    uint64_t ordinal = 0;
+    uint64_t presentCall = 0;
+    uint64_t executionCount = 0;
+    ShaderUseKey key;
+};
+
+class ShaderUseEventRing {
+public:
+    static constexpr size_t Capacity = 64;
+
+    void Record(const ShaderUseKey& key, uint64_t presentCall,
+        uint64_t executionCount) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        ShaderUseEvent event{};
+        event.ordinal = ++ordinal_;
+        event.presentCall = presentCall;
+        event.executionCount = executionCount;
+        event.key = key;
+        buffer_[head_] = event;
+        head_ = (head_ + 1) % Capacity;
+        if (count_ < Capacity) ++count_;
+    }
+
+    std::vector<ShaderUseEvent> Tail(size_t maxEntries) const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        const size_t count = std::min(count_, maxEntries);
+        std::vector<ShaderUseEvent> events;
+        events.reserve(count);
+        for (size_t i = 0; i < count; ++i) {
+            const size_t index = (head_ + Capacity - count + i) % Capacity;
+            events.push_back(buffer_[index]);
+        }
+        return events;
+    }
+
+private:
+    mutable std::mutex mutex_;
+    std::array<ShaderUseEvent, Capacity> buffer_{};
+    size_t head_ = 0;
+    size_t count_ = 0;
+    uint64_t ordinal_ = 0;
+};
+
 struct ShaderUseCount {
     uint64_t executions = 0;
     uint64_t firstPresentCall = 0;
@@ -61,6 +106,7 @@ public:
 
     void Record(const ShaderUseKey& key, uint64_t presentCall,
         uint64_t executionCount = 1) {
+        events_.Record(key, presentCall, executionCount);
         std::lock_guard<std::mutex> lock(mutex_);
         if (key.compute)
             totalDispatches_ += executionCount;
@@ -81,6 +127,10 @@ public:
         }
         found->second.executions += executionCount;
         found->second.lastPresentCall = presentCall;
+    }
+
+    std::vector<ShaderUseEvent> RecentEvents(size_t maxEntries) const {
+        return events_.Tail(maxEntries);
     }
 
     ShaderUseSnapshot TakeSnapshot(size_t maxEntries) {
@@ -132,6 +182,7 @@ public:
 private:
     std::mutex mutex_;
     std::map<ShaderUseKey, ShaderUseCount> groups_;
+    ShaderUseEventRing events_;
     uint64_t totalDraws_ = 0;
     uint64_t totalDispatches_ = 0;
     uint64_t overflowDraws_ = 0;

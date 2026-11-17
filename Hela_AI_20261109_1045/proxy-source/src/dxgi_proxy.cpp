@@ -303,6 +303,7 @@ void CaptureBackbufferReadback(IDXGISwapChain4* swapChain, IUnknown* source) {
             static_cast<unsigned long long>(count));
         return;
     }
+    D3D12On11DumpRecentShaderUseEvents(count);
 
     const bool saveFullReadback = fullReadbackEnabled &&
         (count == 100 || (fullReadbackPresent && count == fullReadbackPresent));
@@ -336,6 +337,14 @@ void CaptureBackbufferReadback(IDXGISwapChain4* swapChain, IUnknown* source) {
         sourceDesc = device->lastBackbufferCopySourceDesc;
         sourceSequence = device->lastBackbufferCopySequence;
     }
+    D3D11_TEXTURE2D_DESC backbufferDesc{};
+    backbuffer->GetDesc(&backbufferDesc);
+    LogDxgi("[READBACK_IDENTITY] readback_present_count=%llu buffer_index=%u "
+        "native_backbuffer=%p width=%u height=%u format=%u "
+        "copy_sequence=%llu copy_source=%p",
+        static_cast<unsigned long long>(count), bufferIndex, backbuffer.Get(),
+        backbufferDesc.Width, backbufferDesc.Height, backbufferDesc.Format,
+        static_cast<unsigned long long>(sourceSequence), sourceResource.Get());
     if (!sourceSequence) {
         LogDxgi("[READBACK_SRC] Present #%llu no CopyResource-to-backbuffer source recorded",
             static_cast<unsigned long long>(count));

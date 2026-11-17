@@ -44,6 +44,10 @@ struct PendingTargetDrawPipelineStats {
 std::mutex g_pendingTargetDrawStatsMutex;
 std::vector<PendingTargetDrawPipelineStats> g_pendingTargetDrawStats;
 
+constexpr uint64_t kTargetDiagnosticVs = 0x20e0826b236597a1ULL;
+constexpr uint64_t kTargetDiagnosticPs0 = 0x44b0a992c2304254ULL;
+constexpr uint64_t kTargetDiagnosticPs1 = 0xd77600bde0076c33ULL;
+
 UINT ClaimTargetDrawDiagSlot(ID3D11Resource* resource, UINT& resourceHit) {
     if (!resource) return 0;
     std::lock_guard<std::mutex> lock(g_targetDrawDiagMutex);
@@ -301,13 +305,10 @@ void LogTargetVertexData(ExecState& state, UINT hit, ID3D11Buffer* vertexBuffer,
 void LogTargetDrawDiagnostic(ExecState& state, UINT indexCount, UINT instanceCount,
     UINT startIndex, INT baseVertex, UINT startInstance,
     TargetDrawPipelineStats& pipelineStats) {
-    constexpr uint64_t targetVs = 0x20e0826b236597a1ULL;
-    constexpr uint64_t targetPs0 = 0x44b0a992c2304254ULL;
-    constexpr uint64_t targetPs1 = 0xd77600bde0076c33ULL;
     if (!Cfg().diagnosticRenderTrace || !state.c ||
-        state.graphicsShaderHash != targetVs ||
-        (state.graphicsPixelShaderHash != targetPs0 &&
-         state.graphicsPixelShaderHash != targetPs1))
+        state.graphicsShaderHash != kTargetDiagnosticVs ||
+        (state.graphicsPixelShaderHash != kTargetDiagnosticPs0 &&
+         state.graphicsPixelShaderHash != kTargetDiagnosticPs1))
         return;
 
     PollTargetDrawPipelineStats(state.c);
@@ -764,6 +765,29 @@ void RecordDrawExecution(ExecState& state, bool indexed, const char* operation,
             static_cast<unsigned long long>(state.graphicsPixelShaderHash),
             elements, instances, viewport);
         TrackTargetOperation(resource, context, TargetHistoryKind::ExecutedDraw);
+    }
+    if (state.graphicsShaderHash == kTargetDiagnosticVs &&
+        (state.graphicsPixelShaderHash == kTargetDiagnosticPs0 ||
+         state.graphicsPixelShaderHash == kTargetDiagnosticPs1)) {
+        Ptr<ID3D11Resource> latestCopySource;
+        uint64_t latestCopySequence = 0;
+        if (state.dev) {
+            std::lock_guard<std::mutex> lock(state.dev->backbufferCopyLock);
+            latestCopySource = state.dev->lastBackbufferCopySource;
+            latestCopySequence = state.dev->lastBackbufferCopySequence;
+        }
+        for (UINT i = 0; i < state.numRtv && i < ARRAYSIZE(state.rtvs); ++i) {
+            ID3D11Resource* resource = state.rtvResources[i].Get();
+            if (!resource) continue;
+            Log("[TARGET_DRAW_COPY] draw_index=%llu api=%s rtv_slot=%u "
+                "tracked_rtv_resource=%p vs=%016llx ps=%016llx "
+                "latest_copy_sequence_at_draw=%llu latest_copy_source_at_draw=%p",
+                static_cast<unsigned long long>(drawIndex), operation, i, resource,
+                static_cast<unsigned long long>(state.graphicsShaderHash),
+                static_cast<unsigned long long>(state.graphicsPixelShaderHash),
+                static_cast<unsigned long long>(latestCopySequence),
+                latestCopySource.Get());
+        }
     }
     if (hasRtv) {
         stats.drawWithRtv.fetch_add(1, std::memory_order_relaxed);
@@ -2135,9 +2159,9 @@ void STDMETHODCALLTYPE CommandList::CopyResource(ID3D12Resource* destination, ID
                 state.dev->lastBackbufferCopySource = srcResource->tex;
                 state.dev->lastBackbufferCopySourceDesc = srcResource->desc;
                 ++state.dev->lastBackbufferCopySequence;
-                Log("[COPY_TO_BB] CopyResource source=%p dimension=%u width=%llu height=%u "
-                    "format=%u sequence=%llu",
-                    srcResource, srcResource->desc.Dimension,
+                Log("[COPY_TO_BB] CopyResource source=%p source_texture=%p "
+                    "dimension=%u width=%llu height=%u format=%u sequence=%llu",
+                    srcResource, srcResource->tex.Get(), srcResource->desc.Dimension,
                     static_cast<unsigned long long>(srcResource->desc.Width),
                     srcResource->desc.Height, srcResource->desc.Format,
                     static_cast<unsigned long long>(state.dev->lastBackbufferCopySequence));

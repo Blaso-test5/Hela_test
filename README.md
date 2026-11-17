@@ -67,12 +67,21 @@ draw records for VS/PS/GS/HS/DS and compute dispatch records for CS. The
 ledger distinguishes executed from skipped calls and includes missing-stage
 masks. It retains up to 512 groups and prints at most 64 per heartbeat.
 
-Each summary is a window since the previous two-second heartbeat, not a
-cumulative total. Present counts are process-wide counters, not frame IDs.
-`executed` means the proxy emitted the D3D11 call; `rtv_is_backbuffer` only
-describes the bound RTV. Neither proves GPU completion or visible contribution
-to a frame. Correlate ledger output with resources, Present readbacks, and
-visual validation from the same run.
+The proxy also retains the last 64 shader-use record events, including skipped
+draws and dispatches, independently of the ledger's group cap. It dumps this
+bounded ring at each enabled readback checkpoint (every 100 readback Present
+calls), alongside the current native backbuffer identity and last recorded
+copy source/sequence. Event ordinals count ledger record events; `execution_count`
+may represent multiple commands, so neither is a frame ID or necessarily one
+individual indirect draw.
+
+The ring records `present_calls_returned` as observed when each event is
+recorded. The separate `readback_present_count` is incremented before the
+corresponding Present call; it is not the same counter. These are correlation
+watermarks, not frame IDs. `executed` means the proxy emitted the D3D11 call;
+`rtv_is_backbuffer` only describes whether a backbuffer RTV was bound. Neither
+proves GPU completion or visible contribution to a frame. Correlate the ring
+with resources, Present readbacks, and visual validation from the same run.
 
 ### Placed-resource alias handling
 
@@ -243,6 +252,43 @@ This verifies firewall configuration, not packet-level behavior or other
 executables outside these two paths. The per-run TCP monitor above is
 best-effort and does not prove that no data was sent.
 
+`Hela_AI_20261109_1045\proxy-source\tools\Block-HelaEgressDefensive.ps1`
+provides separate `Apply`, `Verify`, and `Remove` modes for rules it owns.
+`Apply` uses resolved executable paths and a dedicated rule group; `Remove`
+deletes only rules carrying that group's marker and leaves the older
+`Hela project - block ...` rules untouched. All modes require an elevated
+PowerShell session and do not launch Hela or generate network traffic:
+
+```powershell
+$GameDirectory = 'C:\Path\To\Hela'
+powershell -NoProfile -ExecutionPolicy Bypass -File `
+  .\Hela_AI_20261109_1045\proxy-source\tools\Block-HelaEgressDefensive.ps1 `
+  -GameDirectory $GameDirectory -Mode Apply
+```
+
+The tool reports `configVerified` separately from `enforcementProven`, which
+remains `false`: ActiveStore confirms policy configuration, not that Windows
+or another filtering provider enforces it for a future connection. It does
+not set machine-wide outbound policy or disable network adapters. If zero
+egress is required while enforcement remains uncertain, manually disconnect
+network-capable interfaces for the run.
+
+The controlled readback runner records the helper's ActiveStore verification
+context separately from its TCP observations. Its `firewallCheck` result is
+`observed-nonloopback-established`, `configuration-unverified`,
+`monitor-incomplete`, or `no-egress-observed`; it never treats a successful
+rule-presence check alone as proof that no connection occurred. The detailed
+result contains counts of deduplicated TCP state events and timestamps, not
+remote IP addresses. A missing observation is not proof of zero egress, and an
+Established TCP state does not prove that application payload was accepted by
+a remote service. The pure summary/verdict logic can be checked without
+launching Hela:
+
+```powershell
+powershell -NoProfile -File `
+  .\Hela_AI_20261109_1045\proxy-source\tools\tests\HelaRunEvidence.Tests.ps1
+```
+
 For the staged GTX 1050 Ti shader candidates, set `$GameDirectory`,
 `$RunDirectory`, and `$ExternalReadbackDirectory` to the local paths, then run
 the controlled readback test from the same elevated PowerShell context where
@@ -267,6 +313,19 @@ Sentry credentials in stdout/stderr; and does not replace the installed proxy
 DLLs or alter shared overrides. It refuses to start if the firewall check,
 GPU, DLL fingerprints, or staged override checks fail. The experiment's
 run-specific override inputs are local and are not published.
+Uncaught PowerShell failures are rethrown and also saved in a
+`powershell-error-<UTC timestamp>.json` file in the run directory, including
+the failing stage, exception, and source position.
+Use `-PreflightOnly` to run the same read-only checks and report their results
+without changing readbacks/logs or starting Hela.
+
+For a bounded follow-up observation after the target readback, the runner
+accepts `-ObserveAfterReadbackSeconds 1..120` (default `0`, preserving the
+immediate-close behavior). This only records whether the process remained
+alive during that interval; no reliable menu log marker has been established,
+so `postReadbackObservation.menuReached` remains `undetermined`. Confirming
+the menu requires separate visual observation and must not be inferred from
+Present activity or process lifetime.
 
 The first attempt on 2026-11-16 failed before producing a verified readback:
 the runner tried to read the proxy log while Hela still had it open. The

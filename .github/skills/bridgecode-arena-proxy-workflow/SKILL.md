@@ -14,6 +14,13 @@ Use this workflow for proxy, Proxy Manager, shader-conversion, and Hela-render i
 3. If BridgeCode is busy, do not repeatedly poll, send another prompt, or switch its model underneath the running request. If the operation is taking too long, stop and tell the user what remains so they can resume it.
 4. Read the available model categories, exact model IDs, and modes. Never invent an ID.
 
+## Tool-routing guard: Qwen responses, never Canvas
+
+- For Qwen status, call `bridgecode_status`; for a completed answer, call `bridgecode_read_last_response`. Do not use `open_canvas`, `invoke_canvas_action`, or computer-use UI to retrieve a BridgeCode response.
+- If an invocation returns a Canvas/instance error while a BridgeCode MCP action was intended, treat it as a wrong-tool selection: do not repeat that Canvas call. Use `tool_search` to find the exact BridgeCode tool, then invoke that returned tool.
+- After two failed calls for the same BridgeCode action, stop retrying that action. Search for the appropriate alternate BridgeCode tool and continue independent local work; if no matching tool is available, state the blocker once and do not enter a retry loop.
+- Before sending to Qwen, check status and read the active chat's last response. If a send result is uncertain, do not resend; recover with `bridgecode_read_last_response` or report the exact failure.
+
 ## 2. Research and select a coding model
 
 1. For a model-selection request, check current 2026 coding evidence on the web before choosing: prefer task-relevant coding benchmarks and verified leaderboard results (for example SWE-bench Verified, LiveCodeBench, or an Arena coding leaderboard), and note the date and source.
