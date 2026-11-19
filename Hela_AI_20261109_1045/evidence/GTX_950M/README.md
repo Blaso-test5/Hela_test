@@ -8,6 +8,21 @@ For the latest continuation state and next diagnostic run, see
 This directory contains only evidence from the Hela run on this PC's NVIDIA
 GeForce GTX 950M (device `0x139A`, driver `582.78`, 4 GiB).
 
+## Cross-machine handoff: GTX 1050 Ti run
+
+The versioned GTX 1050 Ti pre-menu run and its sanitized results were pushed
+to `main` in commit `e3c4146`. Read the
+[GTX 1050 Ti findings](../GTX_1050TI/README.md) and
+[v1.1.2 post-run validation](../GTX_1050TI/runs/20261119/1050ti-pre-menu-v1.1.2-historical-env-181838503/post-run-validation.json)
+for context: the user saw the pre-menu, but both full-frame readbacks were
+black, so the pixels do not independently verify the visible image.
+
+**Do not run the `1050ti-*` profile or launcher on the GTX 950M, and do not
+store its output under this directory.** That profile is specific to the
+GTX 1050 Ti run. On the 950M machine, use these files only to read the prior
+results; any continuation must first verify the local GPU and runtime, then
+use a separately versioned 950M profile and output path.
+
 ## Latest status — 2026-11-11
 
 - v012's `Load` probe changed from encoded zero at Present #100 to encoded
