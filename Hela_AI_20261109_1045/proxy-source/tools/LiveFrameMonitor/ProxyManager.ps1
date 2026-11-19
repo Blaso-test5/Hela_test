@@ -110,6 +110,84 @@ function Get-AvailablePackageInventory {
     return $packages
 }
 
+function Get-LaunchEnvironmentSha256 {
+    param([Parameter(Mandatory = $true)]$Environment)
+
+    $lines = foreach ($property in @($Environment.PSObject.Properties | Sort-Object Name)) {
+        "$($property.Name)=$([string]$property.Value)"
+    }
+    $canonical = (($lines -join "`n") + "`n")
+    $bytes = [Text.Encoding]::UTF8.GetBytes($canonical)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace("-", "").ToLowerInvariant()
+    } finally {
+        $sha.Dispose()
+    }
+}
+
+function Assert-LaunchProfile {
+    param([Parameter(Mandatory = $true)]$Manifest)
+
+    $profileProperty = $Manifest.PSObject.Properties["launchProfile"]
+    if ($null -eq $profileProperty) {
+        return $null
+    }
+
+    $profile = $profileProperty.Value
+    if ([string]::IsNullOrWhiteSpace([string]$profile.name) -or
+        $null -eq $profile.environment -or
+        [string]$profile.sha256 -notmatch '^[0-9a-f]{64}$' -or
+        $null -eq $profile.arguments -or
+        $null -eq $profile.attestation) {
+        throw "Invalid launchProfile in run manifest."
+    }
+
+    foreach ($property in $profile.environment.PSObject.Properties) {
+        if ($property.Name -notmatch '^D3D12ON11_[A-Z0-9_]+$' -or
+            $property.Value -isnot [string] -or
+            [string]$property.Value -match '[\r\n]') {
+            throw "Invalid launchProfile environment entry: $($property.Name)"
+        }
+    }
+    foreach ($argument in @($profile.arguments)) {
+        if ($argument -isnot [string] -or $argument -match '[\r\n]') {
+            throw "Invalid launchProfile argument."
+        }
+    }
+
+    foreach ($name in @("D3D12ON11_OVERRIDES", "D3D12ON11_DUMP")) {
+        $property = $profile.environment.PSObject.Properties[$name]
+        $expectedToken = if ($name -eq "D3D12ON11_OVERRIDES") {
+            "@RUN_OVERRIDES@"
+        } else {
+            "@RUN_DUMP@"
+        }
+        if ($null -eq $property -or $property.Value -cne $expectedToken) {
+            throw "Launch profile must use a run-local token for $name."
+        }
+    }
+
+    $actualHash = Get-LaunchEnvironmentSha256 -Environment $profile.environment
+    if ($actualHash -ne [string]$profile.sha256) {
+        throw "Launch environment fingerprint mismatch: expected $($profile.sha256), got $actualHash"
+    }
+    if ($null -ne $profile.attestation.maskedNvidiaAdapter -and
+        $profile.attestation.maskedNvidiaAdapter -isnot [bool]) {
+        throw "Invalid launch profile maskedNvidiaAdapter attestation."
+    }
+    if ($null -ne $profile.attestation.tiledResourcesTier -and
+        [string]$profile.attestation.tiledResourcesTier -notmatch '^[0-3]$') {
+        throw "Invalid launch profile tiledResourcesTier attestation."
+    }
+    if ($null -ne $profile.attestation.callerTrace -and
+        $profile.attestation.callerTrace -isnot [bool]) {
+        throw "Invalid launch profile callerTrace attestation."
+    }
+
+    return $profile
+}
+
 function Read-RunManifest {
     param([Parameter(Mandatory = $true)][string]$Path)
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
@@ -144,6 +222,7 @@ function Read-RunManifest {
             throw "Required override is not pinned in the manifest: $name"
         }
     }
+    $null = Assert-LaunchProfile -Manifest $manifest
     return $manifest
 }
 
@@ -509,6 +588,7 @@ switch ($Action) {
         Assert-GameStopped
         $manifest = Read-RunManifest -Path $ManifestPath
         $packageInfo = Assert-PackageMatchesManifest -Manifest $manifest -PackagePath $VersionPath
+        $launchProfile = Assert-LaunchProfile -Manifest $manifest
         $runTime = [DateTime]::UtcNow
         $runDirectoryPath = Join-Path (Join-Path $RunRoot $runTime.ToString("yyyyMMdd")) `
             "$($manifest.testVersion)-$($runTime.ToString('HHmmssfff'))"
@@ -524,6 +604,34 @@ switch ($Action) {
         $readbackDir = Join-Path $runDirectoryPath "readbacks"
         $reportPath = Join-Path $runDirectoryPath "live-monitor-report.json"
         $runManifestPath = Join-Path $runDirectoryPath "run-manifest.json"
+        $launchEnvironment = @{}
+        $launchArguments = @()
+        $launchProfileInfo = $null
+        if ($null -ne $launchProfile) {
+            $launchProfileRoot = Join-Path $runDirectoryPath "launch-profile"
+            $launchOverridesPath = Join-Path $launchProfileRoot "overrides"
+            $launchDumpPath = Join-Path $launchProfileRoot "dump"
+            New-Item -ItemType Directory -Path $launchOverridesPath -Force | Out-Null
+            New-Item -ItemType Directory -Path $launchDumpPath -Force | Out-Null
+            Copy-DirectoryContents -Source (Join-Path $packageInfo.package_path "overrides") `
+                -Destination $launchOverridesPath
+            foreach ($property in $launchProfile.environment.PSObject.Properties) {
+                $value = switch ([string]$property.Value) {
+                    "@RUN_OVERRIDES@" { $launchOverridesPath }
+                    "@RUN_DUMP@" { $launchDumpPath }
+                    default { [string]$property.Value }
+                }
+                $launchEnvironment[$property.Name] = [string]$value
+            }
+            $launchArguments = @($launchProfile.arguments | ForEach-Object { [string]$_ })
+            $launchProfileInfo = [ordered]@{
+                name = [string]$launchProfile.name
+                sha256 = [string]$launchProfile.sha256
+                environment = $launchEnvironment
+                arguments = $launchArguments
+                working_directory = $GameDir
+            }
+        }
         $runError = $null
         $oldLogMoved = $false
         $launcherStarted = $false
@@ -537,6 +645,7 @@ switch ($Action) {
             started_utc = [DateTime]::UtcNow.ToString("o")
             package_path = $packageInfo.package_path
             target_present = $Present
+            launch_profile = $launchProfileInfo
             status = "preparing"
         }
         $runInfo | ConvertTo-Json -Depth 6 |
@@ -576,6 +685,12 @@ switch ($Action) {
                 FullBmpPresent = $Present
                 StopAfterPresent = $Present
                 StopGameAfterMonitor = $true
+            }
+            if ($null -ne $launchProfile) {
+                $launcherArgs.LaunchEnvironmentProfileName = [string]$launchProfile.name
+                $launcherArgs.LaunchEnvironmentProfileSha256 = [string]$launchProfile.sha256
+                $launcherArgs.LaunchEnvironment = $launchEnvironment
+                $launcherArgs.LaunchArguments = $launchArguments
             }
             $launcherStarted = $true
             & $LiveMonitorLauncher @launcherArgs

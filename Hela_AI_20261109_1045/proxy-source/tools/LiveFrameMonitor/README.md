@@ -98,6 +98,17 @@ powershell -ExecutionPolicy Bypass -File $manager -Action Restore `
 Non eseguire una nuova run finché il gioco è aperto. Il manager non cancella le
 evidenze precedenti e non installa nulla in `Inventory` o `Prepare`.
 
+I manifest possono inoltre definire un `launchProfile` opzionale con nome,
+hash SHA-256 dell'ambiente ordinato, variabili `D3D12ON11_*`, argomenti e
+marker di attestazione. Durante `Run`, ProxyManager risolve i token
+`@RUN_OVERRIDES@` e `@RUN_DUMP@` in cartelle nuove dentro la run; il launcher
+avvia Hela con un ambiente child esplicito dopo aver rimosso tutte le variabili
+`D3D12ON11_*` ereditate. Il nome, l'hash, l'ambiente risolto e gli argomenti
+vengono registrati in `manager-run.json`. I marker richiesti dal profilo
+vengono verificati prima dell'attestazione degli shader; se mancano, la run
+fallisce e il normale ripristino del ProxyManager resta attivo. I manifest
+senza `launchProfile` mantengono il comportamento precedente.
+
 ### 4. Esecuzione della suite di test unitari
 ```powershell
 python -m unittest discover -s tools/LiveFrameMonitor -p "test_*.py" -v

@@ -20,6 +20,10 @@ param(
     [string]$SourceBmpPath = "",
     [string]$BackbufferBmpPath = "",
     [string]$RunManifestPath = "",
+    [string]$LaunchEnvironmentProfileName = "",
+    [string]$LaunchEnvironmentProfileSha256 = "",
+    [hashtable]$LaunchEnvironment = @{},
+    [string[]]$LaunchArguments = @(),
     [UInt32]$MonitorMaxWaitSeconds = 0,
     [switch]$LaunchGame,
     [switch]$EnableReadback = $true,
@@ -83,6 +87,89 @@ function Get-RunManifest {
         throw "Invalid Hela run manifest: $Path"
     }
     return $manifest
+}
+
+function Get-LaunchEnvironmentSha256 {
+    param([Parameter(Mandatory = $true)]$Environment)
+
+    $lines = foreach ($property in @($Environment.PSObject.Properties | Sort-Object Name)) {
+        "$($property.Name)=$([string]$property.Value)"
+    }
+    $canonical = (($lines -join "`n") + "`n")
+    $bytes = [Text.Encoding]::UTF8.GetBytes($canonical)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace("-", "").ToLowerInvariant()
+    } finally {
+        $sha.Dispose()
+    }
+}
+
+function Assert-LaunchProfileMatchesManifest {
+    param([Parameter(Mandatory = $true)]$Manifest)
+
+    $profileProperty = $Manifest.PSObject.Properties["launchProfile"]
+    if ($null -eq $profileProperty) {
+        if (-not [string]::IsNullOrWhiteSpace($LaunchEnvironmentProfileName) -or
+            -not [string]::IsNullOrWhiteSpace($LaunchEnvironmentProfileSha256) -or
+            $LaunchEnvironment.Count -gt 0 -or $LaunchArguments.Count -gt 0) {
+            throw "Launch environment was supplied for a manifest without launchProfile."
+        }
+        return
+    }
+
+    $profile = $profileProperty.Value
+    if ($LaunchEnvironmentProfileName -cne [string]$profile.name -or
+        $LaunchEnvironmentProfileSha256 -cne [string]$profile.sha256) {
+        throw "Launch profile identity does not match the run manifest."
+    }
+    if ((Get-LaunchEnvironmentSha256 -Environment $profile.environment) -ne
+        [string]$profile.sha256) {
+        throw "Launch profile environment fingerprint does not match the run manifest."
+    }
+    $profileEnvironment = @($profile.environment.PSObject.Properties)
+    if ($LaunchEnvironment.Count -ne $profileEnvironment.Count) {
+        throw "Resolved child environment does not match the run manifest launch profile."
+    }
+    $runDirectory = Split-Path -Parent ([IO.Path]::GetFullPath($RunManifestPath))
+    foreach ($property in $LaunchEnvironment.GetEnumerator()) {
+        if ($property.Key -notmatch '^D3D12ON11_[A-Z0-9_]+$' -or
+            $property.Value -isnot [string] -or
+            [string]$property.Value -match '[\r\n]') {
+            throw "Invalid child launch environment entry: $($property.Key)"
+        }
+    }
+    foreach ($property in $profileEnvironment) {
+        $actualProperty = $LaunchEnvironment.GetEnumerator() |
+            Where-Object { $_.Key -ceq $property.Name } |
+            Select-Object -First 1
+        if ($null -eq $actualProperty) {
+            throw "Resolved child environment is missing $($property.Name)."
+        }
+        $expectedValue = [string]$property.Value
+        if ($expectedValue -ceq "@RUN_OVERRIDES@") {
+            $expectedValue = Join-Path $runDirectory "launch-profile\overrides"
+        } elseif ($expectedValue -ceq "@RUN_DUMP@") {
+            $expectedValue = Join-Path $runDirectory "launch-profile\dump"
+        }
+        $matchesExpected = if ($property.Value -ceq "@RUN_OVERRIDES@" -or
+            $property.Value -ceq "@RUN_DUMP@") {
+            [string]$actualProperty.Value -ieq $expectedValue
+        } else {
+            [string]$actualProperty.Value -ceq $expectedValue
+        }
+        if (-not $matchesExpected) {
+            throw "Resolved child environment value does not match the launch profile for $($property.Name)."
+        }
+    }
+    if ($LaunchArguments.Count -ne @($profile.arguments).Count) {
+        throw "Launch arguments do not match the run manifest launch profile."
+    }
+    for ($index = 0; $index -lt $LaunchArguments.Count; $index++) {
+        if ($LaunchArguments[$index] -cne [string]$profile.arguments[$index]) {
+            throw "Launch argument $index does not match the run manifest launch profile."
+        }
+    }
 }
 
 function Assert-ExpectedHash {
@@ -162,6 +249,29 @@ function Assert-RunLogMatchesManifest {
             throw "Run log does not attest the expected $role module fingerprint ($expectedHash)"
         }
     }
+    $profileProperty = $Manifest.PSObject.Properties["launchProfile"]
+    if ($null -ne $profileProperty) {
+        $attestation = $profileProperty.Value.attestation
+        if ($attestation.maskedNvidiaAdapter -eq $true) {
+            if ($log -notmatch '(?m)^.*DIAGNOSTIC_MASK_NVIDIA: .*exposed-vendor=0xffff(?:\s|$)' -or
+                $log -notmatch '(?m)^.*D3D12CreateDevice adapter source=proxy-unwrap(?:\s|$)') {
+                throw "Run log does not attest the required masked NVIDIA proxy adapter."
+            }
+        }
+        if ($null -ne $attestation.tiledResourcesTier) {
+            $tier = [string]$attestation.tiledResourcesTier
+            $pattern = "(?m)^.*CheckFeatureSupport end feature=D3D12_OPTIONS(?:\(0\))?.*tiled-tier=$tier(?:\s|$)"
+            if ($log -notmatch $pattern) {
+                throw "Run log does not attest the required tiled-resource tier $tier."
+            }
+        }
+        if ($null -ne $attestation.callerTrace) {
+            $traceValue = if ($attestation.callerTrace) { "1" } else { "0" }
+            if ($log -notmatch "(?m)^.*Config caller-trace=$traceValue(?:\s|$)") {
+                throw "Run log does not attest the required caller-trace setting $traceValue."
+            }
+        }
+    }
     foreach ($name in @($Manifest.requiredOverrides)) {
         $expectedHash = [string]$Manifest.overrides.PSObject.Properties[$name].Value
         $escapedName = [regex]::Escape($name)
@@ -235,6 +345,7 @@ foreach ($name in $ManagedEnvVars) {
 }
 
 $MonitorProc = $null
+$MonitorStartedAt = $null
 $GameProc = $null
 
 try {
@@ -249,6 +360,7 @@ try {
         }
         $RunManifest = Get-RunManifest -Path $RunManifestPath
         Assert-RunManifestMatchesInstallation -Manifest $RunManifest
+        Assert-LaunchProfileMatchesManifest -Manifest $RunManifest
         Write-Host "[Launcher] Run manifest verified: $($RunManifest.testVersion)" -ForegroundColor Green
 
         if (-not (Test-Path -LiteralPath $GameExePath)) {
@@ -267,12 +379,44 @@ try {
 
     Write-Host "[Launcher] Starting LiveFrameMonitor background process..." -ForegroundColor Cyan
     # Pass a single properly-quoted Win32 command-line string so Start-Process never splits paths with spaces
+    $MonitorStartedAt = [DateTime]::UtcNow
     $MonitorProc = Start-Process -FilePath "python" -ArgumentList $MonitorCmdLine -NoNewWindow -PassThru
 
-    $GameArgs = @("-graphicsadapter=0", "-windowed", "-ResX=1280", "-ResY=720")
+    $GameArgs = if ($LaunchArguments.Count -gt 0) {
+        $LaunchArguments
+    } else {
+        @("-graphicsadapter=0", "-windowed", "-ResX=1280", "-ResY=720")
+    }
     $GameCmdLine = Join-Win32CommandLine -ArgsList $GameArgs
     Write-Host "[Launcher] Launching Hela directly (no Steam): $GameExePath $GameCmdLine" -ForegroundColor Green
-    $GameProc = Start-Process -FilePath $GameExePath -ArgumentList $GameCmdLine -WorkingDirectory $GameDir -PassThru
+    if (-not [string]::IsNullOrWhiteSpace($LaunchEnvironmentProfileName)) {
+        $gameStartInfo = [System.Diagnostics.ProcessStartInfo]::new()
+        $gameStartInfo.FileName = $GameExePath
+        $gameStartInfo.WorkingDirectory = $GameDir
+        $gameStartInfo.Arguments = $GameCmdLine
+        $gameStartInfo.UseShellExecute = $false
+        foreach ($name in @($gameStartInfo.EnvironmentVariables.Keys)) {
+            if ($name -like "D3D12ON11_*") {
+                $gameStartInfo.EnvironmentVariables.Remove($name) | Out-Null
+            }
+        }
+        foreach ($name in $LaunchEnvironment.Keys) {
+            $gameStartInfo.EnvironmentVariables[$name] = [string]$LaunchEnvironment[$name]
+        }
+        $gameStartInfo.EnvironmentVariables["D3D12ON11_BACKBUFFER_READBACK"] =
+            $(if ($EnableReadback) { "1" } else { "0" })
+        $gameStartInfo.EnvironmentVariables["D3D12ON11_FULL_READBACK"] =
+            $(if ($EnableFullBmpReadback) { "1" } else { "0" })
+        $gameStartInfo.EnvironmentVariables["D3D12ON11_FULL_READBACK_PRESENT"] =
+            $FullBmpPresent.ToString()
+        Write-Host "[Launcher] Child environment profile: $LaunchEnvironmentProfileName sha256=$LaunchEnvironmentProfileSha256 (inherited D3D12ON11_* cleared)" -ForegroundColor Cyan
+        $GameProc = [System.Diagnostics.Process]::Start($gameStartInfo)
+        if ($null -eq $GameProc) {
+            throw "Failed to start Hela with launch profile '$LaunchEnvironmentProfileName'."
+        }
+    } else {
+        $GameProc = Start-Process -FilePath $GameExePath -ArgumentList $GameCmdLine -WorkingDirectory $GameDir -PassThru
+    }
 
     while (-not $GameProc.HasExited) {
         if ($MonitorProc.HasExited) {
@@ -284,10 +428,29 @@ try {
 finally {
     try {
         if ($null -ne $MonitorProc -and -not $MonitorProc.HasExited) {
-            Write-Host "[Launcher] Stopping LiveFrameMonitor (PID $($MonitorProc.Id))..." -ForegroundColor Yellow
-            Stop-Process -Id $MonitorProc.Id -Force -ErrorAction SilentlyContinue
-            if (-not $MonitorProc.WaitForExit(5000)) {
-                throw "LiveFrameMonitor process $($MonitorProc.Id) did not exit after termination."
+            if ($null -ne $GameProc -and
+                $GameProc.HasExited -and
+                $MonitorMaxWaitSeconds -gt 0 -and
+                $null -ne $MonitorStartedAt) {
+                $monitorDeadline = $MonitorStartedAt.AddSeconds(
+                    [double]$MonitorMaxWaitSeconds + 5.0)
+                $remainingMilliseconds = [int][Math]::Max(
+                    0,
+                    [Math]::Min(
+                        [int]::MaxValue,
+                        [Math]::Ceiling(($monitorDeadline - [DateTime]::UtcNow).TotalMilliseconds)))
+                if ($remainingMilliseconds -gt 0) {
+                    Write-Host "[Launcher] Hela exited; allowing the monitor to finalize its bounded report..." -ForegroundColor Yellow
+                    $null = $MonitorProc.WaitForExit($remainingMilliseconds)
+                }
+            }
+
+            if (-not $MonitorProc.HasExited) {
+                Write-Host "[Launcher] Stopping LiveFrameMonitor (PID $($MonitorProc.Id))..." -ForegroundColor Yellow
+                Stop-Process -Id $MonitorProc.Id -Force -ErrorAction SilentlyContinue
+                if (-not $MonitorProc.WaitForExit(5000)) {
+                    throw "LiveFrameMonitor process $($MonitorProc.Id) did not exit after termination."
+                }
             }
         }
     } finally {

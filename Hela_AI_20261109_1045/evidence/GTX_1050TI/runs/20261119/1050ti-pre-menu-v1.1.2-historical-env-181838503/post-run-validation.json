@@ -1,0 +1,35 @@
+{
+  "schema": "hela-post-run-validation/v1",
+  "runId": "1050ti-pre-menu-v1.1.2-historical-env-181838503",
+  "testVersion": "1050ti-pre-menu-v1.1.2-historical-env",
+  "operatorObservation": "User confirmed the pre-menu was visible during the run.",
+  "proxyManagerStatus": "failed",
+  "proxyManagerError": "The initial tier matcher expected feature=D3D12_OPTIONS(0); the runtime log emitted feature=D3D12_OPTIONS.",
+  "postRunLogAttestation": {
+    "status": "verified",
+    "moduleFingerprints": "matched",
+    "requiredShaderOverrides": "attested",
+    "maskedNvidiaAdapter": "proxy-unwrap exposed-vendor=0xffff",
+    "tiledResourcesTier": 3,
+    "callerTrace": false
+  },
+  "monitorCapture": {
+    "targetPresent": 1400,
+    "complete": true,
+    "moduleAttestation": "verified",
+    "sourceNonBlackPixels": 0,
+    "backbufferNonBlackPixels": 0,
+    "pixelsPerReadback": 921600
+  },
+  "restoration": {
+    "proxyManagerRestored": true,
+    "runtimeDllsRestored": true,
+    "remainingHelaOrCrashpadProcesses": 0
+  },
+  "egressRules": {
+    "ownedHelaAndCrashpadRulesRemoved": true,
+    "activeOrPersistentOwnedRulesRemaining": 0,
+    "zeroEgressClaimed": false
+  },
+  "interpretation": "The historical initialization profile, required shader overrides, and Present #1400 capture were reproduced. The user's on-screen pre-menu observation is recorded, but both full-frame readbacks are entirely black; visual output is therefore not independently validated by the captured pixels."
+}

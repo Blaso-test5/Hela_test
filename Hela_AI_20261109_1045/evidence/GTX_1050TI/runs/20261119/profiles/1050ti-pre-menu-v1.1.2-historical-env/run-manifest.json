@@ -1,0 +1,70 @@
+{
+  "schema": "hela-run-manifest/v1",
+  "runtimeAttestation": "module-and-shader-sha256",
+  "testVersion": "1050ti-pre-menu-v1.1.2-historical-env",
+  "runtime": {
+    "d3d12": "14dfba07e9a37b1c8adbc7fe11de6ba14ee0ab3968e953b85a097d32dbf69e98",
+    "dxgi": "09d13c05bf198c74b4190a9cb1be1c96966a0ece7641d8621c08a00465e0f857"
+  },
+  "overrides": {
+    "20e0826b236597a1.cso": "5d844557b3a5f78c108aca027b14432f3eba52791057234f7310c487926a3d3e",
+    "25e657206d761172.cso": "84e92d1475080ac8919f855a2eb6f06e8c0829dad0fe76c5e453b6d1101e99ad",
+    "38acdb88bb8801b9.cso": "0724669de377f5bcd07ccb96f3b3172e955d1fa7c56c99e09c997601d12df9cc",
+    "44b0a992c2304254.cso": "43c029b121212d0a37e0a00aaf983d9b6f7ea3ee593412c46ef22c52513d263d",
+    "4c1bc8bf7e457acd.cso": "da38ce807395d0201190bb3f483b4364a37f31ffc009c594a417e2c4c8b6998d",
+    "4ce363172cfd70be.cso": "21420b21a634f1c762645f2ea39afe6d260fc95148603cb138a12e670dfac9a9",
+    "5e8318486d1b2a98.cso": "3602c4d4b45139f1a00ef10caf35285fe7466ed435cf05813368183d929281b7",
+    "74867736557b00e8.cso": "fd8dbefb9aba6699fa8bfed527a6388ed65682b8e9ce28cd529f1f7112fc3e40",
+    "a7f30e5d1d5fc6fb.cso": "5a993c0d07474aa541ab5436fcd7dadc6bda5a312a00a4c88b82f8aa81e83eb5",
+    "bb592abf5ce2bad1.cso": "98aa22ea7d622c246fd30131c4743466ffd07328b9bd457d3b14f9f0ad97c6c6",
+    "c71574a8f462e2c1.cso": "05373e5f80bb3242faf00495dfd1f6b1fd6310372633faf67269cbd675ebd8e1",
+    "d77600bde0076c33.cso": "9f6fee68b9c8c824f106426db501012ebc176e35a22c7a8cd47e3e94719207b4",
+    "df79d6ce6e6eaa48.cso": "961953dc0dd59a6345d053ba4c23bc50104c2d4ef03425488ce57cc5c628e11c",
+    "f79b80f0f2f58f68.cso": "bf56dd5f681dd2fa8f483f5e1fa308dd432b39e78af032ace10634255fc15711"
+  },
+  "requiredOverrides": [
+    "20e0826b236597a1.cso",
+    "25e657206d761172.cso",
+    "44b0a992c2304254.cso",
+    "4c1bc8bf7e457acd.cso",
+    "4ce363172cfd70be.cso",
+    "5e8318486d1b2a98.cso",
+    "74867736557b00e8.cso",
+    "a7f30e5d1d5fc6fb.cso",
+    "bb592abf5ce2bad1.cso",
+    "c71574a8f462e2c1.cso",
+    "d77600bde0076c33.cso",
+    "df79d6ce6e6eaa48.cso",
+    "f79b80f0f2f58f68.cso"
+  ],
+  "launchProfile": {
+    "name": "1050ti-pre-menu-historical-20261117-v1",
+    "sha256": "02dd14ff52bdd38b68589091c4eaa07908d22d488e6a43499ba1a95738499e1d",
+    "environment": {
+      "D3D12ON11_DIAGNOSTIC_MASK_NVIDIA": "1",
+      "D3D12ON11_MASK_VENDOR_ID": "ffff",
+      "D3D12ON11_DIAGNOSTIC_CAPABILITIES": "1",
+      "D3D12ON11_TILED_RESOURCES_TIER": "3",
+      "D3D12ON11_SHADER_MODEL": "6_7",
+      "D3D12ON11_TRACE_CALLERS": "0",
+      "D3D12ON11_DIAGNOSTIC_RENDER_TRACE": "1",
+      "D3D12ON11_DUMP_SHADERS": "0",
+      "D3D12ON11_OVERRIDES": "@RUN_OVERRIDES@",
+      "D3D12ON11_DUMP": "@RUN_DUMP@"
+    },
+    "arguments": [
+      "-graphicsadapter=0",
+      "-windowed",
+      "-ResX=1280",
+      "-ResY=720",
+      "-stdout",
+      "-FullStdOutLogOutput",
+      "-forcelogflush"
+    ],
+    "attestation": {
+      "maskedNvidiaAdapter": true,
+      "tiledResourcesTier": 3,
+      "callerTrace": false
+    }
+  }
+}
