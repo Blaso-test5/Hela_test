@@ -8,7 +8,8 @@ param(
     [string]$RunRoot = "",
     [string]$RunDirectory = "",
     [UInt32]$Present = 400,
-    [UInt32]$MonitorTimeoutSeconds = 180
+    [UInt32]$MonitorTimeoutSeconds = 180,
+    [switch]$EnableCrashDiagnostics
 )
 
 Set-StrictMode -Version Latest
@@ -637,6 +638,11 @@ switch ($Action) {
         $launcherStarted = $false
         $installationStarted = $false
         $oldReadbacks = @{}
+        $existingCrashDiagnostics = @{}
+
+        foreach ($file in Get-ChildItem -LiteralPath $GameDir -File -Filter "d3d12on11-crash-*" -ErrorAction SilentlyContinue) {
+            $existingCrashDiagnostics[$file.FullName] = $true
+        }
 
         $runInfo = [ordered]@{
             schema = "hela-proxy-manager-run/v1"
@@ -646,6 +652,7 @@ switch ($Action) {
             package_path = $packageInfo.package_path
             target_present = $Present
             launch_profile = $launchProfileInfo
+            crash_diagnostics_enabled = [bool]$EnableCrashDiagnostics
             status = "preparing"
         }
         $runInfo | ConvertTo-Json -Depth 6 |
@@ -685,6 +692,7 @@ switch ($Action) {
                 FullBmpPresent = $Present
                 StopAfterPresent = $Present
                 StopGameAfterMonitor = $true
+                EnableCrashDiagnostics = $EnableCrashDiagnostics
             }
             if ($null -ne $launchProfile) {
                 $launcherArgs.LaunchEnvironmentProfileName = [string]$launchProfile.name
@@ -751,6 +759,23 @@ switch ($Action) {
                 $runError = if ($runError) { "$runError; output archive failed: $($_.Exception.Message)" } `
                     else { "Output archive failed: $($_.Exception.Message)" }
             } finally {
+                if ($EnableCrashDiagnostics) {
+                    try {
+                        $crashDiagnosticsDir = Join-Path $runDirectoryPath "crash-diagnostics"
+                        foreach ($file in Get-ChildItem -LiteralPath $GameDir -File -Filter "d3d12on11-crash-*" -ErrorAction SilentlyContinue) {
+                            if (-not $existingCrashDiagnostics.ContainsKey($file.FullName)) {
+                                if (-not (Test-Path -LiteralPath $crashDiagnosticsDir -PathType Container)) {
+                                    New-Item -ItemType Directory -Path $crashDiagnosticsDir -Force | Out-Null
+                                }
+                                Move-IfPresent -Path $file.FullName `
+                                    -Destination (Join-Path $crashDiagnosticsDir $file.Name) | Out-Null
+                            }
+                        }
+                    } catch {
+                        $runError = if ($runError) { "$runError; crash diagnostics archive failed: $($_.Exception.Message)" } `
+                            else { "Crash diagnostics archive failed: $($_.Exception.Message)" }
+                    }
+                }
                 if ($installationStarted -and (Test-Path -LiteralPath $restoreRoot -PathType Container)) {
                     try {
                         Restore-InstalledState -RestoreRoot $restoreRoot

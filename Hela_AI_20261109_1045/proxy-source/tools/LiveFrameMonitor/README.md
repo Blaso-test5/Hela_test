@@ -41,6 +41,15 @@ powershell -ExecutionPolicy Bypass -File tools/LiveFrameMonitor/Start-HelaLiveMo
   -JsonOutPath tools/LiveFrameMonitor/out/live_run.json
 ```
 
+`-EnableCrashDiagnostics` abilita in modo opt-in `D3D12ON11_CRASH_DIAGNOSTICS=1`
+solo per il processo di gioco; il launcher ripristina il valore ambientale
+precedente anche in caso di errore. Il crash handler crea report `.txt` e
+minidump `.dmp` accanto al modulo proxy caricato. Nelle run gestite da
+`ProxyManager.ps1`, i nuovi file vengono archiviati in `crash-diagnostics`
+all'interno della cartella della run e lo stato dell'opzione viene registrato
+in `manager-run.json`. Senza questa opzione il flag è impostato esplicitamente
+a `0`.
+
 `-FullBmpPresent` and `-StopAfterPresent` must be positive multiples of 100,
 matching the native readback cadence. When full BMP readback is enabled, the
 proxy captures both Present #100 and the requested Present (for example
@@ -77,7 +86,8 @@ powershell -ExecutionPolicy Bypass -File $manager -Action Inventory
 powershell -ExecutionPolicy Bypass -File $manager -Action Prepare `
   -VersionPath $version -ManifestPath $manifest -RunRoot $runRoot -Present 400
 powershell -ExecutionPolicy Bypass -File $manager -Action Run `
-  -VersionPath $version -ManifestPath $manifest -RunRoot $runRoot -Present 400
+  -VersionPath $version -ManifestPath $manifest -RunRoot $runRoot -Present 400 `
+  -EnableCrashDiagnostics
 ```
 
 `-RunRoot` e' obbligatorio per `Prepare` e `Run`, cosi' il manager non puo'
@@ -112,4 +122,41 @@ senza `launchProfile` mantengono il comportamento precedente.
 ### 4. Esecuzione della suite di test unitari
 ```powershell
 python -m unittest discover -s tools/LiveFrameMonitor -p "test_*.py" -v
+```
+
+### 5. Snapshot diagnostico del Proxy
+`Get-HelaProxySnapshot.ps1` ispeziona in sola lettura le DLL runtime e gli override
+installati, confrontandoli facoltativamente con un run manifest o un restore point.
+Non installa, ripristina o rimuove file. `-JsonOut` scrive solo il report e deve
+indicare una destinazione esterna all'installazione e al restore point.
+
+Il nome della directory degli override va specificato esplicitamente; per il layout
+gestito da `ProxyManager.ps1` è `D3D12On11Patch\overrides`:
+
+```powershell
+$gameDir = "D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64"
+$runManifest = "evidence\GTX_950M\runs\<data>\<run-id>\run-manifest.json"
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File tools/LiveFrameMonitor/Get-HelaProxySnapshot.ps1 `
+  -GameDirectory $gameDir -RunManifestPath $runManifest `
+  -OverridesDirectoryName "D3D12On11Patch\overrides"
+```
+
+Per confrontare lo stato installato con un restore point:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File tools/LiveFrameMonitor/Get-HelaProxySnapshot.ps1 `
+  -RestorePointPath "evidence\GTX_950M\runs\<data>\<run-id>\restore-point" `
+  -OverridesDirectoryName "D3D12On11Patch\overrides"
+```
+
+I manifest legacy senza `overrides_directory_present` assumono la directory
+presente; non attestano un'assenza originaria. Exit code: `0` match/inventario,
+`1` discrepanze, `2` input o I/O non validi, `3` confronto inconclusivo.
+I test PowerShell autosufficienti (senza Pester) si eseguono con:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File tools/LiveFrameMonitor/Tests/Get-HelaProxySnapshot.Tests.ps1
 ```

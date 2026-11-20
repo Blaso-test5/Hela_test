@@ -26,6 +26,7 @@ param(
     [string[]]$LaunchArguments = @(),
     [UInt32]$MonitorMaxWaitSeconds = 0,
     [switch]$LaunchGame,
+    [switch]$EnableCrashDiagnostics = $false,
     [switch]$EnableReadback = $true,
     [switch]$EnableFullBmpReadback = $false,
     [UInt32]$FullBmpPresent = 100,
@@ -336,7 +337,8 @@ $ManagedEnvVars = @(
     "D3D12ON11_TILED_RESOURCES_TIER",
     "D3D12ON11_BACKBUFFER_READBACK",
     "D3D12ON11_FULL_READBACK",
-    "D3D12ON11_FULL_READBACK_PRESENT"
+    "D3D12ON11_FULL_READBACK_PRESENT",
+    "D3D12ON11_CRASH_DIAGNOSTICS"
 )
 
 $SavedEnv = @{}
@@ -376,7 +378,9 @@ try {
     [Environment]::SetEnvironmentVariable("D3D12ON11_BACKBUFFER_READBACK", ($(if ($EnableReadback) { "1" } else { "0" })), "Process")
     [Environment]::SetEnvironmentVariable("D3D12ON11_FULL_READBACK", ($(if ($EnableFullBmpReadback) { "1" } else { "0" })), "Process")
     [Environment]::SetEnvironmentVariable("D3D12ON11_FULL_READBACK_PRESENT", $FullBmpPresent.ToString(), "Process")
+    [Environment]::SetEnvironmentVariable("D3D12ON11_CRASH_DIAGNOSTICS", ($(if ($EnableCrashDiagnostics) { "1" } else { "0" })), "Process")
 
+    Write-Host "[Launcher] Crash diagnostics: $(if ($EnableCrashDiagnostics) { 'enabled' } else { 'disabled' })" -ForegroundColor Cyan
     Write-Host "[Launcher] Starting LiveFrameMonitor background process..." -ForegroundColor Cyan
     # Pass a single properly-quoted Win32 command-line string so Start-Process never splits paths with spaces
     $MonitorStartedAt = [DateTime]::UtcNow
