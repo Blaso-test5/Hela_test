@@ -5,7 +5,7 @@
 The latest pre-menu replay is
 [`1050ti-pre-menu-v1.1.2-historical-env-061302514`](./1050ti-pre-menu-v1.1.2-historical-env-061302514).
 The machine-readable inventory is
-[`shader-catalog-v1.json`](./1050ti-pre-menu-v1.1.2-historical-env-061302514/shader-catalog-v1.json).
+[`shader-catalog-v1.json`](./1050ti-pre-menu-v1.1.3-resource-snapshots-185616858/shader-catalog-v1.json).
 
 The catalog distinguishes three classes:
 
@@ -72,3 +72,45 @@ pairs, not to convert the 5726 placeholder hashes by count.
 Do not delete or reset existing 2026-11-12 through 2026-11-19 evidence. Keep
 obsolete profiles in evidence as negative/archived baselines; mark them
 deprecated in their README or manifest instead of removing them.
+
+## Run and shader version policy
+
+Every Hela run uses a GPU-specific, immutable test version:
+
+- `v1.1.0`: replay baseline with shader dumping enabled.
+- `v1.1.1`: replay baseline with dumping disabled and run-local overrides.
+- `v1.1.2`: exact historical initialization environment plus NVIDIA masking,
+  tiled tier 3, caller tracing off and run-local paths.
+- `v1.1.3`: diagnostic-only resource snapshots added after the v1.1.2 baseline;
+  it changes no draw or copy behavior.
+
+A shader can advance through the catalog only by measured evidence:
+
+1. **Cataloged**: the hash and stage were observed in a real run.
+2. **Ready**: hash-matched SM5 bytecode loaded successfully.
+3. **Executed**: the graphics or compute pipeline invoked a PSO containing
+   that shader in the recorded run.
+4. **Target-correlated**: the shader or resource pair was observed on the
+   source RTV/copy-to-backbuffer path and correlated with a readback.
+5. **Pixel-validated**: a full source/backbuffer BMP demonstrates non-black,
+   stable pixels for a real menu frame.
+
+The working set is limited to ready shaders and executed pairs. The 13 ready
+shaders and three executed graphics pairs are not individually promoted; only
+the exact pair/hash evidence is reused.
+
+A placeholder remains unresolved until it is proven to be on the target RTV
+or Present copy path. A missing shader outside that path is archived with the
+run and not converted as an unrelated broad batch. The number of placeholder
+hashes is therefore not a target-completion metric.
+
+Future versions append a suffix for the single new diagnostic or fix:
+
+- `...-resource-snapshots`
+- `...-binding-snapshots`
+- `...-target-shader`
+- `...-menu-pixels`
+
+They must pin runtime DLL SHA-256, override SHA-256, GPU, launch profile,
+target Present, and restoration state. Old run directories remain negative or
+historical evidence; they are not deleted or silently overwritten.

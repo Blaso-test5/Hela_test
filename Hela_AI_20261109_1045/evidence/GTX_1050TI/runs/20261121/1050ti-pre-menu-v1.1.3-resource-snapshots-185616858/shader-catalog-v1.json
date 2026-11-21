@@ -1,0 +1,45 @@
+{
+  "schema": "hela-shader-catalog/v1",
+  "runId": "1050ti-pre-menu-v1.1.3-resource-snapshots-185616858",
+  "gpu": "GTX 1050 Ti",
+  "promotionLadder": [
+    "cataloged",
+    "ready",
+    "executed",
+    "target-correlated",
+    "pixel-validated"
+  ],
+  "ready": [
+    {"stage": "CS", "hash": "5e8318486d1b2a98"},
+    {"stage": "CS", "hash": "74867736557b00e8"},
+    {"stage": "CS", "hash": "bb592abf5ce2bad1"},
+    {"stage": "CS", "hash": "c71574a8f462e2c1"},
+    {"stage": "CS", "hash": "df79d6ce6e6eaa48"},
+    {"stage": "PS", "hash": "44b0a992c2304254"},
+    {"stage": "PS", "hash": "4c1bc8bf7e457acd"},
+    {"stage": "PS", "hash": "d77600bde0076c33"},
+    {"stage": "PS", "hash": "f79b80f0f2f58f68"},
+    {"stage": "VS", "hash": "20e0826b236597a1"},
+    {"stage": "VS", "hash": "25e657206d761172"},
+    {"stage": "VS", "hash": "4ce363172cfd70be"},
+    {"stage": "VS", "hash": "a7f30e5d1d5fc6fb"}
+  ],
+  "executedGraphicsPairs": [
+    {"vs": "20e0826b236597a1", "ps": "44b0a992c2304254", "drawEvents": 1312},
+    {"vs": "20e0826b236597a1", "ps": "d77600bde0076c33", "drawEvents": 97},
+    {"vs": "4ce363172cfd70be", "ps": "4c1bc8bf7e457acd", "drawEvents": 63}
+  ],
+  "targetCorrelated": [],
+  "pixelValidated": [],
+  "placeholders": {
+    "policy": "Unresolved placeholders do not become work items unless the exact hash appears on the target RTV/copy-to-backbuffer path.",
+    "uniqueInRun": 5726
+  },
+  "archivedNegativeEvidence": [
+    "v1.1.0-14override-dump",
+    "v1.1.1-14override-no-dump",
+    "late-draw-correlation-20261119",
+    "late-draw-target1000-index1469-20261119"
+  ],
+  "nextStep": "Correlate later CBV/SRV/binding state and resource overwrites before converting or promoting another placeholder."
+}

@@ -51,6 +51,24 @@ run-local override hashes before launch. Reuse the 1050 Ti diagnostic method
 and evidence format, but do not copy the 1050 Ti manifest as a 950M runtime
 attestation.
 
+### 950M version and shader policy
+
+Use independent `950m-*` versions; never inherit `1050ti-*` hash attestation
+as 950M evidence. Start with a locally verified 950M resource-snapshot profile
+and then use this promotion ladder:
+
+1. **Cataloged**: exact hash and stage observed in a 950M run.
+2. **Ready**: hash-matched SM5 override loaded in the 950M proxy.
+3. **Executed**: a 950M draw or dispatch invoked the shader.
+4. **Target-correlated**: the shader/resource pair is linked to the source RTV
+   and copy-to-backbuffer path.
+5. **Pixel-validated**: full source/backbuffer BMP proves stable non-black
+   menu pixels.
+
+Do not convert all 950M placeholder hashes at once. Promote only exact
+target-correlated hashes, and keep failures and negative runs in versioned
+directories rather than deleting them.
+
 ## Latest status — 2026-11-11
 
 - v012's `Load` probe changed from encoded zero at Present #100 to encoded
