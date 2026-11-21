@@ -1,0 +1,37 @@
+﻿{
+    "schema":  "hela-proxy-manager-run/v1",
+    "run_id":  "1050ti-pre-menu-v1.1.3-resource-snapshots-185616858",
+    "test_version":  "1050ti-pre-menu-v1.1.3-resource-snapshots",
+    "started_utc":  "2026-11-21T18:56:16.9157031Z",
+    "package_path":  "D:\\Plugin_ChatGpt\\GHIDRA MCP\\Hela-Export\\Repositories\\Hela_test\\Hela_AI_20261109_1045\\evidence\\GTX_1050TI\\runs\\20261121\\profiles\\1050ti-pre-menu-v1.1.3-resource-snapshots\\package",
+    "target_present":  1400,
+    "launch_profile":  {
+                           "name":  "1050ti-pre-menu-historical-20261117-v1",
+                           "sha256":  "02dd14ff52bdd38b68589091c4eaa07908d22d488e6a43499ba1a95738499e1d",
+                           "environment":  {
+                                               "D3D12ON11_TILED_RESOURCES_TIER":  "3",
+                                               "D3D12ON11_DIAGNOSTIC_CAPABILITIES":  "1",
+                                               "D3D12ON11_DIAGNOSTIC_RENDER_TRACE":  "1",
+                                               "D3D12ON11_MASK_VENDOR_ID":  "ffff",
+                                               "D3D12ON11_DUMP":  "D:\\Plugin_ChatGpt\\GHIDRA MCP\\Hela-Export\\Repositories\\Hela_test\\Hela_AI_20261109_1045\\evidence\\GTX_1050TI\\runs\\20261121\\1050ti-pre-menu-v1.1.3-resource-snapshots-185616858\\launch-profile\\dump",
+                                               "D3D12ON11_OVERRIDES":  "D:\\Plugin_ChatGpt\\GHIDRA MCP\\Hela-Export\\Repositories\\Hela_test\\Hela_AI_20261109_1045\\evidence\\GTX_1050TI\\runs\\20261121\\1050ti-pre-menu-v1.1.3-resource-snapshots-185616858\\launch-profile\\overrides",
+                                               "D3D12ON11_DUMP_SHADERS":  "0",
+                                               "D3D12ON11_TRACE_CALLERS":  "0",
+                                               "D3D12ON11_DIAGNOSTIC_MASK_NVIDIA":  "1",
+                                               "D3D12ON11_SHADER_MODEL":  "6_7"
+                                           },
+                           "arguments":  [
+                                             "-graphicsadapter=0",
+                                             "-windowed",
+                                             "-ResX=1280",
+                                             "-ResY=720",
+                                             "-stdout",
+                                             "-FullStdOutLogOutput",
+                                             "-forcelogflush"
+                                         ],
+                           "working_directory":  "D:\\SteamLibrary\\steamapps\\common\\Hela Demo\\Hela\\Binaries\\Win64"
+                       },
+    "status":  "completed",
+    "completed_utc":  "2026-11-21T18:58:32.0302134Z",
+    "restored":  true
+}

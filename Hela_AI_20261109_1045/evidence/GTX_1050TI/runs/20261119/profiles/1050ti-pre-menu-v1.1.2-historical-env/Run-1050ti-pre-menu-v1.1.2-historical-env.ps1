@@ -2,7 +2,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [switch]$AllowOnlineRun,
-    [string]$PackagePath = ''
+    [string]$PackagePath = '',
+    [string]$ManifestPath = ''
 )
 
 Set-StrictMode -Version Latest
@@ -12,7 +13,6 @@ if (-not $AllowOnlineRun) {
     throw 'This replay can contact external services. Re-run with -AllowOnlineRun only when an online Hela run is explicitly authorized.'
 }
 
-$Version = '1050ti-pre-menu-v1.1.2-historical-env'
 $ProfileRoot = $PSScriptRoot
 $RepoRoot = 'D:\Plugin_ChatGpt\GHIDRA MCP\Hela-Export\Repositories\Hela_test'
 $RunRoot = [IO.Path]::GetFullPath((Join-Path $ProfileRoot '..\..\..'))
@@ -24,15 +24,13 @@ $PackageRoot = if ([string]::IsNullOrWhiteSpace($PackagePath)) {
 } else {
     [IO.Path]::GetFullPath($PackagePath)
 }
-$ManifestPath = Join-Path $ProfileRoot 'run-manifest.json'
+if ([string]::IsNullOrWhiteSpace($ManifestPath)) {
+    $ManifestPath = Join-Path $ProfileRoot 'run-manifest.json'
+}
 $ProxyManager = Join-Path $RepoRoot 'Hela_AI_20261109_1045\proxy-source\tools\LiveFrameMonitor\ProxyManager.ps1'
 $TcpWatcher = Join-Path $RepoRoot 'Hela_AI_20261109_1045\proxy-source\tools\Watch-HelaTcp.ps1'
 $TargetPresent = 1400
 $MonitorTimeoutSeconds = 120
-$ExpectedRuntime = @{
-    d3d12 = '17b8fdea0485e1c0bd5f1f1332e607051d3a1204a19b369812a0bba2c2466e35'
-    dxgi  = '0801ea3b1a28b345a8166aa98a0abd3b7a10d01504d0ebaf2d254a9f330ae996'
-}
 
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = New-Object Security.Principal.WindowsPrincipal($identity)
@@ -47,16 +45,26 @@ foreach ($requiredPath in @($GameExe, $ProxyManager, $TcpWatcher, $PackageRoot, 
 }
 
 $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-if ($manifest.testVersion -cne $Version) {
-    throw "Manifest version mismatch: $($manifest.testVersion)"
+$Version = [string]$manifest.testVersion
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    throw 'Manifest testVersion is missing.'
+}
+
+$PackageRuntime = @{
+    d3d12 = (Get-FileHash -LiteralPath (Join-Path $PackageRoot 'runtime\d3d12.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
+    dxgi  = (Get-FileHash -LiteralPath (Join-Path $PackageRoot 'runtime\dxgi.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+$RestoredRuntime = @{
+    d3d12 = '17b8fdea0485e1c0bd5f1f1332e607051d3a1204a19b369812a0bba2c2466e35'
+    dxgi  = '0801ea3b1a28b345a8166aa98a0abd3b7a10d01504d0ebaf2d254a9f330ae996'
 }
 
 $currentRuntime = @{
     d3d12 = (Get-FileHash -LiteralPath (Join-Path $BinaryRoot 'd3d12.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
     dxgi  = (Get-FileHash -LiteralPath (Join-Path $BinaryRoot 'dxgi.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
 }
-foreach ($role in $ExpectedRuntime.Keys) {
-    if ($currentRuntime[$role] -cne $ExpectedRuntime[$role]) {
+foreach ($role in $RestoredRuntime.Keys) {
+    if ($currentRuntime[$role] -cne $RestoredRuntime[$role]) {
         throw "Installed $role.dll differs from the expected pre-run restore state."
     }
 }
@@ -164,8 +172,8 @@ $summary = [ordered]@{
     } else {
         $false
     }
-    runtimeRestored = (($runtimeAfter.d3d12 -eq $ExpectedRuntime.d3d12) -and
-        ($runtimeAfter.dxgi -eq $ExpectedRuntime.dxgi))
+    runtimeRestored = (($runtimeAfter.d3d12 -eq $RestoredRuntime.d3d12) -and
+        ($runtimeAfter.dxgi -eq $RestoredRuntime.dxgi))
     remainingGameProcesses = $remainingGame.Count
 }
 $summary | ConvertTo-Json -Depth 7

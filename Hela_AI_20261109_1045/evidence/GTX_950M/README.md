@@ -23,6 +23,34 @@ GTX 1050 Ti run. On the 950M machine, use these files only to read the prior
 results; any continuation must first verify the local GPU and runtime, then
 use a separately versioned 950M profile and output path.
 
+### 1050 Ti diagnostic facts to reproduce on the 950M
+
+The 1050 Ti v1.1.3 resource-snapshot run reached Present #1400 and preserved
+snapshot history for every 100th Present. It found three source/RTV resources
+and zero skipped draws or clears in those resource histories. Pixel samples
+fell from 11/100 at Present #100 to 2/100 at Present #300-400 and 0/100 from
+Present #500 onward; the full Present #1400 source and backbuffer BMPs were
+100% black.
+
+The most important 1050 Ti pipeline finding was that the target history
+executed 1,472 sampled draw events using only these pairs:
+
+- `20e0826b236597a1` / `44b0a992c2304254`
+- `20e0826b236597a1` / `d77600bde0076c33`
+- `4ce363172cfd70be` / `4c1bc8bf7e457acd`
+
+No new placeholder or missing-shader pair was proven on the target RTV path
+from this log. Do not convert thousands of placeholder hashes by count. Start
+instead from the exact executed pairs, the three source resources, CBV/SRV
+bindings, readback transition, and full BMP at the target Present.
+
+For a 950M continuation, create a separate
+`evidence\GTX_950M\runs\<date>\950m-pre-menu-v1.x-...` profile. Verify the
+950M GPU, runtime DLL hashes, D3D11 tiled tier, the 950M package, and all
+run-local override hashes before launch. Reuse the 1050 Ti diagnostic method
+and evidence format, but do not copy the 1050 Ti manifest as a 950M runtime
+attestation.
+
 ## Latest status — 2026-11-11
 
 - v012's `Load` probe changed from encoded zero at Present #100 to encoded

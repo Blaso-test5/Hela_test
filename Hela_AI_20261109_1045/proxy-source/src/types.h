@@ -355,7 +355,7 @@ struct CommandList : Stub_ID3D12GraphicsCommandList {
     void STDMETHODCALLTYPE EndEvent() override {}
 };
 
-void DumpBackbufferSourceHistory();
+void DumpBackbufferSourceHistory(UINT64 readbackPresentCount);
 
 struct CommandQueue : Stub_ID3D12CommandQueue {
     D3D12_COMMAND_QUEUE_DESC qd{};

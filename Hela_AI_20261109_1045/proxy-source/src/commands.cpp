@@ -18,7 +18,6 @@ struct BackbufferSourceHistory {
 
 std::mutex g_resourceDrawMutex;
 std::map<ID3D11Resource*, BackbufferSourceHistory> g_backbufferSourceHistory;
-bool g_backbufferSourceHistoryDumped = false;
 std::mutex g_targetDrawDiagMutex;
 std::map<ID3D11Resource*, UINT> g_targetDrawDiagResourceCounts;
 UINT g_targetDrawDiagCount = 0;
@@ -48,13 +47,39 @@ constexpr uint64_t kTargetDiagnosticVs = 0x20e0826b236597a1ULL;
 constexpr uint64_t kTargetDiagnosticPs0 = 0x44b0a992c2304254ULL;
 constexpr uint64_t kTargetDiagnosticPs1 = 0xd77600bde0076c33ULL;
 
-UINT ClaimTargetDrawDiagSlot(ID3D11Resource* resource, UINT& resourceHit) {
+UINT ClaimTargetDrawDiagSlot(ID3D11Resource* resource, UINT& resourceHit,
+    bool selectedCapture) {
     if (!resource) return 0;
     std::lock_guard<std::mutex> lock(g_targetDrawDiagMutex);
     UINT& resourceCount = g_targetDrawDiagResourceCounts[resource];
-    if (resourceCount >= 2 || g_targetDrawDiagCount >= 6) return 0;
+    if (!selectedCapture && (resourceCount >= 2 || g_targetDrawDiagCount >= 6))
+        return 0;
     resourceHit = ++resourceCount;
     return ++g_targetDrawDiagCount;
+}
+
+UINT TargetDrawCaptureIndex() {
+    static const UINT drawIndex = [] {
+        wchar_t value[32]{};
+        const DWORD length = GetEnvironmentVariableW(
+            L"D3D12ON11_TARGET_DRAW_CAPTURE_INDEX", value, ARRAYSIZE(value));
+        if (!length) return 0u;
+        if (length >= ARRAYSIZE(value)) {
+            Log("D3D12ON11_TARGET_DRAW_CAPTURE_INDEX is too long; capture disabled");
+            return 0u;
+        }
+
+        wchar_t* end = nullptr;
+        errno = 0;
+        const unsigned long parsed = wcstoul(value, &end, 10);
+        if (errno == ERANGE || end == value || *end != L'\0' ||
+            parsed == 0 || parsed > UINT_MAX) {
+            Log("D3D12ON11_TARGET_DRAW_CAPTURE_INDEX is invalid; capture disabled");
+            return 0u;
+        }
+        return static_cast<UINT>(parsed);
+    }();
+    return drawIndex;
 }
 
 void PollTargetDrawPipelineStats(ID3D11DeviceContext* context) {
@@ -322,9 +347,21 @@ void LogTargetDrawDiagnostic(ExecState& state, UINT indexCount, UINT instanceCou
     if (rtv) rtv->GetResource(&rawRtvResource);
     Ptr<ID3D11Resource> rtvResource = Ptr<ID3D11Resource>::Attach(rawRtvResource);
 
+    const uint64_t nextDrawIndex =
+        TraceStats().drawExec.load(std::memory_order_relaxed) + 1;
+    const UINT captureIndex = TargetDrawCaptureIndex();
+    const bool selectedCapture = captureIndex == nextDrawIndex;
     UINT resourceHit = 0;
-    const UINT hit = ClaimTargetDrawDiagSlot(rtvResource.Get(), resourceHit);
+    const UINT hit = ClaimTargetDrawDiagSlot(
+        rtvResource.Get(), resourceHit, selectedCapture);
     if (!hit) return;
+    if (selectedCapture) {
+        Log("[TARGET_DRAW_CAPTURE] expected_draw_index=%llu hit=%u rtv_resource=%p "
+            "vs=%016llx ps=%016llx",
+            static_cast<unsigned long long>(nextDrawIndex), hit, rtvResource.Get(),
+            static_cast<unsigned long long>(state.graphicsShaderHash),
+            static_cast<unsigned long long>(state.graphicsPixelShaderHash));
+    }
 
     auto logBoundCb = [&](const char* stage) {
         ID3D11Buffer* rawBuffer = nullptr;
@@ -448,7 +485,7 @@ void LogTargetDrawDiagnostic(ExecState& state, UINT indexCount, UINT instanceCou
         static_cast<unsigned int>(psSamplerDesc.AddressV),
         static_cast<unsigned int>(psSamplerDesc.AddressW));
 
-    if (hit == 1) {
+    if (hit == 1 || selectedCapture) {
         if (!psTexture) {
             Log("[TARGET_TEXEL] hit=%u status=not_texture2d query_hr=0x%08lx dimension=%u",
                 hit, psTextureQueryResult, static_cast<unsigned int>(psResourceDimension));
@@ -520,7 +557,7 @@ void LogTargetDrawDiagnostic(ExecState& state, UINT indexCount, UINT instanceCou
         if (!rawVertexBuffers[slot]) continue;
         vertexBufferMask |= 1u << slot;
         ++vertexBufferCount;
-        if (hit == 1 && slot == 0)
+        if ((hit == 1 || selectedCapture) && slot == 0)
             LogTargetVertexData(state, hit, rawVertexBuffers[slot],
                 vertexStrides[slot], vertexOffsets[slot]);
         rawVertexBuffers[slot]->Release();
@@ -649,7 +686,6 @@ void TrackTargetOperation(ID3D11Resource* resource, const std::string& context,
     TargetHistoryKind kind) {
     if (!resource || !Cfg().diagnosticRenderTrace) return;
     std::lock_guard<std::mutex> lock(g_resourceDrawMutex);
-    if (g_backbufferSourceHistoryDumped) return;
     auto it = g_backbufferSourceHistory.find(resource);
     if (it == g_backbufferSourceHistory.end()) return;
     auto& history = it->second;
@@ -664,14 +700,17 @@ void TrackTargetOperation(ID3D11Resource* resource, const std::string& context,
         ++history.clears;
         break;
     }
-    if (history.entries.size() < 20)
+    if (history.entries.size() < 128) {
         history.entries.push_back(context);
+    } else {
+        history.entries.erase(history.entries.begin());
+        history.entries.push_back(context);
+    }
 }
 
 void RegisterBackbufferCopySource(ID3D11Resource* resource) {
     if (!resource || !Cfg().diagnosticRenderTrace) return;
     std::lock_guard<std::mutex> lock(g_resourceDrawMutex);
-    if (g_backbufferSourceHistoryDumped) return;
     auto& history = g_backbufferSourceHistory[resource];
     if (!history.resource) history.resource = Ptr<ID3D11Resource>(resource);
 }
@@ -848,7 +887,7 @@ void LogSkippedDraw(ExecState& state, const char* operation,
         arg0, arg1, state.numRtv, state.rtvBackbuffer ? 1u : 0u);
 }
 
-void DumpBackbufferSourceHistoryImpl() {
+void DumpBackbufferSourceHistoryImpl(UINT64 readbackPresentCount) {
     struct Snapshot {
         ID3D11Resource* resource = nullptr;
         uint64_t executedDraws = 0;
@@ -859,7 +898,6 @@ void DumpBackbufferSourceHistoryImpl() {
     std::vector<Snapshot> snapshots;
     {
         std::lock_guard<std::mutex> lock(g_resourceDrawMutex);
-        g_backbufferSourceHistoryDumped = true;
         snapshots.reserve(g_backbufferSourceHistory.size());
         for (const auto& pair : g_backbufferSourceHistory) {
             Snapshot snapshot{};
@@ -870,9 +908,11 @@ void DumpBackbufferSourceHistoryImpl() {
             snapshot.entries = pair.second.entries;
             snapshots.push_back(std::move(snapshot));
         }
-        g_backbufferSourceHistory.clear();
     }
 
+    Log("[BB_SOURCE_HISTORY_SNAPSHOT] present=%llu resources=%llu",
+        static_cast<unsigned long long>(readbackPresentCount),
+        static_cast<unsigned long long>(snapshots.size()));
     if (snapshots.empty()) {
         Log("[BB_SOURCE_HISTORY] No CopyResource-to-backbuffer sources registered");
         return;
@@ -1495,8 +1535,8 @@ void ApplyPipeline(ExecState& state, PipelineState* pipeline) {
 
 } // namespace
 
-void DumpBackbufferSourceHistory() {
-    DumpBackbufferSourceHistoryImpl();
+void DumpBackbufferSourceHistory(UINT64 readbackPresentCount) {
+    DumpBackbufferSourceHistoryImpl(readbackPresentCount);
 }
 
 void STDMETHODCALLTYPE CommandList::SetDescriptorHeaps(UINT count, ID3D12DescriptorHeap* const* heaps) {
