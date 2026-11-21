@@ -505,6 +505,7 @@ class LiveFrameMonitorTests(unittest.TestCase):
                 spaced_manifest,
                 "-StopAfterPresent",
                 "400",
+                "-EnableCrashDiagnostics",
                 "-MonitorMaxWaitSeconds",
                 "180",
                 "-PrintCommandLineOnly",
