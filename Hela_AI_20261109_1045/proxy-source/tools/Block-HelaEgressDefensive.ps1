@@ -1,3 +1,23 @@
+<#
+.SYNOPSIS
+Applies, verifies, or removes owned outbound block rules for Hela.
+
+.DESCRIPTION
+Use -HelaOnly to limit the operation to Hela-Win64-Shipping.exe and leave
+Crashpad rules untouched. -MockFirewall runs against an in-memory firewall
+state and never calls Windows Firewall or process-query commands.
+
+.PARAMETER HelaOnly
+Targets only Hela-Win64-Shipping.exe. Without this switch, the existing
+Hela-and-Crashpad target set is retained.
+
+.PARAMETER MockFirewall
+Runs without administrator access using only the supplied in-memory MockState.
+
+.PARAMETER MockState
+In-memory ActiveStore and PersistentStore collections used only with
+-MockFirewall.
+#>
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
@@ -7,7 +27,13 @@ param(
 
     [Parameter(Mandatory = $true)]
     [ValidateSet('Apply', 'Verify', 'Remove')]
-    [string]$Mode
+    [string]$Mode,
+
+    [switch]$HelaOnly,
+
+    [switch]$MockFirewall,
+
+    [hashtable]$MockState
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,6 +44,13 @@ $createdRules = @()
 $report = [ordered]@{
     schema = 'hela-egress-control/v1'
     mode = $Mode
+    targetScope = if ($HelaOnly) {
+        @('Hela-Win64-Shipping.exe')
+    }
+    else {
+        @('Hela-Win64-Shipping.exe', 'crashpad_handler.exe')
+    }
+    mockMode = [bool]$MockFirewall
     status = 'running'
     identity = $null
     administrator = $false
@@ -33,6 +66,9 @@ $report = [ordered]@{
         'For a guaranteed zero-egress run, the operator must manually disconnect network-capable interfaces.'
     )
 }
+
+$script:mockFirewallEnabled = [bool]$MockFirewall
+$script:mockFirewallState = $MockState
 
 function Get-NormalizedPath {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -53,8 +89,79 @@ function Get-RulesByDisplayName {
         [Parameter(Mandatory = $true)][string]$DisplayName
     )
 
+    if ($script:mockFirewallEnabled) {
+        return @(
+            $script:mockFirewallState[$Store] |
+                Where-Object { [string]$_.DisplayName -eq $DisplayName }
+        )
+    }
+
     $rules = @(Get-NetFirewallRule -PolicyStore $Store -ErrorAction Stop)
     return @($rules | Where-Object { [string]$_.DisplayName -eq $DisplayName })
+}
+
+function Add-HelaFirewallRule {
+    param([Parameter(Mandatory = $true)]$Target)
+
+    if ($script:mockFirewallEnabled) {
+        $rule = [pscustomobject]@{
+            MockId = [guid]::NewGuid().ToString('N')
+            DisplayName = $Target.DisplayName
+            Group = $script:ruleGroup
+            Description = $script:ruleDescription
+            Enabled = 'True'
+            Direction = 'Outbound'
+            Action = 'Block'
+            Profile = 'Any'
+            Program = $Target.ResolvedPath
+            Protocol = 'Any'
+            LocalAddress = @('Any')
+            RemoteAddress = @('Any')
+            LocalPort = @('Any')
+            RemotePort = @('Any')
+        }
+        $script:mockFirewallState.PersistentStore =
+            @($script:mockFirewallState.PersistentStore) + @($rule)
+        if (-not $script:mockFirewallState.SuppressActiveStore) {
+            $script:mockFirewallState.ActiveStore =
+                @($script:mockFirewallState.ActiveStore) + @($rule)
+        }
+        return
+    }
+
+    New-NetFirewallRule `
+        -PolicyStore PersistentStore `
+        -DisplayName $Target.DisplayName `
+        -Group $script:ruleGroup `
+        -Description $script:ruleDescription `
+        -Direction Outbound `
+        -Program $Target.ResolvedPath `
+        -Action Block `
+        -Profile Any `
+        -Protocol Any `
+        -LocalAddress Any `
+        -RemoteAddress Any `
+        -LocalPort Any `
+        -RemotePort Any `
+        -Enabled True `
+        -ErrorAction Stop |
+        Out-Null
+}
+
+function Remove-HelaFirewallRule {
+    param([Parameter(Mandatory = $true)]$Rule)
+
+    if ($script:mockFirewallEnabled) {
+        foreach ($store in @('PersistentStore', 'ActiveStore')) {
+            $script:mockFirewallState[$store] = @(
+                $script:mockFirewallState[$store] |
+                    Where-Object { $_.MockId -ne $Rule.MockId }
+            )
+        }
+        return
+    }
+
+    Remove-NetFirewallRule -InputObject $Rule -ErrorAction Stop
 }
 
 function Get-OwnedRules {
@@ -95,6 +202,18 @@ function Test-ValidBlockRule {
     }
 
     $expectedProgram = Get-NormalizedPath $Program
+    if ($script:mockFirewallEnabled) {
+        return [string]::Equals(
+                (Get-NormalizedPath ([string]$Rule.Program)),
+                $expectedProgram,
+                [System.StringComparison]::OrdinalIgnoreCase) -and
+            (Test-AnyFilterValue $Rule.LocalAddress) -and
+            (Test-AnyFilterValue $Rule.RemoteAddress) -and
+            ([string]$Rule.Protocol -in @('Any', '256')) -and
+            (Test-AnyFilterValue $Rule.LocalPort) -and
+            (Test-AnyFilterValue $Rule.RemotePort)
+    }
+
     $applicationFilters = @(
         Get-NetFirewallApplicationFilter -AssociatedNetFirewallRule $Rule -ErrorAction Stop
     )
@@ -139,14 +258,31 @@ function Test-ValidBlockRule {
 
 try {
     $diagnosticStage = 'identity-and-path-validation'
-    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = [Security.Principal.WindowsPrincipal]::new($identity)
-    $isAdministrator = $principal.IsInRole(
-        [Security.Principal.WindowsBuiltInRole]::Administrator)
-    $report.identity = $identity.Name
-    $report.administrator = $isAdministrator
-    if (-not $isAdministrator) {
-        throw 'Run this tool from an elevated PowerShell session. No firewall rules were changed.'
+    if ($MockFirewall) {
+        if ($null -eq $MockState) {
+            throw '-MockFirewall requires a -MockState hashtable. No Windows Firewall commands are called in mock mode.'
+        }
+        foreach ($storeName in @('ActiveStore', 'PersistentStore')) {
+            if (-not $MockState.ContainsKey($storeName)) {
+                $MockState[$storeName] = @()
+            }
+        }
+        $report.identity = 'offline-mock'
+        $report.administrator = $null
+    }
+    else {
+        if ($null -ne $MockState) {
+            throw '-MockState is only valid with -MockFirewall.'
+        }
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+        $isAdministrator = $principal.IsInRole(
+            [Security.Principal.WindowsBuiltInRole]::Administrator)
+        $report.identity = $identity.Name
+        $report.administrator = $isAdministrator
+        if (-not $isAdministrator) {
+            throw 'Run this tool from an elevated PowerShell session. No firewall rules were changed.'
+        }
     }
 
     $resolvedGameDirectory = (Resolve-Path -LiteralPath $GameDirectory -ErrorAction Stop).Path
@@ -155,12 +291,14 @@ try {
         [pscustomobject]@{
             Name = 'Hela-Win64-Shipping.exe'
             Path = Join-Path $gameRoot 'Binaries\Win64\Hela-Win64-Shipping.exe'
-        },
-        [pscustomobject]@{
+        }
+    )
+    if (-not $HelaOnly) {
+        $targetDefinitions += [pscustomobject]@{
             Name = 'crashpad_handler.exe'
             Path = Join-Path $gameRoot 'Plugins\Sentry\Binaries\Win64\crashpad_handler.exe'
         }
-    )
+    }
 
     $targets = @(
         foreach ($definition in $targetDefinitions) {
@@ -190,12 +328,21 @@ try {
     )
 
     $diagnosticStage = 'runtime-image-validation'
-    $runtimeProcesses = @(
-        Get-CimInstance -ClassName Win32_Process `
-            -Filter "Name='Hela-Win64-Shipping.exe' OR Name='crashpad_handler.exe'" `
-            -ErrorAction Stop |
-            Where-Object { $_.ExecutablePath }
-    )
+    if ($MockFirewall) {
+        $runtimeProcesses = @()
+    }
+    else {
+        $processFilter = "Name='Hela-Win64-Shipping.exe' OR Name='crashpad_handler.exe'"
+        if ($HelaOnly) {
+            $processFilter = "Name='Hela-Win64-Shipping.exe'"
+        }
+        $runtimeProcesses = @(
+            Get-CimInstance -ClassName Win32_Process `
+                -Filter $processFilter `
+                -ErrorAction Stop |
+                Where-Object { $_.ExecutablePath }
+        )
+    }
     $runtimeImageChecks = @(
         foreach ($process in $runtimeProcesses) {
             $processPath = [System.IO.Path]::GetFullPath([string]$process.ExecutablePath)
@@ -222,7 +369,20 @@ try {
     }
 
     $diagnosticStage = 'profile-validation'
-    $profiles = @(Get-NetFirewallProfile -PolicyStore ActiveStore -ErrorAction Stop)
+    if ($MockFirewall) {
+        $profiles = @(
+            foreach ($profileName in @('Domain', 'Private', 'Public')) {
+                [pscustomobject]@{
+                    Name = $profileName
+                    Enabled = $true
+                    AllowLocalFirewallRules = $true
+                }
+            }
+        )
+    }
+    else {
+        $profiles = @(Get-NetFirewallProfile -PolicyStore ActiveStore -ErrorAction Stop)
+    }
     $report.profiles = @(
         $profiles | ForEach-Object {
             [ordered]@{
@@ -295,23 +455,7 @@ try {
                     continue
                 }
 
-                New-NetFirewallRule `
-                    -PolicyStore PersistentStore `
-                    -DisplayName $target.DisplayName `
-                    -Group $ruleGroup `
-                    -Description $ruleDescription `
-                    -Direction Outbound `
-                    -Program $target.ResolvedPath `
-                    -Action Block `
-                    -Profile Any `
-                    -Protocol Any `
-                    -LocalAddress Any `
-                    -RemoteAddress Any `
-                    -LocalPort Any `
-                    -RemotePort Any `
-                    -Enabled True `
-                    -ErrorAction Stop |
-                    Out-Null
+                Add-HelaFirewallRule -Target $target
                 $createdRules += [pscustomobject]@{
                     DisplayName = $target.DisplayName
                 }
@@ -341,7 +485,7 @@ try {
                             }
                     )
                     foreach ($rule in $persistentCreated) {
-                        Remove-NetFirewallRule -InputObject $rule -ErrorAction Stop
+                        Remove-HelaFirewallRule -Rule $rule
                     }
                 }
                 catch {
@@ -358,7 +502,7 @@ try {
         $diagnosticStage = 'remove'
         foreach ($target in $targets) {
             foreach ($rule in (Get-OwnedRules -Store PersistentStore -Target $target)) {
-                Remove-NetFirewallRule -InputObject $rule -ErrorAction Stop
+                Remove-HelaFirewallRule -Rule $rule
             }
         }
     }
@@ -414,6 +558,8 @@ $json = ConvertTo-Json -InputObject $report -Depth 8
 Write-Output $json
 if ($report.status -ne 'verified') {
     $failureMessage = "Hela egress tool failed at '$($report.stage)': $($report.error)"
-    [Console]::Error.WriteLine($failureMessage)
+    if (-not $MockFirewall) {
+        [Console]::Error.WriteLine($failureMessage)
+    }
     throw $failureMessage
 }

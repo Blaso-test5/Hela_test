@@ -11,6 +11,8 @@ param(
     [string]$ExternalReadbackDirectory,
     [ValidateRange(100, 100000)]
     [int]$TargetPresent = 1400,
+    [ValidateRange(0, 100000000)]
+    [int]$TargetDrawIndex = 0,
     [ValidateRange(60, 300)]
     [int]$TimeoutSeconds = 120,
     [ValidateRange(0, 120)]
@@ -52,8 +54,8 @@ $baselineRun = Join-Path $packageRoot 'evidence\GTX_1050TI\runs\20261116\placed-
 $candidateRun = Join-Path $packageRoot 'evidence\GTX_1050TI\runs\20261116\placed-resource-overlap-monitored-20261116-132140\analysis\local-cs-sm5-candidates'
 $additionalCandidateRun = Join-Path $packageRoot 'shaders\overrides'
 $expectedDllHashes = @{
-    'd3d12.dll' = '14DFBA07E9A37B1C8ADBC7FE11DE6BA14EE0AB3968E953B85A097D32DBF69E98'
-    'dxgi.dll' = '09D13C05BF198C74B4190A9CB1BE1C96966A0ECE7641D8621C08A00465E0F857'
+    'd3d12.dll' = '17B8FDEA0485E1C0BD5F1F1332E607051D3A1204A19B369812A0BBA2C2466E35'
+    'dxgi.dll' = '0801EA3B1A28B345A8166AA98A0ABD3B7A10D01504D0EBAF2D254A9F330AE996'
 }
 
 function Get-ProcessPaths {
@@ -375,6 +377,7 @@ try {
         D3D12ON11_BACKBUFFER_READBACK = '1'
         D3D12ON11_FULL_READBACK = '1'
         D3D12ON11_FULL_READBACK_PRESENT = [string]$TargetPresent
+        D3D12ON11_TARGET_DRAW_CAPTURE_INDEX = [string]$TargetDrawIndex
         D3D12ON11_DUMP_SHADERS = '0'
         D3D12ON11_DUMP = $dumpDirectory
         D3D12ON11_OVERRIDES = $overrides

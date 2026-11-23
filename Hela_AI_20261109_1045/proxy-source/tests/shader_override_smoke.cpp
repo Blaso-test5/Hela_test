@@ -54,12 +54,15 @@ int main(int argc, char** argv) {
         result = device->CreateGraphicsPipelineState(&desc, __uuidof(ID3D12PipelineState),
             reinterpret_cast<void**>(&pipeline));
     }
-    if (FAILED(result))
-        std::fprintf(stderr, "%s PSO creation/SM5 override lookup failed: 0x%08lx\n", argv[1], result);
-    else {
+    const bool succeeded = result == S_OK && pipeline != nullptr;
+    if (!succeeded) {
+        std::fprintf(stderr, "%s PSO creation/SM5 override lookup failed: 0x%08lx pipeline=%p\n",
+            argv[1], result, static_cast<void*>(pipeline));
+        if (pipeline) pipeline->Release();
+    } else {
         std::printf("%s PSO created with the configured SM5 override.\n", argv[1]);
         pipeline->Release();
     }
     device->Release();
-    return FAILED(result) ? 5 : 0;
+    return succeeded ? 0 : 5;
 }
