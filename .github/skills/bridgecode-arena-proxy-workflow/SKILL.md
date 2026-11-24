@@ -77,6 +77,16 @@ Use this workflow for proxy, Proxy Manager, shader-conversion, and Hela-render i
 - Mark snapshots as windows since the previous dump when a heartbeat resets the ledger. Do not label window totals as cumulative process totals.
 - A top-N summary can hide rare skipped or missing-stage groups. Prefer those groups when truncating, and expose omitted/overflow totals. Test the invariant per execution type: tracked entries + omitted entries + overflow equals the reported total.
 
+## Shader mapping and checkpoint continuity
+
+- Keep a separate, append-only test/version history for each GPU. Before any run, read that GPU's latest checkpoint and shader catalog; never use another GPU's profile, runtime attestation, or output directory as evidence.
+- Record every shader by exact hash and stage, with the GPU, run/version, package/override hash, and evidence path. Track its measured state explicitly: `cataloged`, `ready` (matching SM5 override loaded), `executed` (draw/dispatch observed), `target-correlated`, and `pixel-validated`. A state advances only when the corresponding same-run evidence exists.
+- Keep failed, incomplete, invalid, and negative tests in the history with the reason and the last verified milestone. Do not erase or silently replace them; a corrected setup or changed variable gets a new immutable test version.
+- A checkpoint must state the current goal, latest known-good result, source commit, GPU/driver, runtime and override hashes, launch profile, completed/failed test versions, unresolved shader mappings, and one next discriminating test. After a run, update the checkpoint from verified logs/manifests/readbacks and preserve the prior evidence.
+- Resume from the latest checkpoint and reuse already measured shader conversions and outcomes. Do not repeat an equivalent test unless a named variable changes or a fresh run is necessary to validate a specific fix; record that reason in the new version.
+- Keep the working set limited to shaders observed in the target workload and progress them by evidence. Placeholder counts alone are not a conversion plan. A converted shader is not considered functional for the game until its exact hash is loaded, executed on the relevant path, correlated to the target resource, and validated against the stated visual/readback goal.
+- Ask BridgeCode/Qwen for bounded hypotheses or a discriminating test when useful, following the status/context checks above. Treat its advice as a proposal; do not mark a shader or milestone complete without repository and same-run measured evidence.
+
 ## Hela-specific safeguards
 
 - Check the current GPU and keep evidence separated under `evidence\GTX_950M` and `evidence\GTX_1050TI`.

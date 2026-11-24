@@ -715,7 +715,8 @@ HRESULT STDMETHODCALLTYPE Device::CreatePlacedResource(ID3D12Heap* sourceHeap, U
     const HRESULT createResult = Resource::Create(this, &heap->hd.Properties, heap->hd.Flags,
         desc, &resource);
     if (FAILED(createResult)) {
-        Log("CreatePlacedResource backing creation failed result=0x%08lx", createResult);
+        Log("CreatePlacedResource backing creation failed result=0x%08lx device-removed-reason=0x%08lx",
+            createResult, GetDeviceRemovedReason());
         return createResult;
     }
 

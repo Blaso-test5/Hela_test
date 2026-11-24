@@ -465,6 +465,8 @@ void STDMETHODCALLTYPE Device::CreateUnorderedAccessView(ID3D12Resource* sourceR
     const HRESULT result = d11->CreateUnorderedAccessView(nativeResource, &desc, descriptor.uav.Put());
     Log("CreateUnorderedAccessView result=0x%08lx", result);
     if (FAILED(result)) {
+        Log("CreateUnorderedAccessView device-removed-reason=0x%08lx",
+            d11->GetDeviceRemovedReason());
         Store(handle, std::move(descriptor));
         return;
     }

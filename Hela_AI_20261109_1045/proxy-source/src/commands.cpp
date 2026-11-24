@@ -735,8 +735,8 @@ HRESULT WaitForContext(Device* device) {
     if (FAILED(result)) {
         if (trace) {
             TraceStats().waitCtxFail.fetch_add(1, std::memory_order_relaxed);
-            Log("[RENDER_TRACE] [tid=%lu] WaitForContext CreateQuery failed hr=0x%08lx",
-                GetCurrentThreadId(), result);
+            Log("[RENDER_TRACE] [tid=%lu] WaitForContext CreateQuery failed hr=0x%08lx device-removed-reason=0x%08lx",
+                GetCurrentThreadId(), result, device->GetDeviceRemovedReason());
         }
         return result;
     }

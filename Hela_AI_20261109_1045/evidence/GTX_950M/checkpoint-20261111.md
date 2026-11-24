@@ -1,15 +1,131 @@
 # Hela GTX 950M checkpoint — 2026-11-11
 
+Raw per-run logs, binaries, shader dumps, images, and minidumps remain in the
+local evidence archive and are intentionally not included in remote commits.
+The checkpoint contains the summarized outcomes only.
+
+## Current operator objective — 2026-11-24
+
+The operator visually confirmed the pre-menu on the GTX 1050 Ti and on this
+GTX 950M during v016. The 950M pre-menu reproduction goal is reached; continue
+from this milestone toward the Hela menu. The v023 Shader Lab runtime run
+exited before the #1400 capture and rejected six overlapping placed-resource
+requests. The subsequent v024 run used a build from Hela's own `proxy-source`,
+reached Present #1400, and produced fully black source/backbuffer BMPs. Keep
+the two source trees and tools separate. As on the 1050 Ti, later black
+samples do not revoke the operator-confirmed visible image. v025 enabled
+shader dumping, captured 4,219 DXIL files, then exited with an access
+violation before #1400; its crash text and minidump are archived. Analyze
+those artifacts before repeating a dump-enabled run. The v024 raw log also
+proves the full source-texture → CopyResource → swap-chain backbuffer →
+readback pointer/sequence chain at #1400; both source and output are black.
+The remaining rendering question is why the off-screen draws produce black
+pixels, not whether the copy or readback ran. See the v024 raw proxy log (local-only: `runs/20261123/950m-v024-hela-native-uav-device-removed-diagnostic-213458199/d3d12on11.log`).
+
+Use only a separately versioned `950m-*` profile, package, output directory,
+and runtime/shader attestations. Do not copy the 1050 Ti hashes as 950M
+evidence. Resume from this checkpoint and the archived `v001`–`v016` results;
+do not repeat an equivalent probe unless a specific changed variable or
+validation need is recorded in a new test version. Preserve all prior
+negative, incomplete, and failed runs.
+
+## Latest continuation — v024 Hela-native run (2026-11-23)
+
+The v024 staged-only package passed both its package gate and
+`ProxyManager -Action Prepare`; it contains the Hela-native runtime and all 14
+baseline override files. Runtime hashes:
+
+- `d3d12.dll`: `397918b24ad94aa32a6a2a7ee5b6b4e36dcb97063d91f395624c8a5adf6c6bae`
+- `dxgi.dll`: `f3d0a95299e1151334666105dc88895c684d5fe95f426ad45b3bc7b152f5fd10`
+
+The Hela-source CMake build succeeded. CTest passed 7/8; only
+`d3d12on11_smoke` failed, reporting `tiles=1 packed-mips=0 subresources=1`
+where its assertion expects one packed mip. Keep this failure visible and
+investigate the assertion/feature behavior; do not confuse it with the
+separate Shader Lab CTest results.
+
+The v024 archived run (local-only: `runs/20261123/950m-v024-hela-native-uav-device-removed-diagnostic-213458199/`)
+passed runtime attestation and completed the Present #1400 capture. Both
+full-frame readbacks were `0/921,600` non-black; the verifier returns
+`present-reached-black-readback`, not menu validation. Present #100 sampled
+11/100 non-black points. Three graphics pairs executed on off-screen RTVs.
+The source texture copied at sequence 1400 (`0000022027A84578`) has 800
+recorded draws. The raw log matches its copy source pointer and sequence to
+the readback, and matches the copy destination wrapper to the native
+swap-chain backbuffer. Both full-frame BMPs are black, proving that the
+black pixels exist before the copy. The generic evidence report still marks
+14 correlations candidate-only; the v024 raw pointer/sequence chain directly
+confirms this final-frame path, but not which draw/shader generated black
+pixels. The log has 5,839 placeholders and 13 ready SM5 overrides, with no
+native SM5 shaders. Hela's placed-resource requests succeeded; the six
+overlap rejections from v023 did not recur. The new failed-UAV
+`GetDeviceRemovedReason` diagnostic was not exercised.
+
+The launcher requested shutdown after the target capture and force-terminated
+the process during cleanup; do not interpret this as a spontaneous crash.
+`manager-run.json` records `restored=true`; post-run inventory confirmed the
+pre-run DLL hashes and all six installed overrides. Consolidated evidence is
+in the v024 offline-evidence directory (local-only: `runs/20261123/profiles/950m-v024-hela-native-build-agent-20261123/run-evidence/`).
+
+Next, preserve the v024 result as a black-rendered-source failure. Inspect
+the inputs and outputs of the executed draws on that source to find where
+non-black pixels are lost. Investigate the tiled-resource smoke assertion
+separately. Do not merge, move, or remove either proxy tree.
+
+## Latest diagnostic trace — v025 shader dump (2026-11-23)
+
+The v025 package (local-only: `runs/20261123/profiles/950m-v025-hela-native-shader-dump-20261123/package/`)
+passed the staged-only package gate and read-only manager preflight. It uses
+the same Hela-native DLL pair and shader baseline as v024; only
+`D3D12ON11_DUMP_SHADERS` changed to `1`.
+
+The archived run (local-only: `runs/20261123/950m-v025-hela-native-shader-dump-20261123-214230728/`)
+captured 4,219 `.dxil` files totaling 47,486,892 bytes. Its log reports 4,236
+unique shaders, 4,218 placeholders, 13 ready SM5 overrides, 140/142 graphics
+PSOs with placeholders, and 227/227 compute PSOs with placeholders. Three
+graphics pairs executed; all were observed off the backbuffer RTV. The
+source/backbuffer samples were black by #1000 and remained 0/100 through the
+last readback #1300. The target #1400 readback was not reached. This run does
+not supersede v024's complete pointer/sequence chain; v025 adds shader
+bytecode and crash artifacts, but does not identify why the source renders
+black.
+
+Hela exited before monitor cleanup with `0xC0000005` (read access to address
+zero), reported at `Hela-Win64-Shipping.exe+0x25C2872`. The crash handler
+saved
+crash report (local-only: `runs/20261123/950m-v025-hela-native-shader-dump-20261123-214230728/crash-diagnostics/d3d12on11-crash-26048-20261123-224250.txt`)
+and
+minidump (local-only: `runs/20261123/950m-v025-hela-native-shader-dump-20261123-214230728/crash-diagnostics/d3d12on11-crash-26048-20261123-224250.dmp`).
+The report has only module offsets; no WinDbg MCP session or local Hela PDB
+was available to symbolize them. The crash occurred during the dump-enabled
+run, but causation is not established.
+
+`ProxyManager` reports `restored=true`; current inventory matches the v024
+pre-run runtime hashes and confirms Hela is closed. The consolidated
+offline evidence (local-only: `runs/20261123/profiles/950m-v025-hela-native-shader-dump-20261123/run-evidence/`)
+records that #1400 is missing and menu verification remains unverified.
+Next, analyze the captured bytecode and minidump before any repeat. Use v024
+to investigate the off-screen source's executed draw inputs and output, rather
+than treating the confirmed copy/present path as suspect. Missing shader
+translations remain a broader compatibility issue; they are not yet proven
+to be the cause of the black output from this source.
+
+For each shader, maintain its exact hash and stage, run/version, override
+hash, and evidence path. Promote it only through the measured states
+`cataloged` → `ready` → `executed` → `target-correlated` →
+`pixel-validated`. A loaded or executed override alone is not proof that it
+contributes to the visible pre-menu. The first 950M success criterion is an
+operator-confirmed visible pre-menu with the run's GPU, runtime, shader
+attestation, launch profile, and restoration state recorded; v016 meets that
+criterion. Its Present #1400 capture is incomplete, so do not mark the shader
+set pixel-validated from this run.
+
 ## Goal and status
 
-Continue the controlled investigation until Hela renders a visible game image
-on the GTX 950M. The goal is **not yet reached**. v012's `Load` probe changed
-from an encoded zero at Present #100 to encoded ones by #1300, but that is
-shader-generated output, not gameplay. v013's `SampleLevel` probe also
-produced encoded zero at #100; its log ends at #800 and has no verified late
-capture. v014's no-override baseline is uniformly black at #100 and reports
-66 skipped draws at #400. The forced-color path and instrumentation work, but
-real Hela rendering has not been demonstrated.
+The v016 operator-confirmed pre-menu is the first visible-image milestone on
+the GTX 950M. The next goal is to reach and verify the Hela menu. Earlier
+v012/v013 encoded probes remain diagnostic-only, and v014/v015 remain
+negative no-override baselines; preserve them as historical evidence.
 
 The versioned proxy source now contains bounded target-draw diagnostics,
 pipeline statistics, t0 texel readback, input-layout logging, and a four-vertex
@@ -37,12 +153,13 @@ requires a per-run manifest and aborts on a preflight mismatch or missing
 post-run fingerprint.
 
 Argon's focused review highlighted the default-state ambiguity that was
-corrected. The merged source builds with Visual Studio 18 / MSVC
-19.50.35721.0 using the `d3d12` and `dxgi_proxy` targets. Five of six CTest
-tests pass; `d3d12on11_smoke` fails on the existing tiled-resource layout
-expectation (`tiles=1, packed-mips=0, subresources=1`). The other five tests
-pass when that test is excluded. The temporary DLLs remain outside the
-repository and the installed root pair is restored to v001.
+corrected. On 2026-11-22, Visual Studio 18 / MSVC 19.50.35721.0 compiled all
+34 C++ build steps, including the proxy DLLs, tests, and `nvapi_trace`.
+CTest passed 6/8 tests. `d3d12on11_smoke` failed its tiled-resource layout
+expectation (`tiles=1, packed-mips=0, subresources=1`); the shader-use-ledger
+smoke failed its expected execution count at `shader_use_ledger_smoke.cpp:39`.
+The v016 run therefore used the previously attested 950M v015 runtime, not
+the fresh build. Temporary build output stayed outside the repository.
 
 ## GTX 1050 Ti evidence from the merged update
 
@@ -256,12 +373,11 @@ created under the old path
 `D:\Plugin_ChatGpt\GHIDRA MCP\Plugin Nuovi\sm6-to-sm5-mcp\d3d12on11`
 but was reused from
 `D:\Ghidra MCP\Plugin\sm6-to-sm5-mcp\d3d12on11`. This is a stale build-tree
-path mismatch, not a C++ source compile error. Configuring the current
-`proxy-source` into a fresh build directory succeeded; the new fingerprint
-code compiled. The previous GTX 950M CTest result remains 5/6: the one
-failure is the smoke test's tiled-resource layout expectation, not CMake
-configuration or compilation. The new build's full CTest suite has not yet
-been run through the selected CMake Tools project.
+path mismatch, not a C++ source compile error. A fresh out-of-tree build of
+the current `proxy-source` compiled all 34 targets successfully. Its CTest
+result is 6/8, with the two failures described above. The v016 package instead
+used the previously run-attested v015 DLL pair, whose fingerprints matched
+during the run.
 
 ## Run checklist
 
@@ -269,26 +385,201 @@ been run through the selected CMake Tools project.
    confirm the installed hashes before every DLL swap.
 2. Keep the manifest gate mandatory for every new run and version any changed
    proxy DLL or shader override as a distinct run artifact.
-3. Investigate why target draws are skipped in the no-override baseline.
-   Compare the old SRV failure in v012-v014 with v015, where it did not
-   reproduce; do not infer a root cause from the one successful diagnostic run.
-4. Repeat the `SampleLevel` late capture only with fresh output paths and a
-   log-attested Present #1300; compare it with `Load` only after both runs
-   reach that exact capture.
-5. Preserve each raw log, report, BMP, and manifest; use the manager's
-   verified restore point and check the restored hashes after each run.
-6. Treat the current target quad as one measured draw path, not proof that all
-   game rendering is black.
+3. Keep v016 as the first user-confirmed 950M pre-menu milestone. Preserve
+   its incomplete Present #1400 capture and verified restore; do not repeat
+   the same shader test without a concrete reason.
+4. Proceed to a separately versioned test aimed at the Hela menu, starting
+   from the v016 package and its run evidence.
+5. If a full Present #1400 capture is later required, use a longer monitor
+   timeout in a new run attempt; keep the current incomplete attempt intact.
+6. Preserve each log, report, BMP, manifest, and restore point. Re-authorize
+   online runs separately and keep the TCP metadata trace local.
 
 ## Tooling decision
 
-The existing Live Frame Monitor remains a CLI parser for the current log
-format. A VS Code GUI could make live events and build comparisons easier to
-inspect, but it would not answer the current draw-target/state question.
-Defer the GUI until the instrumented run establishes which events and
-comparisons are useful. BridgeCode reports `browserReady=true`, but a search of its 1,186-file index
-did not find the current Hela readback implementation. It can still review a
-carefully scoped summary, but should not be used for source-level conclusions
-until its project index is refreshed. Keep the immediate effort on why the
-no-override baseline skips the target draws and why the SRV creation fails;
-repeat the late `SampleLevel` probe only with a fresh, log-attested capture.
+The existing Live Frame Monitor and ProxyManager were sufficient for v016;
+no ProxyManager code change was needed. Keep future work on the next visual
+milestone—the Hela menu—and use the v016 evidence as the 950M pre-menu
+checkpoint.
+
+## GTX 950M v016 — 1050 Ti shader-set comparison
+
+The user confirmed that the Hela pre-menu was visibly rendered on the GTX
+950M. The new 950M-specific package reused the v015 runtime DLLs and the 14
+CSOs from the known 1050 Ti v1.1.3 package; all 13 required overrides were
+reported ready. The 950M launch profile used Tier 0. Runtime fingerprints
+matched the v016 manifest, and the three shaders correlated with the Present
+#100 source history were VS `20e0826b236597a1` and PS
+`44b0a992c2304254` / `d77600bde0076c33`.
+
+At Present #100, source and backbuffer samples each reported 9/100
+non-black pixels; the matched source history had 66 draws, zero skips, and
+zero clears. Five-point samples from Presents #300–1000 were black. The
+monitor did not reach the requested full source/backbuffer readbacks at
+Present #1400, so ProxyManager marked the attempt failed for that missing
+capture, not for the visual result. The user-confirmed milestone is valid;
+this run is not full-frame pixel validation.
+
+ProxyManager recorded `restored: true`; post-run checks matched the exact
+pre-run v001 DLL hashes and six override files, and Hela was stopped. The
+online TCP-only observer recorded two Hela connection-state events without
+capturing payload or UDP. Full run evidence is in
+v016 run report (local-only: `runs/20261122/950m-v016-pre-menu-1050ti-shader-set-20261122-182755274/README.md`).
+
+Do not repeat v016 just to reach #1400. Continue toward the Hela menu with a
+newly versioned 950M test; use a longer monitor timeout only if a complete
+#1400 capture is needed for a specific diagnostic question.
+
+## GTX 950M v017-v019 — device-removal diagnosis (2026-11-22)
+
+The v016, v017, and v018 manifests attest identical v015 runtime DLL hashes,
+shader overrides, and launch-profile hash. The runs do not provide a
+runtime-by-shader comparison and cannot implicate the shader set by
+themselves. See the v017 manifest (local-only: `runs/20261122/profiles/950m-v017-menu-progression-1050ti-shaders-20261122/run-manifest.json`),
+v017 log (local-only: `runs/20261122/950m-v017-menu-progression-1050ti-shaders-20261122-184749626/d3d12on11.log`),
+v018 manifest (local-only: `runs/20261122/profiles/950m-v018-startup-crash-diagnostics-20261122/run-manifest.json`),
+and v018 log (local-only: `runs/20261122/950m-v018-startup-crash-diagnostics-20261122-185839186/d3d12on11.log`).
+
+The v017 log ends with `0x887A0005` from resource backing creation, followed
+by `CreateQuery` and `Signal` failures with that HRESULT. In v018, the
+heartbeat reached Present #1313 at about 18 seconds, with 2,580 draws and 21
+dispatches. The last logged failures are `CreatePlacedResource`,
+`CreateQuery`, and `Signal` with `0x887A0005` (`DXGI_ERROR_DEVICE_REMOVED`).
+This confirms device removal was reported by the runtime, but does not
+identify the initiating fault or establish that a TDR occurred.
+
+Although the manager recorded crash diagnostics enabled for v018, the runtime
+logged `crash-diagnostics=0`. The launcher's profile branch cleared inherited
+`D3D12ON11_*` variables and did not add `D3D12ON11_CRASH_DIAGNOSTICS` back to
+the child environment. This explains how the manager's `true` setting and
+the runtime's `0` could coexist; v018 used the old v015 runtime pair and did
+not validate the updated diagnostic build. No exception stack or minidump
+was captured.
+
+Present #1400 was not reached; the manager restored the prior files. Neither
+the manager report nor the monitor report records Hela's exit code. The proxy
+log stopping after about 19 seconds does not prove Hela exited then: the
+monitor is bounded at 180 seconds, and its launcher closes Hela during cleanup
+if the game is still running after the monitor ends. The manager's 362-second
+wall interval includes monitoring and cleanup; it is not Hela's measured
+uptime. The report cannot distinguish a crash, a hang, or cleanup termination.
+
+The launcher now explicitly propagates `D3D12ON11_CRASH_DIAGNOSTICS` through
+profile launches and writes `process-status.json` with the game's exit code
+and whether cleanup requested or forced termination.
+
+A read-only Windows event-log check found no matching display-reset or
+application-crash event. It found one corrected PCIe AER warning at 19:59:48
+on Intel root port `0:1C:4`; the currently enumerated NVIDIA adapter reports
+a different PCI location path, so this is not evidence that the warning
+caused the NVIDIA device removal.
+
+### v019 process and device-removal evidence
+
+The v019 manifest (local-only: `runs/20261122/profiles/950m-v019-device-removal-diagnostics-20261122/run-manifest.json`)
+pins the new diagnostic runtime and shader set. Runtime module fingerprints
+matched the manifest, and the log reports `crash-diagnostics=1`, verifying the
+v018 environment-propagation fix.
+
+At 21:25:36.798 the proxy logged
+`CreateUnorderedAccessView result=0x887a0005`
+(`DXGI_ERROR_DEVICE_REMOVED`). Its last heartbeat was at 21:25:56.534:
+Present #629, runtime uptime 52.015 seconds, with `Dispatch` as the last API.
+The Present #1400 monitor target was not reached. Present #100 source and
+backbuffer samples each had 11/100 non-black pixels; no full-frame result is
+available. No `GetDeviceRemovedReason` value was emitted for the failing
+operation.
+
+The process-status report (local-only: `runs/20261122/950m-v019-device-removal-diagnostics-20261122-202451048/process-status.json`)
+shows Hela had not exited before cleanup. The monitor exited first; after the
+60-second bound the launcher requested shutdown and force-terminated the game.
+The exit code before cleanup is null; the post-cleanup value `-1` followed
+forced termination and cannot establish the game's natural exit code.
+Therefore this run does not demonstrate a spontaneous game crash; the manager
+marked it failed because Present #1400 was incomplete.
+Windows event logs contained no display-reset (`4101`), `nvlddmkm`,
+Application Error (`1000`), or WER (`1001`) event during the run.
+
+ProxyManager recorded `restored=true`. Independent SHA-256 checks confirmed
+that both runtime DLLs and all six installed shader overrides match the
+v019 restore manifest. See the
+manager report (local-only: `runs/20261122/950m-v019-device-removal-diagnostics-20261122-202451048/manager-run.json`),
+monitor report (local-only: `runs/20261122/950m-v019-device-removal-diagnostics-20261122-202451048/live-monitor-report.json`),
+and proxy log (local-only: `runs/20261122/950m-v019-device-removal-diagnostics-20261122-202451048/d3d12on11.log`).
+
+### Next diagnostic gate
+
+Do not repeat the v016-v019 runs with the same runtime and shader set. The
+v019 run verifies that the new runtime and crash-diagnostics flag were loaded,
+but the specific `CreateUnorderedAccessView` failure still has no logged
+`GetDeviceRemovedReason`. The removal's initiating cause is unknown; the
+observed HRESULT alone does not establish a TDR. Preserve the v019 artifacts
+and restore manifest.
+
+### v020 staged-only package and manager gate (2026-11-23)
+
+The operator resumed offline preparation. Shader Lab 0.1.9 generated the
+staged package at
+950m-v020-shaderlab-0.1.9-package-20261123 (local-only: `runs/20261123/profiles/950m-v020-shaderlab-0.1.9-package-20261123/package/`).
+The package gate passed with all 14 baseline overrides preserved and zero new
+overrides included. `ProxyManager -Action Prepare` accepted the staged-only
+attestation with `ready=true` and `mutation_performed=false`. A fail-closed
+preflight rejected the package after `candidate-package.json` was removed;
+the installed runtime DLL hashes were unchanged.
+
+This package reuses the v019 `d3d12.dll` and `dxgi.dll`; it is not a new proxy
+runtime test. No game launch or installation was performed. Shader Lab's
+`d3d12on11` source remains separate from Hela's `proxy-source`. The failed-UAV
+`GetDeviceRemovedReason` log was added and the proxy built successfully with
+Visual Studio 18 2026 in an isolated `build-agent` directory.
+
+All eight registered CTest smoke tests pass. The two initial failures were
+test assumptions: the shader-use test expected a different order than the
+diagnostic-priority sort, and the tiled-resource test required a packed mip
+even though Microsoft documents that smaller mips may or may not be packed.
+The assertions now reflect those contracts. This validates the local build
+and smoke suite, but not a Hela run or equivalence with Hela's separate
+`proxy-source`. Do not deploy the DLLs or launch Hela until the two proxy
+sources are reconciled and a new package is staged and reviewed.
+
+### v023 Shader Lab runtime package and manager gate (2026-11-23)
+
+The v023 package (local-only: `runs/20261123/profiles/950m-v023-shaderlab-build-agent-20261123/package/`)
+uses the Shader Lab `build-agent` DLLs:
+`d3d12.dll` SHA-256
+`27b8f2a31f64b89511b41fce00d0b23b023674c9c6117953d8e7ef4c0bf491b0`,
+`dxgi.dll` SHA-256
+`161ca838f5fbe3747e8b42aa7d00272f7e46f3ea7650e064ae7c008cfd066eb2`.
+Its gate passed with all 14 baseline overrides preserved, three candidates
+compiled, one VS/PS pair validated, three candidates blocked by baseline
+conflicts, and zero new overrides included. `ProxyManager -Action Prepare`
+accepted it with `ready=true`, `lifecycle=staged-only`, and
+`mutation_performed=false`.
+
+The package was built against a separate seed manifest derived from v020's
+shader baseline and pinned to the new DLL hashes; the original v020 manifest
+was not changed. This clears packaging and read-only preflight only; it does
+not establish runtime equivalence or rendering.
+
+### v023 Shader Lab runtime run (2026-11-23)
+
+The v023 run directory (local-only: `runs/20261123/20261123/950m-v023-shaderlab-build-agent-20261123-212500745/`)
+preserves the full run evidence. Both loaded runtime hashes matched the
+manifest and crash diagnostics were enabled. Hela exited before cleanup with
+code `16384` (`0x4000`); neither the launcher nor monitor recorded a launcher
+shutdown request, and the monitor did not capture Present #1400.
+
+At Present #100, the matched source and backbuffer samples each had 11/100
+non-black pixels; source history recorded 66 draws, zero skips, and zero
+clears. The last heartbeat reached Present #782 at about 42 seconds. The
+proxy log ends with six rejected overlapping `CreatePlacedResource` requests
+(`0x80070057`); there is no device-removed HRESULT or captured crash report.
+The overlap difference from Hela's source is a plausible contributor, not
+proven as the exit cause. This run does not establish menu rendering or
+pixel-validation.
+
+`ProxyManager` reports `restored=true`, and independent checks matched the
+pre-run hashes for both installed DLLs and all six overrides. Do not repeat
+this Shader Lab runtime on Hela. Continue using the separate Hela
+`proxy-source` and preserve its accepted placed-resource alias behavior; do
+not merge or move either proxy tree during graphics-compatibility work.

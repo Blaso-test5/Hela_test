@@ -17,6 +17,7 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LiveMonitorLauncher = Join-Path $ScriptDir "Start-HelaLiveMonitor.ps1"
+$PackageGateScript = Join-Path $ScriptDir "Assert-HelaPackageGate.ps1"
 $GameDir = [IO.Path]::GetFullPath((Split-Path -Parent $GameExePath))
 $PatchRoot = Join-Path $GameDir "D3D12On11Patch"
 $RuntimeDir = Join-Path $PatchRoot "versions"
@@ -227,10 +228,36 @@ function Read-RunManifest {
     return $manifest
 }
 
+function Invoke-HelaPackageGate {
+    param(
+        [Parameter(Mandatory = $true)][string]$PackagePath,
+        [Parameter(Mandatory = $true)][string]$ManifestPath,
+        [Parameter(Mandatory = $true)][string]$TestVersion,
+        [Parameter(Mandatory = $true)][int]$OverrideCount
+    )
+
+    if (-not (Test-Path -LiteralPath $PackageGateScript -PathType Leaf)) {
+        throw "Hela package gate not found: $PackageGateScript"
+    }
+
+    $result = & $PackageGateScript -PackagePath $PackagePath -RunManifestPath $ManifestPath
+    if ($null -eq $result -or
+        $result.schema -cne "hela-package-gate-bridge/v1" -or
+        $result.package_id -cne $TestVersion -or
+        [int]$result.override_count -ne $OverrideCount -or
+        $result.lifecycle -cne "staged-only" -or
+        [bool]$result.mutation_performed) {
+        throw "Hela package gate did not return a valid staged-only attestation."
+    }
+
+    return $result
+}
+
 function Assert-PackageMatchesManifest {
     param(
         [Parameter(Mandatory = $true)]$Manifest,
-        [Parameter(Mandatory = $true)][string]$PackagePath
+        [Parameter(Mandatory = $true)][string]$PackagePath,
+        [Parameter(Mandatory = $true)][string]$ManifestPath
     )
     $package = [IO.Path]::GetFullPath($PackagePath)
     $runtimePath = Join-Path $package "runtime"
@@ -268,6 +295,11 @@ function Assert-PackageMatchesManifest {
             throw "Package fingerprint mismatch for $($file.Name): expected $expected, got $actual"
         }
     }
+    $packageGate = Invoke-HelaPackageGate `
+        -PackagePath $package `
+        -ManifestPath $ManifestPath `
+        -TestVersion ([string]$Manifest.testVersion) `
+        -OverrideCount $actualFiles.Count
     return [ordered]@{
         package_path = $package
         test_version = [string]$Manifest.testVersion
@@ -276,6 +308,7 @@ function Assert-PackageMatchesManifest {
             dxgi = [string]$Manifest.runtime.dxgi
         }
         override_count = $actualFiles.Count
+        package_gate = $packageGate
     }
 }
 
@@ -556,10 +589,14 @@ switch ($Action) {
             throw "-VersionPath and -ManifestPath are required for Prepare."
         }
         $manifest = Read-RunManifest -Path $ManifestPath
-        $packageInfo = Assert-PackageMatchesManifest -Manifest $manifest -PackagePath $VersionPath
+        $packageInfo = Assert-PackageMatchesManifest `
+            -Manifest $manifest `
+            -PackagePath $VersionPath `
+            -ManifestPath $ManifestPath
         [ordered]@{
             ready = $true
             package = $packageInfo
+            package_gate = $packageInfo.package_gate
             installed = Get-InstalledInventory
             present = $Present
             mutation_performed = $false
@@ -588,7 +625,10 @@ switch ($Action) {
         }
         Assert-GameStopped
         $manifest = Read-RunManifest -Path $ManifestPath
-        $packageInfo = Assert-PackageMatchesManifest -Manifest $manifest -PackagePath $VersionPath
+        $packageInfo = Assert-PackageMatchesManifest `
+            -Manifest $manifest `
+            -PackagePath $VersionPath `
+            -ManifestPath $ManifestPath
         $launchProfile = Assert-LaunchProfile -Manifest $manifest
         $runTime = [DateTime]::UtcNow
         $runDirectoryPath = Join-Path (Join-Path $RunRoot $runTime.ToString("yyyyMMdd")) `
@@ -650,9 +690,11 @@ switch ($Action) {
             test_version = [string]$manifest.testVersion
             started_utc = [DateTime]::UtcNow.ToString("o")
             package_path = $packageInfo.package_path
+            package_gate = $packageInfo.package_gate
             target_present = $Present
             launch_profile = $launchProfileInfo
             crash_diagnostics_enabled = [bool]$EnableCrashDiagnostics
+            process_status_file = "process-status.json"
             status = "preparing"
         }
         $runInfo | ConvertTo-Json -Depth 6 |
@@ -682,6 +724,7 @@ switch ($Action) {
                 GameExePath = $GameExePath
                 LogPath = $LogPath
                 JsonOutPath = $reportPath
+                ProcessStatusPath = (Join-Path $runDirectoryPath "process-status.json")
                 RunManifestPath = $runManifestPath
                 MonitorMaxWaitSeconds = $MonitorTimeoutSeconds
                 SourceBmpPath = "D:\HelaReadback_Present${Present}_source.bmp"

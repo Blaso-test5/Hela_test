@@ -17,6 +17,7 @@ param(
     [string]$GameExePath = "D:\SteamLibrary\steamapps\common\Hela Demo\Hela\Binaries\Win64\Hela-Win64-Shipping.exe",
     [string]$LogPath = "",
     [string]$JsonOutPath = "",
+    [string]$ProcessStatusPath = "",
     [string]$SourceBmpPath = "",
     [string]$BackbufferBmpPath = "",
     [string]$RunManifestPath = "",
@@ -349,6 +350,12 @@ foreach ($name in $ManagedEnvVars) {
 $MonitorProc = $null
 $MonitorStartedAt = $null
 $GameProc = $null
+$GameStartedAt = $null
+$gameExitedBeforeCleanup = $false
+$gameExitCodeBeforeCleanup = $null
+$monitorExitedBeforeCleanup = $false
+$gameShutdownRequested = $false
+$gameForcedTermination = $false
 
 try {
     if (-not $LaunchGame) {
@@ -413,13 +420,17 @@ try {
             $(if ($EnableFullBmpReadback) { "1" } else { "0" })
         $gameStartInfo.EnvironmentVariables["D3D12ON11_FULL_READBACK_PRESENT"] =
             $FullBmpPresent.ToString()
+        $gameStartInfo.EnvironmentVariables["D3D12ON11_CRASH_DIAGNOSTICS"] =
+            $(if ($EnableCrashDiagnostics) { "1" } else { "0" })
         Write-Host "[Launcher] Child environment profile: $LaunchEnvironmentProfileName sha256=$LaunchEnvironmentProfileSha256 (inherited D3D12ON11_* cleared)" -ForegroundColor Cyan
         $GameProc = [System.Diagnostics.Process]::Start($gameStartInfo)
         if ($null -eq $GameProc) {
             throw "Failed to start Hela with launch profile '$LaunchEnvironmentProfileName'."
         }
+        $GameStartedAt = [DateTime]::UtcNow
     } else {
         $GameProc = Start-Process -FilePath $GameExePath -ArgumentList $GameCmdLine -WorkingDirectory $GameDir -PassThru
+        $GameStartedAt = [DateTime]::UtcNow
     }
 
     while (-not $GameProc.HasExited) {
@@ -430,6 +441,17 @@ try {
     }
 }
 finally {
+    $cleanupStartedAt = [DateTime]::UtcNow
+    if ($null -ne $GameProc) {
+        $gameExitedBeforeCleanup = $GameProc.HasExited
+        if ($gameExitedBeforeCleanup) {
+            $gameExitCodeBeforeCleanup = $GameProc.ExitCode
+        }
+    }
+    if ($null -ne $MonitorProc) {
+        $monitorExitedBeforeCleanup = $MonitorProc.HasExited
+    }
+
     try {
         if ($null -ne $MonitorProc -and -not $MonitorProc.HasExited) {
             if ($null -ne $GameProc -and
@@ -460,6 +482,7 @@ finally {
     } finally {
         try {
             if ($StopGameAfterMonitor -and $null -ne $GameProc -and -not $GameProc.HasExited) {
+                $gameShutdownRequested = $true
                 Write-Host "[Launcher] Closing diagnostic game process (PID $($GameProc.Id))..." -ForegroundColor Yellow
                 try {
                     $null = $GameProc.CloseMainWindow()
@@ -467,6 +490,7 @@ finally {
                     # The game may exit between HasExited and CloseMainWindow.
                 }
                 if (-not $GameProc.WaitForExit(5000)) {
+                    $gameForcedTermination = $true
                     Stop-Process -Id $GameProc.Id -Force -ErrorAction SilentlyContinue
                     if (-not $GameProc.WaitForExit(5000)) {
                         throw "Hela process $($GameProc.Id) did not exit after termination."
@@ -478,6 +502,32 @@ finally {
                 [Environment]::SetEnvironmentVariable($name, $SavedEnv[$name], "Process")
             }
             Write-Host "[Launcher] Process-scoped environment variables restored." -ForegroundColor DarkGray
+            if (-not [string]::IsNullOrWhiteSpace($ProcessStatusPath)) {
+                $gameExitedAfterCleanup = $null -ne $GameProc -and $GameProc.HasExited
+                $gameExitCodeAfterCleanup = if ($gameExitedAfterCleanup) { $GameProc.ExitCode } else { $null }
+                $processStatus = [ordered]@{
+                    schema = "hela-launcher-process-status/v1"
+                    cleanup_started_utc = $cleanupStartedAt.ToString("o")
+                    game = [ordered]@{
+                        process_id = if ($null -ne $GameProc) { $GameProc.Id } else { $null }
+                        started_utc = if ($null -ne $GameStartedAt) { $GameStartedAt.ToString("o") } else { $null }
+                        exited_before_cleanup = $gameExitedBeforeCleanup
+                        exit_code_before_cleanup = $gameExitCodeBeforeCleanup
+                        shutdown_requested_by_launcher = $gameShutdownRequested
+                        force_terminated_by_launcher = $gameForcedTermination
+                        exited_after_cleanup = $gameExitedAfterCleanup
+                        exit_code_after_cleanup = $gameExitCodeAfterCleanup
+                    }
+                    monitor = [ordered]@{
+                        process_id = if ($null -ne $MonitorProc) { $MonitorProc.Id } else { $null }
+                        started_utc = if ($null -ne $MonitorStartedAt) { $MonitorStartedAt.ToString("o") } else { $null }
+                        exited_before_cleanup = $monitorExitedBeforeCleanup
+                    }
+                    completed_utc = [DateTime]::UtcNow.ToString("o")
+                }
+                $processStatus | ConvertTo-Json -Depth 6 |
+                    Set-Content -LiteralPath $ProcessStatusPath -Encoding UTF8
+            }
         }
     }
 }
