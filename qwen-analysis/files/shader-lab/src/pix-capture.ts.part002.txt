@@ -1,0 +1,160 @@
+  }
+  knownMarkers.sort((a, b) => a.offset - b.offset);
+
+  // ---- scansione a blocchi con overlap
+  const patterns: { name: string; kind: PatternHits["kind"]; buf: Buffer }[] = [
+    ...KNOWN_MARKERS.map((m) => ({ name: m, kind: "marker" as const, buf: Buffer.from(m, "latin1") })),
+    { name: DXBC_MAGIC, kind: "dxbc-pattern" as const, buf: Buffer.from(DXBC_MAGIC, "latin1") },
+  ];
+  const hits: PatternHits[] = patterns.map((p) => ({ pattern: p.name, kind: p.kind, count: 0, offsets: [], offsetsTruncated: false }));
+  const overlap = Math.max(...patterns.map((p) => p.buf.length)) - 1;
+
+  const scanLimit = Math.min(source.size, limits.maxScanBytes);
+  let pos = 0;
+  let blocks = 0;
+  let tail: Buffer = Buffer.alloc(0);
+  let entropy: number | null = null;
+
+  while (pos < scanLimit) {
+    const want = Math.min(limits.blockBytes, scanLimit - pos);
+    const chunk = await source.read(pos, want);
+    if (chunk.length === 0) {
+      warnings.push(`Lettura vuota all'offset ${pos}: file più corto di quanto riportato da stat o letture interrotte.`);
+      break;
+    }
+    if (blocks === 0) entropy = shannonEntropy(chunk);
+    const buf = tail.length ? Buffer.concat([tail, chunk]) : chunk;
+    const base = pos - tail.length;
+    patterns.forEach((p, idx) => {
+      let i = buf.indexOf(p.buf);
+      while (i !== -1) {
+        // conta solo i match che terminano nei dati nuovi (evita doppi conteggi nell'overlap)
+        if (i + p.buf.length > tail.length) {
+          const h = hits[idx];
+          h.count++;
+          if (h.offsets.length < DEFAULT_LIMITS.maxOffsetsPerPattern) h.offsets.push(base + i);
+          else h.offsetsTruncated = true;
+        }
+        i = buf.indexOf(p.buf, i + 1);
+      }
+    });
+    tail = Buffer.from(buf.subarray(Math.max(0, buf.length - overlap)));
+    pos += chunk.length;
+    blocks++;
+  }
+
+  const complete = pos >= source.size;
+  if (!complete) {
+    warnings.push(
+      `Scansione parziale: analizzati ${pos} byte su ${source.size} (limite maxScanBytes=${limits.maxScanBytes}). I conteggi dei pattern riguardano solo questa parte.`,
+    );
+  }
+
+  let status: PixStatus;
+  if (source.size === 0) status = "empty";
+  else if (source.size < limits.headerBytes) status = "truncated_header";
+  else if (knownMarkers.length > 0) status = "known_markers_in_header";
+  else status = "unrecognized_header";
+
+  if (status === "truncated_header") {
+    warnings.push(`File più corto dell'header analizzato (${source.size} < ${limits.headerBytes} byte): possibile file troncato o non .wpix.`);
+  }
+  if (status === "unrecognized_header") {
+    warnings.push("Nessun marker noto (GFXA/GFXB/GFXC) nell'header: formato non riconosciuto da questo tool.");
+  }
+  warnings.push("Il formato .wpix non è documentato e non esiste un decoder verificato in questo tool: nessuna integrità o struttura è stata verificata.");
+
+  return {
+    file: fileLabel,
+    extensionOk,
+    sizeBytes: source.size,
+    status,
+    decoded: false,
+    limits,
+    header: {
+      bytesRead: head.length,
+      hexDump: hexDump(head),
+      asciiPreview: asciiPreview(head),
+      leadingTag,
+      knownMarkers,
+    },
+    scan: { bytesScanned: pos, blocksRead: blocks, complete, firstBlockEntropyBitsPerByte: entropy, hits },
+    pixtool: { found: !!pixtoolPath, path: pixtoolPath ?? null },
+    warnings,
+    nextInputs: nextInputs(fileLabel),
+  };
+}
+
+/** Analizza un file su disco: solo header + scansione a blocchi, mai lettura integrale. */
+export async function analyzePixCapture(filePath: string, options: PixScanOptions = {}): Promise<PixCaptureReport> {
+  const src = await openFileSource(filePath);
+  try {
+    return await analyzeSource(src, filePath, options);
+  } finally {
+    await src.close();
+  }
+}
+
+const STATUS_TEXT: Record<PixStatus, string> = {
+  empty: "File vuoto (0 byte).",
+  truncated_header: "Header incompleto: file più corto dell'header analizzato (possibile troncamento).",
+  unrecognized_header: "Header non riconosciuto: nessun marker noto trovato.",
+  known_markers_in_header: "Marker noti trovati nell'header (GFXA/GFXB/GFXC osservati). Significato dei marker NON verificato.",
+};
+
+export function formatPixReport(r: PixCaptureReport): string {
+  const L: string[] = [];
+  L.push(`# Analisi read-only cattura PIX — ${path.basename(r.file)}`);
+  L.push("");
+  L.push("**Stato: NON DECODIFICATO.** Nessun PSO, shader, evento o risorsa è stato estratto da questo file.");
+  L.push("");
+  L.push("## Fatti misurati");
+  L.push(`- Percorso: ${r.file}`);
+  L.push(`- Dimensione: ${r.sizeBytes} byte (${(r.sizeBytes / MiB).toFixed(2)} MiB)`);
+  L.push(`- Esito header: ${STATUS_TEXT[r.status]}`);
+  L.push(`- Tag ASCII iniziale (4 byte): ${r.header.leadingTag ?? "non stampabile / assente"}`);
+  L.push(
+    `- Marker noti nell'header (primi ${r.header.bytesRead} byte): ` +
+      (r.header.knownMarkers.length ? r.header.knownMarkers.map((m) => `${m.marker}@0x${m.offset.toString(16)}`).join(", ") : "nessuno"),
+  );
+  L.push("");
+  L.push("```");
+  L.push(r.header.hexDump || "(nessun byte)");
+  L.push("```");
+  L.push(`ASCII: \`${r.header.asciiPreview}\``);
+  L.push("");
+  L.push("## Scansione a blocchi (letture limitate, file mai caricato per intero)");
+  L.push(
+    `- Limiti: header ${r.limits.headerBytes} B, blocco ${r.limits.blockBytes} B, scansione massima ${r.limits.maxScanBytes} B`,
+  );
+  L.push(`- Analizzati: ${r.scan.bytesScanned} B in ${r.scan.blocksRead} blocchi — ${r.scan.complete ? "file completo" : "SCANSIONE PARZIALE"}`);
+  if (r.scan.firstBlockEntropyBitsPerByte !== null) {
+    const e = r.scan.firstBlockEntropyBitsPerByte;
+    L.push(
+      `- Entropia primo blocco: ${e.toFixed(3)} bit/byte` +
+        (e > 7.5 ? " (valore alto: ipotesi, NON verificata, di dati compressi o cifrati)" : ""),
+    );
+  }
+  L.push("- Occorrenze di pattern byte (NON sono chunk verificati e NON sono shader estratti):");
+  for (const h of r.scan.hits) {
+    const label = h.kind === "dxbc-pattern" ? `${h.pattern} (magic container D3D, non validato)` : h.pattern;
+    L.push(
+      `  - ${label}: ${h.count}` +
+        (h.offsets.length ? ` — primi offset: ${h.offsets.map((o) => "0x" + o.toString(16)).join(", ")}${h.offsetsTruncated ? ", …" : ""}` : ""),
+    );
+  }
+  L.push("");
+  L.push("## pixtool");
+  L.push(
+    r.pixtool.found
+      ? `- Rilevato: ${r.pixtool.path} (non eseguito da questo tool).`
+      : "- Non trovato (PIX non installato o PIXTOOL_PATH non impostato): nessuna estrazione possibile da qui.",
+  );
+  L.push("");
+  L.push("## Avvisi");
+  for (const w of r.warnings) L.push(`- ${w}`);
+  L.push("");
+  L.push("## Input successivi consigliati");
+  for (const n of r.nextInputs) L.push(`- ${n}`);
+  return L.join("\n");
+}

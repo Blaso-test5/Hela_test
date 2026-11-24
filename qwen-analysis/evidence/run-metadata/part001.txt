@@ -1,0 +1,202 @@
+{
+  "schema": "qwen.hela.black-menu-runtime-evidence",
+  "run": {
+    "runId": "proxy-main-4450b7d-1050ti-profile14-20261124-104217038",
+    "testVersion": "proxy-main-4450b7d-1050ti-profile14-20261124",
+    "schema": "hela-proxy-manager-run/v1",
+    "status": "completed",
+    "targetPresent": 1400,
+    "startedUtc": "2026-11-24T10:42:17.1121253Z",
+    "completedUtc": "2026-11-24T10:44:10.8993032Z",
+    "restored": true,
+    "crashDiagnosticsEnabled": false,
+    "error": null,
+    "packagePath": "<staging-local>/proxy-main-4450b7d-1050ti-profile14-20261124",
+    "launchProfile": {
+      "name": "1050ti-pre-menu-historical-20261117-v1",
+      "sha256": "02dd14ff52bdd38b68589091c4eaa07908d22d488e6a43499ba1a95738499e1d",
+      "arguments": [
+        "-graphicsadapter=0",
+        "-windowed",
+        "-ResX=1280",
+        "-ResY=720",
+        "-stdout",
+        "-FullStdOutLogOutput",
+        "-forcelogflush"
+      ],
+      "environment": {
+        "D3D12ON11_BACKBUFFER_READBACK": null,
+        "D3D12ON11_BINDING_MAP": null,
+        "D3D12ON11_DIAGNOSTIC_CAPABILITIES": "1",
+        "D3D12ON11_DIAGNOSTIC_MASK_NVIDIA": "1",
+        "D3D12ON11_DIAGNOSTIC_RENDER_TRACE": "1",
+        "D3D12ON11_DUMP": "<run-local>\\launch-profile\\dump",
+        "D3D12ON11_DUMP_SHADERS": "0",
+        "D3D12ON11_FULL_READBACK": null,
+        "D3D12ON11_FULL_READBACK_PRESENT": null,
+        "D3D12ON11_MASK_VENDOR_ID": "ffff",
+        "D3D12ON11_OVERRIDES": "<run-local>\\launch-profile\\overrides",
+        "D3D12ON11_SHADER_MODEL": "6_7",
+        "D3D12ON11_TARGET_DRAW_CAPTURE_INDEX": null,
+        "D3D12ON11_TILED_RESOURCES_TIER": "3",
+        "D3D12ON11_TRACE_CALLERS": "0"
+      }
+    },
+    "packageGate": {
+      "schema": "hela-package-gate-bridge/v1",
+      "package_id": "proxy-main-4450b7d-1050ti-profile14-20261124",
+      "test_version": "proxy-main-4450b7d-1050ti-profile14-20261124",
+      "override_count": 14,
+      "lifecycle": "staged-only",
+      "mutation_performed": false
+    }
+  },
+  "runManifest": {
+    "schema": "hela-run-manifest/v1",
+    "testVersion": "proxy-main-4450b7d-1050ti-profile14-20261124",
+    "runtimeAttestation": "module-and-shader-sha256",
+    "runtime": {
+      "d3d12": "23e2c8ba52a1cba32d01595c505e047b21b2744a3df807cade734f648ccd7fbe",
+      "dxgi": "edd099d49c4b669c05e1fd46f4af0e251cbee7065a9d596aa93c6d4fafca4aad"
+    },
+    "overrides": {
+      "20e0826b236597a1.cso": "5d844557b3a5f78c108aca027b14432f3eba52791057234f7310c487926a3d3e",
+      "25e657206d761172.cso": "84e92d1475080ac8919f855a2eb6f06e8c0829dad0fe76c5e453b6d1101e99ad",
+      "38acdb88bb8801b9.cso": "0724669de377f5bcd07ccb96f3b3172e955d1fa7c56c99e09c997601d12df9cc",
+      "44b0a992c2304254.cso": "43c029b121212d0a37e0a00aaf983d9b6f7ea3ee593412c46ef22c52513d263d",
+      "4c1bc8bf7e457acd.cso": "da38ce807395d0201190bb3f483b4364a37f31ffc009c594a417e2c4c8b6998d",
+      "4ce363172cfd70be.cso": "21420b21a634f1c762645f2ea39afe6d260fc95148603cb138a12e670dfac9a9",
+      "5e8318486d1b2a98.cso": "3602c4d4b45139f1a00ef10caf35285fe7466ed435cf05813368183d929281b7",
+      "74867736557b00e8.cso": "fd8dbefb9aba6699fa8bfed527a6388ed65682b8e9ce28cd529f1f7112fc3e40",
+      "a7f30e5d1d5fc6fb.cso": "5a993c0d07474aa541ab5436fcd7dadc6bda5a312a00a4c88b82f8aa81e83eb5",
+      "bb592abf5ce2bad1.cso": "98aa22ea7d622c246fd30131c4743466ffd07328b9bd457d3b14f9f0ad97c6c6",
+      "c71574a8f462e2c1.cso": "05373e5f80bb3242faf00495dfd1f6b1fd6310372633faf67269cbd675ebd8e1",
+      "d77600bde0076c33.cso": "9f6fee68b9c8c824f106426db501012ebc176e35a22c7a8cd47e3e94719207b4",
+      "df79d6ce6e6eaa48.cso": "961953dc0dd59a6345d053ba4c23bc50104c2d4ef03425488ce57cc5c628e11c",
+      "f79b80f0f2f58f68.cso": "bf56dd5f681dd2fa8f483f5e1fa308dd432b39e78af032ace10634255fc15711"
+    },
+    "requiredOverrides": [
+      "20e0826b236597a1.cso",
+      "25e657206d761172.cso",
+      "44b0a992c2304254.cso",
+      "4c1bc8bf7e457acd.cso",
+      "4ce363172cfd70be.cso",
+      "5e8318486d1b2a98.cso",
+      "74867736557b00e8.cso",
+      "a7f30e5d1d5fc6fb.cso",
+      "bb592abf5ce2bad1.cso",
+      "c71574a8f462e2c1.cso",
+      "d77600bde0076c33.cso",
+      "df79d6ce6e6eaa48.cso",
+      "f79b80f0f2f58f68.cso"
+    ],
+    "launchProfile": {
+      "name": "1050ti-pre-menu-historical-20261117-v1",
+      "sha256": "02dd14ff52bdd38b68589091c4eaa07908d22d488e6a43499ba1a95738499e1d",
+      "environment": {
+        "D3D12ON11_BACKBUFFER_READBACK": null,
+        "D3D12ON11_BINDING_MAP": null,
+        "D3D12ON11_DIAGNOSTIC_CAPABILITIES": "1",
+        "D3D12ON11_DIAGNOSTIC_MASK_NVIDIA": "1",
+        "D3D12ON11_DIAGNOSTIC_RENDER_TRACE": "1",
+        "D3D12ON11_DUMP": "@RUN_DUMP@",
+        "D3D12ON11_DUMP_SHADERS": "0",
+        "D3D12ON11_FULL_READBACK": null,
+        "D3D12ON11_FULL_READBACK_PRESENT": null,
+        "D3D12ON11_MASK_VENDOR_ID": "ffff",
+        "D3D12ON11_OVERRIDES": "@RUN_OVERRIDES@",
+        "D3D12ON11_SHADER_MODEL": "6_7",
+        "D3D12ON11_TARGET_DRAW_CAPTURE_INDEX": null,
+        "D3D12ON11_TILED_RESOURCES_TIER": "3",
+        "D3D12ON11_TRACE_CALLERS": "0"
+      },
+      "arguments": [
+        "-graphicsadapter=0",
+        "-windowed",
+        "-ResX=1280",
+        "-ResY=720",
+        "-stdout",
+        "-FullStdOutLogOutput",
+        "-forcelogflush"
+      ],
+      "attestation": {
+        "maskedNvidiaAdapter": true,
+        "tiledResourcesTier": 3,
+        "callerTrace": false
+      }
+    }
+  },
+  "stagedPackageArtifacts": {
+    "candidatePackage": {
+      "schemaVersion": 1,
+      "packageId": "proxy-main-4450b7d-1050ti-profile14-20261124",
+      "runtime": [
+        {
+          "fileName": "d3d12.dll",
+          "sha256": "23e2c8ba52a1cba32d01595c505e047b21b2744a3df807cade734f648ccd7fbe",
+          "bytes": 403968,
+          "presentInStagedPackage": true
+        },
+        {
+          "fileName": "dxgi.dll",
+          "sha256": "edd099d49c4b669c05e1fd46f4af0e251cbee7065a9d596aa93c6d4fafca4aad",
+          "bytes": 48128,
+          "presentInStagedPackage": true
+        }
+      ],
+      "overrides": [
+        {
+          "id": "20e0826b236597a1",
+          "fileName": "20e0826b236597a1.cso",
+          "sha256": "5d844557b3a5f78c108aca027b14432f3eba52791057234f7310c487926a3d3e",
+          "bytes": 1768
+        },
+        {
+          "id": "25e657206d761172",
+          "fileName": "25e657206d761172.cso",
+          "sha256": "84e92d1475080ac8919f855a2eb6f06e8c0829dad0fe76c5e453b6d1101e99ad",
+          "bytes": 372
+        },
+        {
+          "id": "38acdb88bb8801b9",
+          "fileName": "38acdb88bb8801b9.cso",
+          "sha256": "0724669de377f5bcd07ccb96f3b3172e955d1fa7c56c99e09c997601d12df9cc",
+          "bytes": 58476
+        },
+        {
+          "id": "44b0a992c2304254",
+          "fileName": "44b0a992c2304254.cso",
+          "sha256": "43c029b121212d0a37e0a00aaf983d9b6f7ea3ee593412c46ef22c52513d263d",
+          "bytes": 1560
+        },
+        {
+          "id": "4c1bc8bf7e457acd",
+          "fileName": "4c1bc8bf7e457acd.cso",
+          "sha256": "da38ce807395d0201190bb3f483b4364a37f31ffc009c594a417e2c4c8b6998d",
+          "bytes": 1996
+        },
+        {
+          "id": "4ce363172cfd70be",
+          "fileName": "4ce363172cfd70be.cso",
+          "sha256": "21420b21a634f1c762645f2ea39afe6d260fc95148603cb138a12e670dfac9a9",
+          "bytes": 596
+        },
+        {
+          "id": "5e8318486d1b2a98",
+          "fileName": "5e8318486d1b2a98.cso",
+          "sha256": "3602c4d4b45139f1a00ef10caf35285fe7466ed435cf05813368183d929281b7",
+          "bytes": 1344
+        },
+        {
+          "id": "74867736557b00e8",
+          "fileName": "74867736557b00e8.cso",
+          "sha256": "fd8dbefb9aba6699fa8bfed527a6388ed65682b8e9ce28cd529f1f7112fc3e40",
+          "bytes": 1540
+        },
+        {
+          "id": "a7f30e5d1d5fc6fb",
+          "fileName": "a7f30e5d1d5fc6fb.cso",
+          "sha256": "5a993c0d07474aa541ab5436fcd7dadc6bda5a312a00a4c88b82f8aa81e83eb5",
+          "bytes": 692
+        },
+        {

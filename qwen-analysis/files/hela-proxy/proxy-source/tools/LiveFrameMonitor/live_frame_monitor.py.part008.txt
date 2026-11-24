@@ -1,0 +1,212 @@
+    out.append(
+        f"  SHADER READY : {shaders['ready_unique_count']} unique "
+        f"({shaders['ready_total_events']} total events)"
+    )
+    for h, s in shaders["ready"].items():
+        out.append(f"                 - {h} (stage={s['stage'] or '?'}, count={s['occurrences']})")
+    out.append(
+        f"  PLACEHOLDERS : {shaders['placeholder_unique_count']} unique "
+        f"({shaders['placeholder_total_events']} total events)"
+    )
+    for h, s in shaders["placeholders"].items():
+        out.append(
+            f"                 - {h} (stage={s['stage'] or '?'}, reason={s['reason'] or '?'}, "
+            f"count={s['occurrences']})"
+        )
+    out.append("")
+
+    out.append("[3] HEARTBEATS & DISPATCH CLUES")
+    out.append("-" * 78)
+    if clues["heartbeats"]:
+        last_hb = clues["heartbeats"][-1]
+        hb_str = ", ".join(f"{k}={v}" for k, v in last_hb["metrics"].items())
+        out.append(f"  Last Heartbeat (line {last_hb['line_no']}): {hb_str}")
+    else:
+        out.append("  Heartbeats   : <none observed>")
+    out.append(f"  Dispatch Clues Observed: {clues['dispatch_clue_total']}")
+    out.append("")
+
+    out.append("[4] VERIFIED FACTS (DIRECTLY SUPPORTED BY LOG/BMP EVIDENCE)")
+    out.append("-" * 78)
+    for idx, fact in enumerate(report["verified_facts"], start=1):
+        out.append(f"  {idx}. {fact}")
+    if not report["verified_facts"]:
+        out.append("  <No forensic markers observed>")
+    out.append("")
+
+    out.append("[5] DIAGNOSTIC BOUNDARIES & OPEN HYPOTHESES")
+    out.append("-" * 78)
+    for idx, hyp in enumerate(report["hypotheses_and_open_questions"], start=1):
+        out.append(f"  {idx}. {hyp}")
+    if not report["hypotheses_and_open_questions"]:
+        out.append("  <None>")
+    out.append("=" * 78)
+    return "\n".join(out)
+
+
+def run_monitor(
+    log_path: Path,
+    poll_interval_sec: float = 0.20,
+    once: bool = False,
+    stop_after_present100: bool = False,
+    stop_after_present_num: Optional[int] = None,
+    max_wait_sec: Optional[float] = None,
+    source_bmp_path: Optional[Path] = None,
+    backbuffer_bmp_path: Optional[Path] = None,
+    bmp_wait_timeout_sec: float = 5.0,
+    json_path: Optional[Path] = None,
+    quiet_events: bool = False,
+    run_manifest_path: Optional[Path] = None,
+) -> Tuple[int, Dict[str, Any]]:
+    def _print_live_event(summary: str, _evt: Dict[str, Any]) -> None:
+        if not quiet_events:
+            print(f"[LIVE] {summary}", flush=True)
+
+    if stop_after_present100:
+        if stop_after_present_num is not None and stop_after_present_num != 100:
+            print("ERROR: --stop-after-present100 conflicts with --stop-after-present.", file=sys.stderr)
+            return 2, LiveMonitorState().build_report(str(log_path))
+        stop_after_present_num = 100
+    if stop_after_present_num is not None and (
+        stop_after_present_num < 100 or stop_after_present_num % 100 != 0
+    ):
+        print("ERROR: stop-after-present must be a positive multiple of 100.", file=sys.stderr)
+        return 2, LiveMonitorState().build_report(str(log_path))
+
+    run_manifest = None
+    if run_manifest_path is not None:
+        try:
+            run_manifest = load_run_manifest(run_manifest_path)
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2, LiveMonitorState().build_report(str(log_path))
+
+    state = LiveMonitorState(
+        event_callback=_print_live_event,
+        run_manifest=run_manifest,
+    )
+    capture_present = stop_after_present_num or 100
+    tailer = LogFileTailer(log_path, state=state, start_at_end=False)
+
+    stop_requested = False
+
+    def _sigint_handler(_signum: int, _frame: Any) -> None:
+        nonlocal stop_requested
+        stop_requested = True
+
+    old_sigint = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGINT, _sigint_handler)
+
+    start_time = time.monotonic()
+    capture_present_seen_at: Optional[float] = None
+
+    pending_bmps: Dict[str, Path] = {}
+    if source_bmp_path:
+        pending_bmps["source"] = source_bmp_path
+    if backbuffer_bmp_path:
+        pending_bmps["backbuffer"] = backbuffer_bmp_path
+
+    try:
+        if once and not log_path.is_file():
+            print(f"ERROR: Log file not found in --once mode: {log_path}", file=sys.stderr)
+            return 2, state.build_report(str(log_path), capture_present)
+
+        while not stop_requested:
+            tailer.poll()
+
+            # Check any pending BMP files for atomic completeness
+            for label, bpath in list(pending_bmps.items()):
+                try:
+                    info = try_inspect_complete_bmp(bpath, label=label)
+                except ValueError as exc:
+                    print(f"ERROR: Malformed BMP '{bpath}': {exc}", file=sys.stderr)
+                    del pending_bmps[label]
+                    continue
+                if info is not None:
+                    state.record_bmp_inspection(info)
+                    del pending_bmps[label]
+
+            if once:
+                tailer.flush_partial()
+                break
+
+            now = time.monotonic()
+            if stop_after_present_num is not None and state.present_reached(capture_present):
+                if capture_present_seen_at is None:
+                    capture_present_seen_at = now
+                if not pending_bmps or (now - capture_present_seen_at) >= bmp_wait_timeout_sec:
+                    tailer.poll()
+                    tailer.flush_partial()
+                    break
+
+            if max_wait_sec is not None and (now - start_time) >= max_wait_sec:
+                tailer.flush_partial()
+                break
+
+            time.sleep(poll_interval_sec)
+    finally:
+        signal.signal(signal.SIGINT, old_sigint)
+
+    report = state.build_report(str(log_path), capture_present)
+    if json_path:
+        try:
+            if json_path.parent:
+                json_path.parent.mkdir(parents=True, exist_ok=True)
+            json_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        except OSError as exc:
+            print(f"ERROR: Failed to write JSON report '{json_path}': {exc}", file=sys.stderr)
+            return 2, report
+
+    print(format_human_summary(report), flush=True)
+    return 0, report
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="live_frame_monitor",
+        description="Real-time log & BMP companion monitor for Hela D3D12-to-D3D11 proxy runs.",
+    )
+    parser.add_argument("log_path", help="Path to d3d12on11.log (or backup diagnostic log).")
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Read existing log file once from start to EOF and exit immediately (for fixtures/post-run logs).",
+    )
+    parser.add_argument(
+        "--stop-after-present100",
+        action="store_true",
+        help="Stop automatically once Present #100 readbacks/history (and optional BMPs) are captured.",
+    )
+    parser.add_argument(
+        "--stop-after-present",
+        type=int,
+        default=None,
+        help="Stop after both source and backbuffer readbacks for this Present number complete.",
+    )
+    parser.add_argument(
+        "--poll-interval",
+        type=float,
+        default=0.20,
+        help="Polling interval in seconds when tailing live (default: 0.20).",
+    )
+    parser.add_argument(
+        "--max-wait",
+        type=float,
+        default=None,
+        help="Optional maximum monitoring duration in seconds before clean exit.",
+    )
+    parser.add_argument(
+        "--source-bmp",
+        dest="source_bmp",
+        default=None,
+        help="Optional path to source BMP to wait for and inspect when complete.",
+    )
+    parser.add_argument(
+        "--backbuffer-bmp",
+        dest="backbuffer_bmp",
+        default=None,
+        help="Optional path to backbuffer BMP to wait for and inspect when complete.",
+    )
+    parser.add_argument(
+        "--bmp-wait-timeout",
+        type=float,

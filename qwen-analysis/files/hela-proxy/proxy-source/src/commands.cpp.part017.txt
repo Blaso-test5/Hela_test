@@ -1,0 +1,170 @@
+    Add([descriptor, copy](ExecState& state) { state.c->ClearUnorderedAccessViewFloat(descriptor.uav.Get(), copy); });
+}
+
+void STDMETHODCALLTYPE CommandList::BeginQuery(ID3D12QueryHeap* heapIn, D3D12_QUERY_TYPE type, UINT index) {
+    auto* heap = dynamic_cast<QueryHeapObj*>(heapIn);
+    if (!heap || index >= heap->desc.Count ||
+        heap->desc.Type != D3D12_QUERY_HEAP_TYPE_OCCLUSION ||
+        (type != D3D12_QUERY_TYPE_OCCLUSION && type != D3D12_QUERY_TYPE_BINARY_OCCLUSION)) {
+        Log("BeginQuery rejected heap=%p type=%u index=%u",
+            heapIn, static_cast<unsigned>(type), index);
+        return;
+    }
+
+    Ptr<ID3D12QueryHeap> keep(heapIn);
+    Add([keep, index](ExecState& state) {
+        auto* queryHeap = dynamic_cast<QueryHeapObj*>(keep.Get());
+        if (!queryHeap || !state.dev || !state.c) return;
+        Ptr<ID3D11Query> query;
+        {
+            std::lock_guard<std::mutex> lock(queryHeap->mutex);
+            if (!queryHeap->queries[index]) {
+                D3D11_QUERY_DESC desc{D3D11_QUERY_OCCLUSION, 0};
+                const HRESULT result = state.dev->d11->CreateQuery(&desc, queryHeap->queries[index].Put());
+                if (FAILED(result)) {
+                    Log("BeginQuery could not create D3D11 occlusion query: hr=0x%08lx", result);
+                    return;
+                }
+            }
+            query = queryHeap->queries[index];
+        }
+        std::lock_guard<std::recursive_mutex> lock(state.dev->ctxLock);
+        state.c->Begin(query.Get());
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::EndQuery(ID3D12QueryHeap* heapIn, D3D12_QUERY_TYPE type, UINT index) {
+    auto* heap = dynamic_cast<QueryHeapObj*>(heapIn);
+    if (!heap || index >= heap->desc.Count) {
+        Log("EndQuery rejected heap=%p type=%u index=%u",
+            heapIn, static_cast<unsigned>(type), index);
+        return;
+    }
+
+    const bool timestamp = type == D3D12_QUERY_TYPE_TIMESTAMP;
+    const bool occlusion = type == D3D12_QUERY_TYPE_OCCLUSION ||
+        type == D3D12_QUERY_TYPE_BINARY_OCCLUSION;
+    if ((timestamp && heap->desc.Type != D3D12_QUERY_HEAP_TYPE_TIMESTAMP) ||
+        (occlusion && heap->desc.Type != D3D12_QUERY_HEAP_TYPE_OCCLUSION) ||
+        (!timestamp && !occlusion)) {
+        Log("EndQuery rejected incompatible heap/type heap-type=%u query-type=%u",
+            static_cast<unsigned>(heap->desc.Type), static_cast<unsigned>(type));
+        return;
+    }
+
+    Ptr<ID3D12QueryHeap> keep(heapIn);
+    Add([keep, index, timestamp](ExecState& state) {
+        auto* queryHeap = dynamic_cast<QueryHeapObj*>(keep.Get());
+        if (!queryHeap || !state.dev || !state.c) return;
+        if (timestamp) {
+            std::lock_guard<std::mutex> lock(queryHeap->mutex);
+            queryHeap->timestamps[index] = CurrentGpuTimestampNs();
+            return;
+        }
+        Ptr<ID3D11Query> query;
+        {
+            std::lock_guard<std::mutex> lock(queryHeap->mutex);
+            query = queryHeap->queries[index];
+        }
+        if (!query) {
+            Log("EndQuery has no matching D3D11 occlusion query at index=%u", index);
+            return;
+        }
+        std::lock_guard<std::recursive_mutex> lock(state.dev->ctxLock);
+        state.c->End(query.Get());
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::ResolveQueryData(ID3D12QueryHeap* heapIn, D3D12_QUERY_TYPE type,
+    UINT startIndex, UINT numQueries, ID3D12Resource* dstIn, UINT64 alignedDstBufferOffset) {
+    auto* heap = dynamic_cast<QueryHeapObj*>(heapIn);
+    auto* dst = dynamic_cast<Resource*>(dstIn);
+    if (!heap || !dst || !dst->IsBuffer() || !numQueries ||
+        startIndex >= heap->desc.Count || numQueries > heap->desc.Count - startIndex ||
+        alignedDstBufferOffset > dst->desc.Width || (alignedDstBufferOffset & 7)) {
+        Log("ResolveQueryData rejected heap=%p destination=%p start=%u count=%u offset=%llu",
+            heapIn, dstIn, startIndex, numQueries,
+            static_cast<unsigned long long>(alignedDstBufferOffset));
+        return;
+    }
+
+    size_t elementSize = sizeof(UINT64);
+    if (type == D3D12_QUERY_TYPE_PIPELINE_STATISTICS) {
+        elementSize = sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS);
+    } else if (type >= D3D12_QUERY_TYPE_SO_STATISTICS_STREAM0 &&
+               type <= D3D12_QUERY_TYPE_SO_STATISTICS_STREAM3) {
+        elementSize = sizeof(D3D12_QUERY_DATA_SO_STATISTICS);
+    }
+    const size_t payloadSize = static_cast<size_t>(numQueries) * elementSize;
+    if (payloadSize > dst->desc.Width - alignedDstBufferOffset) {
+        Log("ResolveQueryData result exceeds destination buffer");
+        return;
+    }
+
+    Ptr<ID3D12QueryHeap> heapKeep(heapIn);
+    Ptr<ID3D12Resource> dstKeep(dstIn);
+    Add([heapKeep, dstKeep, type, startIndex, numQueries, alignedDstBufferOffset,
+         payloadSize](ExecState& state) {
+        auto* queryHeap = dynamic_cast<QueryHeapObj*>(heapKeep.Get());
+        auto* destination = dynamic_cast<Resource*>(dstKeep.Get());
+        if (!queryHeap || !destination || !state.dev || !state.c) return;
+
+        std::vector<uint8_t> payload(payloadSize, 0);
+        if (type == D3D12_QUERY_TYPE_TIMESTAMP) {
+            std::lock_guard<std::mutex> lock(queryHeap->mutex);
+            auto* values = reinterpret_cast<UINT64*>(payload.data());
+            for (UINT i = 0; i < numQueries; ++i) {
+                UINT64 value = queryHeap->timestamps[startIndex + i];
+                if (!value) value = CurrentGpuTimestampNs();
+                values[i] = value;
+            }
+        } else if (type == D3D12_QUERY_TYPE_OCCLUSION ||
+                   type == D3D12_QUERY_TYPE_BINARY_OCCLUSION) {
+            std::lock_guard<std::recursive_mutex> contextLock(state.dev->ctxLock);
+            state.c->Flush();
+            auto* values = reinterpret_cast<UINT64*>(payload.data());
+            for (UINT i = 0; i < numQueries; ++i) {
+                Ptr<ID3D11Query> query;
+                {
+                    std::lock_guard<std::mutex> lock(queryHeap->mutex);
+                    query = queryHeap->queries[startIndex + i];
+                }
+                if (!query) {
+                    Log("ResolveQueryData has no D3D11 occlusion query at index=%u", startIndex + i);
+                    continue;
+                }
+                UINT64 value = 0;
+                const HRESULT result = WaitForQuery(state.dev, query.Get(), &value, sizeof(value));
+                if (FAILED(result)) {
+                    Log("ResolveQueryData occlusion query failed at index=%u: hr=0x%08lx",
+                        startIndex + i, result);
+                    continue;
+                }
+                values[i] = type == D3D12_QUERY_TYPE_BINARY_OCCLUSION ? (value ? 1 : 0) : value;
+            }
+        } else if (type != D3D12_QUERY_TYPE_PIPELINE_STATISTICS &&
+                   (type < D3D12_QUERY_TYPE_SO_STATISTICS_STREAM0 ||
+                    type > D3D12_QUERY_TYPE_SO_STATISTICS_STREAM3)) {
+            Log("ResolveQueryData query type %u is not implemented; writing zero results",
+                static_cast<unsigned>(type));
+        }
+
+        if (!destination->shadow.empty() &&
+            alignedDstBufferOffset <= destination->shadow.size() &&
+            payloadSize <= destination->shadow.size() - alignedDstBufferOffset) {
+            std::memcpy(destination->shadow.data() + alignedDstBufferOffset,
+                payload.data(), payloadSize);
+        }
+        if (destination->buf) {
+            std::lock_guard<std::recursive_mutex> lock(state.dev->ctxLock);
+            D3D11_BOX box{
+                static_cast<UINT>(alignedDstBufferOffset), 0, 0,
+                static_cast<UINT>(alignedDstBufferOffset + payloadSize), 1, 1
+            };
+            state.c->UpdateSubresource(destination->buf.Get(), 0, &box, payload.data(),
+                static_cast<UINT>(payloadSize), static_cast<UINT>(payloadSize));
+        }
+    });
+}
+
+void STDMETHODCALLTYPE CommandQueue::ExecuteCommandLists(UINT count, ID3D12CommandList* const* lists) {

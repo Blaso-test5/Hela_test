@@ -1,0 +1,137 @@
+Test-Case 'parameter sets: -RunManifestPath and -RestorePointPath together are refused' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    New-Install $game @{ 'd3d12.dll' = 'A' }
+    $r = Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = (Join-P $sb 'a.json'); RestorePointPath = (Join-P $sb 'b.json') }
+    Assert-True ($null -ne $r.Threw) 'binding error expected'
+    Assert-True ($null -eq $r.Json) 'no report'
+}
+
+Test-Case 'restore modern: DLLs and overrides directory originally absent -> Match when still absent' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    [void][System.IO.Directory]::CreateDirectory($game)
+    $m = Join-P $sb 'restore.json'
+    New-ModernRestore $m $game ([ordered]@{
+        'd3d12.dll' = [ordered]@{ present = $false; sha256 = $null }
+        'dxgi.dll'  = [ordered]@{ present = $false; sha256 = $null }
+    }) $false
+    $r = Invoke-Snapshot @{ GameDirectory = $game; RestorePointPath = $m; OverridesDirectoryName = $Ov }
+    Assert-Equal $r.ExitCode 0 'exit code'
+    Assert-Equal $r.Json.summary.verdict 'Match' 'verdict'
+    Assert-Equal $r.Json.reference.format 'restore-modern' 'format must be modern, not legacy'
+    $d = Find-Finding $r 'runtime' 'd3d12.dll'
+    Assert-Equal $d.status 'Match' 'd3d12 status'
+    Assert-Equal $d.expected.present $false 'd3d12 expected.present'
+    $dir = Find-Finding $r 'overridesDirectory' $Ov
+    Assert-Equal $dir.status 'Match' 'overrides dir status'
+    Assert-Equal $dir.expected.present $false 'overrides dir expected.present'
+}
+
+Test-Case 'restore modern: things that should be absent but exist are Extra' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    New-Install $game @{ 'd3d12.dll' = 'proxy left behind'; "$Ov\x.cso" = 'leftover' }
+    $m = Join-P $sb 'restore.json'
+    New-ModernRestore $m $game ([ordered]@{
+        'd3d12.dll' = [ordered]@{ present = $false; sha256 = $null }
+        'dxgi.dll'  = [ordered]@{ present = $false; sha256 = $null }
+    }) $false
+    $before = Get-Tree $game
+    $r = Invoke-Snapshot @{ GameDirectory = $game; RestorePointPath = $m; OverridesDirectoryName = $Ov }
+    Assert-Equal $r.ExitCode 1 'exit code'
+    Assert-Status $r 'runtime' 'd3d12.dll' 'Extra'
+    Assert-Status $r 'runtime' 'dxgi.dll' 'Match'
+    Assert-Status $r 'overridesDirectory' $Ov 'Extra'
+    Assert-Status $r 'override' 'x.cso' 'Extra'
+    Assert-Equal (Get-Tree $game) $before 'install tree unchanged (read-only)'
+}
+
+Test-Case 'restore modern: present with hashes matches; present without hash is NotAttestable (Inconclusive)' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    New-Install $game @{ 'd3d12.dll' = 'ORIG-D3D12'; 'dxgi.dll' = 'ORIG-DXGI'; "$Ov\a.cso" = 'AAA' }
+    $m = Join-P $sb 'restore.json'
+    New-ModernRestore $m $game ([ordered]@{
+        'd3d12.dll' = [ordered]@{ present = $true; sha256 = (Get-TextSha 'ORIG-D3D12') }
+        'dxgi.dll'  = [ordered]@{ present = $true; sha256 = $null }
+    }) $true @(, [ordered]@{ path = 'a.cso'; bytes = 3; sha256 = (Get-TextSha 'AAA') })
+    $r = Invoke-Snapshot @{ GameDirectory = $game; RestorePointPath = $m; OverridesDirectoryName = $Ov }
+    Assert-Equal $r.ExitCode 3 'exit code'
+    Assert-Equal $r.Json.summary.verdict 'Inconclusive' 'verdict'
+    Assert-Status $r 'runtime' 'd3d12.dll' 'Match'
+    Assert-Status $r 'runtime' 'dxgi.dll' 'NotAttestable'
+    Assert-Status $r 'overridesDirectory' $Ov 'Match'
+    Assert-Status $r 'override' 'a.cso' 'Match'
+}
+
+Test-Case 'restore modern: size mismatch with equal hash string is still reported' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    New-Install $game @{ 'd3d12.dll' = 'A'; 'dxgi.dll' = 'B'; "$Ov\a.cso" = 'AAA' }
+    $m = Join-P $sb 'restore.json'
+    New-ModernRestore $m $game ([ordered]@{
+        'd3d12.dll' = [ordered]@{ present = $true; sha256 = (Get-TextSha 'A') }
+        'dxgi.dll'  = [ordered]@{ present = $true; sha256 = (Get-TextSha 'B') }
+    }) $true @(, [ordered]@{ path = 'a.cso'; bytes = 999; sha256 = (Get-TextSha 'AAA') })
+    $r = Invoke-Snapshot @{ GameDirectory = $game; RestorePointPath = $m; OverridesDirectoryName = $Ov }
+    Assert-Equal $r.ExitCode 1 'exit code'
+    Assert-Status $r 'override' 'a.cso' 'Mismatch'
+}
+
+Test-Case 'restore modern: inconsistent manifest (dir absent but overrides listed) is rejected' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    [void][System.IO.Directory]::CreateDirectory($game)
+    $m = Join-P $sb 'restore.json'
+    New-ModernRestore $m $game ([ordered]@{
+        'd3d12.dll' = [ordered]@{ present = $false; sha256 = $null }
+        'dxgi.dll'  = [ordered]@{ present = $false; sha256 = $null }
+    }) $false @(, [ordered]@{ path = 'a.cso'; bytes = 3; sha256 = (Get-TextSha 'AAA') })
+    Assert-Rejected (Invoke-Snapshot @{ GameDirectory = $game; RestorePointPath = $m; OverridesDirectoryName = $Ov }) 'inconsistent restore manifest'
+}
+
+Test-Case 'restore legacy (real example): recognised as legacy; no claim of original absence' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    [void][System.IO.Directory]::CreateDirectory($game)
+    $m = Join-P $sb 'legacy.json'
+    [System.IO.File]::WriteAllText($m, $LegacyExample, $Utf8)
+    $r = Invoke-Snapshot @{ GameDirectory = $game; RestorePointPath = $m; OverridesDirectoryName = $Ov }
+    Assert-Equal $r.ExitCode 1 'exit code'
+    Assert-Equal $r.Json.reference.format 'restore-legacy' 'format'
+    $d = Find-Finding $r 'runtime' 'd3d12.dll'
+    Assert-Equal $d.status 'Missing' 'd3d12 status'
+    Assert-Equal $d.expected.present $true 'legacy string means present'
+    Assert-Equal $d.expected.sha256 '209c78ca0fa244228a967a6a98465cd625a92d1696fe6d1a68edc45cfdeaf062' 'legacy hash'
+    $dir = Find-Finding $r 'overridesDirectory' $Ov
+    Assert-Equal $dir.expected.present $true 'legacy semantics assume the directory present'
+    Assert-Equal $dir.status 'Missing' 'overrides dir status'
+    Assert-True ($dir.reason -match 'legacy') 'reason mentions the legacy assumption'
+    $ovr = @($r.Json.items | Where-Object { $_.category -eq 'override' })
+    Assert-Equal $ovr.Count 6 'six recorded overrides'
+    foreach ($o in $ovr) { Assert-Equal $o.status 'Missing' "status of $($o.name)" }
+    $absentClaims = @($r.Json.items | Where-Object { $null -ne $_.expected -and $_.expected.present -eq $false })
+    Assert-Equal $absentClaims.Count 0 'no item may claim "originally absent" from legacy data'
+    Assert-True ($r.Json.notes.Count -ge 1) 'legacy notes emitted'
+}
+
+Test-Case 'restore legacy: matching install is a Match, and format is not confused with modern' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    New-Install $game @{ 'd3d12.dll' = 'L-D3D12'; 'dxgi.dll' = 'L-DXGI'; "$Ov\a.cso" = 'AAA'; "$Ov\b.cso" = 'BBBB' }
+    $m = Join-P $sb 'legacy.json'
+    Write-Json $m ([ordered]@{
+        schema         = 'hela-proxy-restore/v1'
+        game_directory = $game
+        created_utc    = '2026-11-11T11:31:22.5341877Z'
+        runtime        = [ordered]@{ 'd3d12.dll' = (Get-TextSha 'L-D3D12'); 'dxgi.dll' = (Get-TextSha 'L-DXGI') }
+        overrides      = @(
+            [ordered]@{ path = 'a.cso'; bytes = 3; sha256 = (Get-TextSha 'AAA') },
+            [ordered]@{ path = 'b.cso'; bytes = 4; sha256 = (Get-TextSha 'BBBB') }
+        )
+    })
+    $r = Invoke-Snapshot @{ GameDirectory = $game; RestorePointPath = $m; OverridesDirectoryName = $Ov }
+    Assert-Equal $r.ExitCode 0 'exit code'
+    Assert-Equal $r.Json.summary.verdict 'Match' 'verdict'
+    Assert-Equal $r.Json.reference.format 'restore-legacy' 'format'
+    Assert-Equal $r.Json.summary.counts.Match 5 'two runtime + overrides dir + two overrides'
+}
+
+Test-Case 'restore point as directory + game_directory fallback; restore point stays untouched' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'; $rp = Join-P $sb 'restore-point'
+    [void][System.IO.Directory]::CreateDirectory($game)
+    New-Install $rp @{ 'backup\d3d12.dll' = 'whatever' }
+    New-ModernRestore (Join-P $rp 'restore-manifest.json') $game ([ordered]@{

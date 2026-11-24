@@ -1,0 +1,43 @@
+            Set-Content -LiteralPath (Join-Path $package "override-inventory.json") -Encoding UTF8
+
+        $report = [ordered]@{
+            ok = $true
+            lifecycle = "staged-only"
+            installed = $false
+            networkUsed = $false
+            manifestSha256 = $candidateHash
+        }
+        $report | ConvertTo-Json -Depth 6 |
+            Set-Content -LiteralPath (Join-Path $package "package-report.json") -Encoding UTF8
+
+        $manifestPath = Join-Path $root "run-manifest.json"
+        $manifest = [ordered]@{
+            schema = "hela-run-manifest/v1"
+            runtimeAttestation = "module-and-shader-sha256"
+            testVersion = "T-selftest"
+            runtime = [ordered]@{ d3d12 = $d3d12Hash; dxgi = $dxgiHash }
+            overrides = [ordered]@{ "a.cso" = $csoHash }
+            requiredOverrides = @("a.cso")
+        }
+        $manifest | ConvertTo-Json -Depth 6 |
+            Set-Content -LiteralPath $manifestPath -Encoding UTF8
+
+        $result = Assert-HelaPackageGate -PackagePath $package -RunManifestPath $manifestPath
+        Write-Output ([ordered]@{
+            ok = $true
+            lifecycle = "staged-only"
+            mutation_performed = $false
+            result = $result
+        } | ConvertTo-Json -Depth 8)
+    } finally {
+        Remove-Item -LiteralPath $root -Recurse -Force
+    }
+}
+
+if ($SelfTest) {
+    Invoke-SelfTest
+} elseif ($PackagePath -and $RunManifestPath) {
+    Assert-HelaPackageGate -PackagePath $PackagePath -RunManifestPath $RunManifestPath
+} else {
+    throw "Use -PackagePath and -RunManifestPath, or -SelfTest."
+}

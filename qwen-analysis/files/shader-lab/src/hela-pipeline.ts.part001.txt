@@ -1,0 +1,261 @@
+import { createHash } from "node:crypto";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import * as dxilAnalyzer from "./dxil-analyzer.js";
+import {
+  analyzeDisasm,
+  analyzeFiles,
+  compareShaderSignatures,
+  formatReport,
+  parseInputSignature,
+  parseOutputSignature,
+  type SigElement,
+} from "./dxil-analyzer.js";
+import { convertDxilToHlsl, fnv1a64 } from "./dxil-precompile.js";
+import { findFxc, run, type RunResult } from "./external.js";
+import { analyzeBmpFile, type BmpPixelAnalysis } from "./hela-bmp.js";
+import {
+  parseHelaProxyLogFile,
+  TARGET_INPUT_LAYOUT_DIAGNOSTIC_VS,
+  type ExecutedGraphicsPair,
+  type HelaProxyLogReport,
+  type RankedPlaceholderShader,
+  type ReadbackDrawCorrelationAssessment,
+  type SampledReadbackRecord,
+  type TargetInputLayoutElement,
+} from "./hela-log-parser.js";
+
+export interface HelaLaunchProfile {
+  name: string;
+  sha256: string;
+  environment: Record<string, string>;
+  arguments: string[];
+  attestation: {
+    maskedNvidiaAdapter?: boolean;
+    tiledResourcesTier?: number;
+    callerTrace?: boolean;
+  };
+}
+
+export interface HelaRunManifestV1 {
+  schema: "hela-run-manifest/v1";
+  runtimeAttestation: "module-and-shader-sha256";
+  testVersion: string;
+  runtime: {
+    d3d12: string;
+    dxgi: string;
+  };
+  overrides: Record<string, string>;
+  requiredOverrides: string[];
+  launchProfile?: HelaLaunchProfile;
+}
+
+export type ShaderStageOutcome =
+  | "pair-validated"
+  | "compiled-candidate"
+  | "compiled-unpaired"
+  | "pair-incomplete"
+  | "pair-conflict"
+  | "pair-failed"
+  | "input-layout-failed"
+  | "blocked"
+  | "failed"
+  | "skipped";
+
+export interface StagedShaderEntry {
+  hash: string;
+  stage: string;
+  inputPath: string;
+  disasmPath?: string;
+  autoDisassembled: boolean;
+  status: ShaderStageOutcome;
+  includedInManifest: boolean;
+  csoPath?: string;
+  csoSha256?: string;
+  sharedByMultipleVs: boolean;
+  pairedVsHashes: string[];
+  validatedAgainstVs: string[];
+  missingPairedVsDisasm: string[];
+  missingPairedVsCso: string[];
+  inputLayoutCheck: "diagnostic-vs-passed" | "diagnostic-vs-failed" | "not-covered-by-proxy-log";
+  registerMap: Array<{ from: string; to: string }>;
+  warnings: string[];
+  message: string;
+}
+
+export interface BuildHelaStageOptions {
+  dumpDir: string;
+  stagingDir: string;
+  logPath?: string;
+  baselineManifestPath?: string;
+  baselineOverridesDir?: string;
+  runtimeDir?: string;
+  bindingMapPath?: string;
+  testVersion?: string;
+  autoDisassemble?: boolean;
+  requirePairValidationForPs?: boolean;
+  enableDumpInCandidateManifest?: boolean;
+  /** Se true, aggiunge i nuovi candidati validati anche a `requiredOverrides` (preservando sempre quelli del baseline). Default: false. */
+  addNewCandidatesToRequiredOverrides?: boolean;
+  onlyHashes?: string[];
+  dxcPath?: string;
+}
+
+export interface BuildHelaStageDependencies {
+  converter?: typeof convertDxilToHlsl;
+  runner?: typeof run;
+  fxcPath?: () => string;
+  dxcPath?: () => string;
+  packageGate?: (stagingDir: string, opts?: { mode?: "build" | "check" }) => Promise<HelaPackageGateReport>;
+}
+
+export interface BuildHelaStageReport {
+  stagingDir: string;
+  overridesDir: string;
+  manifestPath?: string;
+  reportJsonPath: string;
+  reportMarkdownPath: string;
+  logAnalyzed: boolean;
+  counts: Record<ShaderStageOutcome, number>;
+  baselineOverridesPreserved: number;
+  newCandidatesIncluded: number;
+  unmappedRegisterSpaces: Array<{ hash: string; stage: string; bindings: string[] }>;
+  entries: StagedShaderEntry[];
+  packageGate?: HelaPackageGateReport;
+  disclaimer: string;
+}
+
+export interface HelaPackageGateReport {
+  schemaVersion: number;
+  tool: string;
+  toolVersion: string;
+  mode: "build" | "check";
+  stagingDir: string;
+  packageId: string | null;
+  ok: boolean;
+  lifecycle: "staged-only";
+  installed: boolean;
+  networkUsed: boolean;
+  issues: Array<{ code: string; message: string; [key: string]: unknown }>;
+  warnings: Array<{ code: string; message: string; [key: string]: unknown }>;
+  [key: string]: unknown;
+}
+
+export interface PlanManifestPatchOptions {
+  baselineManifestPath: string;
+  stagingOverridesDir: string;
+  outManifestPath: string;
+  testVersion: string;
+  dumpShaders?: boolean;
+  addNewCandidatesToRequiredOverrides?: boolean;
+}
+
+export interface PlanManifestPatchResult {
+  written: string;
+  testVersion: string;
+  baselineOverrideCount: number;
+  totalOverrides: number;
+  addedOverrides: string[];
+  unchangedBaselineOverrides: number;
+  requiredOverridesCount: number;
+  launchProfileSha256?: string;
+  disclaimer: string;
+}
+
+export type HelaRunVerdict =
+  | "attestation-failed"
+  | "present-not-reached"
+  | "present-reached-readback-missing"
+  | "present-reached-black-readback"
+  | "present-reached-nonzero-pixels-observed";
+
+export interface VerifyHelaRunOptions {
+  runDir: string;
+  logPath?: string;
+  manifestPath?: string;
+  bmpPaths?: string[];
+  targetPresent?: number;
+}
+
+export interface VerifyHelaRunReport {
+  runDir: string;
+  verdict: HelaRunVerdict;
+  testVersion?: string;
+  attestationPassed: boolean;
+  attestationFailures: string[];
+  missingRequiredOverrides: string[];
+  presentStatus: {
+    reached: boolean;
+    maxObservedPresent: number;
+    maxHeartbeatPresent: number;
+    maxReadbackPresent: number;
+    targetPresent?: number;
+    targetPresentReached?: boolean;
+  };
+  bmpReadbackStatus: "missing" | "invalid" | "black-readback" | "nonzero-pixels-observed";
+  bmpPathsNotMatchingTarget: string[];
+  bmps: BmpPixelAnalysis[];
+  sampledReadbacksFromLog: SampledReadbackRecord[];
+  /**
+   * L'analisi BMP automatica non dimostra mai da sola che il menu sia renderizzato correttamente:
+   * pixel non neri possono provenire da loghi pre-menu, clear, artefatti o altri pass.
+   */
+  menuValidated: false;
+  menuValidationBoundary: string;
+  logSummary: HelaProxyLogReport["summary"];
+  executedGraphicsPairs: ExecutedGraphicsPair[];
+  readbackCorrelations: ReadbackDrawCorrelationAssessment[];
+  placeholdersPreview: RankedPlaceholderShader[];
+  explanation: string;
+}
+
+const PROFILE_BY_STAGE: Record<string, string> = {
+  vs: "vs_5_0",
+  ps: "ps_5_0",
+  gs: "gs_5_0",
+  hs: "hs_5_0",
+  ds: "ds_5_0",
+  cs: "cs_5_0",
+};
+
+const STAGE_ORDER: Record<string, number> = {
+  vs: 0,
+  cs: 1,
+  gs: 2,
+  hs: 3,
+  ds: 4,
+  ps: 5,
+};
+
+const CANDIDATE_DISCLAIMER =
+  "La compilazione FXC e la validazione delle firme VS/PS non dimostrano equivalenza semantica né rendering corretto: " +
+  "gli output restano candidati di staging finché non superano ProxyManager.ps1 e una run Hela autorizzata con readback correlato.";
+
+const MENU_VALIDATION_BOUNDARY =
+  "Pixel non neri osservati in un BMP readback NON equivalgono a menu validato: " +
+  "occorrono correlazione causale draw/risorsa sul path del backbuffer e ispezione visiva della schermata di menu.";
+
+const HEX64 = /^[0-9a-fA-F]{64}$/;
+const CSO_NAME = /^[^\\/:*?"<>|]+\.cso$/i;
+const PROTECTED_PATH_SEGMENTS = ["d3d12on11patch", "binaries\\win64", "binaries/win64"];
+
+export function sha256Buffer(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+/**
+ * Replica esatta di `Get-LaunchEnvironmentSha256` in `ProxyManager.ps1`:
+ * ordina le chiavi `D3D12ON11_*`, formatta `KEY=VALUE\n`, calcola SHA-256 hex lowercase.
+ */
+export function computeLaunchEnvironmentSha256(environment: Record<string, string>): string {
+  const keys = Object.keys(environment).sort((a, b) => a.localeCompare(b, "en", { sensitivity: "case" }));
+  const canonical = keys.map((k) => `${k}=${environment[k]}`).join("\n") + "\n";
+  return createHash("sha256").update(canonical, "utf8").digest("hex");
+}
+
+/** Cerca dxc.exe: override esplicito, DXC_PATH, Windows SDK, poi PATH. */
+export function findDxc(overridePath?: string): string {
+  if (overridePath?.trim()) return overridePath.trim();
+  if (process.env.DXC_PATH) return process.env.DXC_PATH;

@@ -1,0 +1,65 @@
+      `[12:00:01.109] [tid=100] SHADER PLACEHOLDER stage=PS hash=${psConflictHash} reason=no-usable-SM5-bytecode DXBC=1 DXIL=1 action=provide-sm5-override overrides=o\\${psConflictHash}.cso`,
+      `[12:00:01.110] [tid=100] SHADER BEGIN stage=CS hash=${csWaveHash} bytes=${csWave.length} DXBC=1 DXIL=1 legacy=0 model=6_7 RTS0=1`,
+      `[12:00:01.111] [tid=100] SHADER PLACEHOLDER stage=CS hash=${csWaveHash} reason=no-usable-SM5-bytecode DXBC=1 DXIL=1 action=provide-sm5-override overrides=o\\${csWaveHash}.cso`,
+      // PSO GRAPHICS: psCompatHash condiviso da vsA + vsB (firme compatibili)
+      `[12:00:02.001] [tid=100] PSO GRAPHICS #1 READY status=placeholder-missing-sm5-override pso=00000100 missing_mask=0x03 VS=${vsAHash}/${vsA.length} PS=${psCompatHash}/${psSharedCompat.length} GS=0000000000000000/0 HS=0000000000000000/0 DS=0000000000000000/0 d11_vs=0 d11_ps=0 d11_il=0`,
+      `[12:00:02.002] [tid=100] PSO GRAPHICS #2 READY status=placeholder-missing-sm5-override pso=00000200 missing_mask=0x03 VS=${vsBHash}/${vsB.length} PS=${psCompatHash}/${psSharedCompat.length} GS=0000000000000000/0 HS=0000000000000000/0 DS=0000000000000000/0 d11_vs=0 d11_ps=0 d11_il=0`,
+      // psIncompleteHash condiviso da vsA (presente) + vsMissingHash (assente nel dump!)
+      `[12:00:02.003] [tid=100] PSO GRAPHICS #3 READY status=placeholder-missing-sm5-override pso=00000300 missing_mask=0x03 VS=${vsAHash}/${vsA.length} PS=${psIncompleteHash}/${psSharedIncomplete.length} GS=0000000000000000/0 HS=0000000000000000/0 DS=0000000000000000/0 d11_vs=0 d11_ps=0 d11_il=0`,
+      `[12:00:02.004] [tid=100] PSO GRAPHICS #4 READY status=placeholder-missing-sm5-override pso=00000400 missing_mask=0x03 VS=${vsMissingHash}/${vsMissing.length} PS=${psIncompleteHash}/${psSharedIncomplete.length} GS=0000000000000000/0 HS=0000000000000000/0 DS=0000000000000000/0 d11_vs=0 d11_ps=0 d11_il=0`,
+      // psConflictHash condiviso da vsA (COLOR0) + vsBadOut (TEXCOORD0) -> conflitto firme multi-VS!
+      `[12:00:02.005] [tid=100] PSO GRAPHICS #5 READY status=placeholder-missing-sm5-override pso=00000500 missing_mask=0x03 VS=${vsAHash}/${vsA.length} PS=${psConflictHash}/${psSharedConflict.length} GS=0000000000000000/0 HS=0000000000000000/0 DS=0000000000000000/0 d11_vs=0 d11_ps=0 d11_il=0`,
+      `[12:00:02.006] [tid=100] PSO GRAPHICS #6 READY status=placeholder-missing-sm5-override pso=00000600 missing_mask=0x03 VS=${vsBadOutHash}/${vsBadOut.length} PS=${psConflictHash}/${psSharedConflict.length} GS=0000000000000000/0 HS=0000000000000000/0 DS=0000000000000000/0 d11_vs=0 d11_ps=0 d11_il=0`,
+      // Campi REALI di util.cpp: draw_commands, rtv_is_backbuffer, dispatch_commands
+      `[12:00:03.000] [tid=101] [RENDER_TRACE] [HEARTBEAT] tid=101 up=3000ms last-api=Present(tid=100,ago=5ms) exec=50 sig=50 wait=50 wctx=10(fail=0,max-spin=0) swap=1 present=1400 pso(G=4,C=1,last=0000000000000000) draw(ok=12,rtv=12,bb=0,nullrtv=0,skip-pso=0,skip-vs=0,skip-other=0,skip-vb=0,skip-ib=0,skip-map=0,missing-vb=0,missing-ib=0) disp(ok=0,skip-pso=0,skip-cs=15) placed(ok=0,ovl=0,rel=0,live=0)`,
+      `[12:00:03.001] [tid=101] [SHADER_USE_SUMMARY] window=since_previous_heartbeat present_calls_process_wide=1400 draw_commands=52 dispatch_commands=15 groups=2 omitted_groups=0 omitted_draw_commands=0 omitted_dispatch_commands=0 overflow_draw_commands=0 overflow_dispatch_commands=0`,
+      `[12:00:03.002] [tid=101] [DRAW_SHADER_USE] outcome=executed vs=20e0826b236597a1 ps=44b0a992c2304254 gs=0000000000000000 hs=0000000000000000 ds=0000000000000000 missing_mask=0x00 graphics_pso_bound=1 rtv_is_backbuffer=1 draw_commands=40 first_observed_present_count_process_wide=100 last_observed_present_count_process_wide=1400`,
+      `[12:00:03.003] [tid=101] [DRAW_SHADER_USE] outcome=skipped vs=${vsAHash} ps=${psCompatHash} gs=0000000000000000 hs=0000000000000000 ds=0000000000000000 missing_mask=0x03 graphics_pso_bound=1 rtv_is_backbuffer=0 draw_commands=12 first_observed_present_count_process_wide=1200 last_observed_present_count_process_wide=1400`,
+      `[12:00:03.004] [tid=101] [COMPUTE_SHADER_USE] outcome=skipped cs=${csWaveHash} missing_mask=0x20 dispatch_commands=15 first_observed_present_count_process_wide=10 last_observed_present_count_process_wide=1400`,
+      // Campi REALI di commands.cpp e dxgi_proxy.cpp
+      `[12:00:03.100] [tid=100] [TARGET_DRAW_COPY] draw_index=88 api=DrawIndexedInstanced rtv_slot=0 tracked_rtv_resource=000001A000002000 vs=20e0826b236597a1 ps=44b0a992c2304254 latest_copy_sequence_at_draw=6 latest_copy_source_at_draw=000001A000002000`,
+      `[12:00:03.110] [tid=100] [COPY_TO_BB] CopyResource source=000001A000009000 source_texture=000001A000002000 dimension=3 width=1280 height=720 format=87 sequence=7`,
+      `[12:00:03.120] [tid=100] [BB_SOURCE_HISTORY_SNAPSHOT] present=1400 resources=1`,
+      `[12:00:03.121] [tid=100] [BB_SOURCE_HISTORY] Resource 000001A000002000 operations=1 draws=1 skipped=0 clears=0`,
+      `[12:00:03.122] [tid=100] [BB_SOURCE_HISTORY]   Draw #88 api=DrawIndexedInstanced indexed=1 rtv_slot=0 pso=00000500 vs_hash=20e0826b236597a1 ps_hash=44b0a992c2304254 elements=6 instances=1 viewport=0,0,1280x720`,
+      `[12:00:03.130] [tid=100] [READBACK_IDENTITY] readback_present_count=1400 buffer_index=0 native_backbuffer=000001A000001000 width=1280 height=720 format=87 copy_sequence=7 copy_source=000001A000002000`,
+      `[12:00:03.131] [tid=100] [READBACK_SRC] Present #1400 size=1280x720 format=87 buffer=0`,
+      `[12:00:03.132] [tid=100] [READBACK_SRC]   Non-black pixels: 0/100 (0.0%)`,
+    ].join("\n");
+
+    const parsed = parseHelaProxyLog(realisticLog);
+    assert.equal(parsed.attestation.maskedNvidiaAdapter, true);
+    assert.equal(parsed.attestation.tiledResourcesTier, 3);
+    assert.equal(parsed.attestation.callerTrace, false);
+    assert.equal(parsed.presentProgress.maxObservedPresent, 1400);
+    assert.equal(parsed.drawShaderUse.length, 2);
+    assert.equal(parsed.drawShaderUse[0].drawCommands, 40);
+    assert.equal(parsed.drawShaderUse[0].rtvIsBackbuffer, true);
+    assert.equal(parsed.computeShaderUse.length, 1);
+    assert.equal(parsed.computeShaderUse[0].dispatchCommands, 15);
+    assert.equal(parsed.executedGraphicsPairs.length, 1);
+    assert.equal(parsed.executedGraphicsPairs[0].vsHash, "20e0826b236597a1");
+    assert.equal(parsed.targetInputLayoutCoverage.scope, "diagnostic-vs-20e0826b236597a1-only");
+    assert.equal(parsed.targetInputLayoutCoverage.elements.length, 1);
+    assert.equal(parsed.readbackIdentities.length, 1);
+    assert.equal(parsed.readbackIdentities[0].readbackPresentCount, 1400);
+    assert.equal(parsed.readbackIdentities[0].copySequence, 7);
+    assert.equal(parsed.readbackIdentities[0].copySource, "0x000001a000002000");
+    assert.equal(parsed.targetDrawCopies.length, 1);
+    assert.equal(parsed.targetDrawCopies[0].latestCopySequenceAtDraw, 6);
+    assert.equal(parsed.readbackCorrelations.length, 1);
+    assert.equal(parsed.readbackCorrelations[0].status, "candidate-only-not-proven");
+    assert.equal(parsed.readbackCorrelations[0].causalProofEstablished, false, "non simulare prova causale non dimostrata");
+    assert.deepEqual(parsed.readbackCorrelations[0].candidateDrawIndices, [88]);
+    assert.equal(parsed.readbackCorrelations[0].matchedCopyToBbSequence, true);
+    assert.equal(parsed.sampledReadbacks.length, 1);
+    assert.equal(parsed.sampledReadbacks[0].nonBlackSamples, 0);
+
+    // 5. Pipeline PSO-aware: distingue PS condiviso compatibile vs PS con VS mancante (pair-incomplete!) vs Wave blocked
+    const dumpDir = path.join(tmp, "dump");
+    const baselineDir = path.join(tmp, "baseline-profile");
+    const baselineOverridesDir = path.join(baselineDir, "overrides");
+    const stagingDir = path.join(tmp, "staging-v2");
+    fs.mkdirSync(dumpDir, { recursive: true });
+    fs.mkdirSync(baselineOverridesDir, { recursive: true });
+

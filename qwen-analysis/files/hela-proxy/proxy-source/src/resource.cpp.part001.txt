@@ -1,0 +1,171 @@
+#include "types.h"
+
+namespace {
+
+bool CopyBufferPrefix(ID3D11DeviceContext* context, ID3D11Buffer* destination,
+    ID3D11Buffer* source, UINT byteWidth) {
+    if (!context || !destination || !source || !byteWidth) return false;
+    D3D11_BUFFER_DESC destinationDesc{};
+    D3D11_BUFFER_DESC sourceDesc{};
+    destination->GetDesc(&destinationDesc);
+    source->GetDesc(&sourceDesc);
+    if (byteWidth > destinationDesc.ByteWidth || byteWidth > sourceDesc.ByteWidth)
+        return false;
+    D3D11_BOX box{};
+    box.right = byteWidth;
+    box.bottom = 1;
+    box.back = 1;
+    context->CopySubresourceRegion(destination, 0, 0, 0, 0, source, 0, &box);
+    return true;
+}
+
+UINT BindFlags(const D3D12_RESOURCE_DESC& desc) {
+    if (desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER) {
+        UINT flags = D3D11_BIND_SHADER_RESOURCE;
+        if (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) flags |= D3D11_BIND_RENDER_TARGET;
+        if (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) flags |= D3D11_BIND_DEPTH_STENCIL;
+        if (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) flags |= D3D11_BIND_UNORDERED_ACCESS;
+        return flags;
+    }
+
+    UINT flags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER;
+    if (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) flags |= D3D11_BIND_UNORDERED_ACCESS;
+    return flags;
+}
+
+HRESULT CreateBuffer(Resource* resource) {
+    if (resource->desc.Width == 0 || resource->desc.Width > UINT_MAX) return E_INVALIDARG;
+    if (resource->tiled) {
+        if (resource->heap != D3D12_HEAP_TYPE_DEFAULT) return E_INVALIDARG;
+        D3D11_BUFFER_DESC bufferDesc{};
+        bufferDesc.Usage = D3D11_USAGE_DEFAULT;
+        bufferDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        if (resource->desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
+            bufferDesc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+
+        const UINT64 alignedRequested = AlignUp(resource->desc.Width,
+            D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
+        std::vector<UINT> candidates;
+        if (alignedRequested <= 0x7fff0000ull)
+            candidates.push_back(static_cast<UINT>(alignedRequested));
+        constexpr UINT kStepBytes = 64u * 1024u * 1024u;
+        const UINT maxCandidate = static_cast<UINT>(std::min<UINT64>(
+            alignedRequested, 1024ull * 1024ull * 1024ull));
+        for (UINT candidate = (maxCandidate / kStepBytes) * kStepBytes;
+             candidate >= kStepBytes; candidate -= kStepBytes) {
+            if (candidate < alignedRequested) candidates.push_back(candidate);
+            if (candidate == kStepBytes) break;
+        }
+        candidates.push_back(D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
+
+        const UINT miscCandidates[] = {
+            D3D11_RESOURCE_MISC_TILED | D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS,
+            D3D11_RESOURCE_MISC_TILED
+        };
+        HRESULT result = E_INVALIDARG;
+        for (UINT misc : miscCandidates) {
+            bufferDesc.MiscFlags = misc;
+            for (UINT candidate : candidates) {
+                bufferDesc.ByteWidth = candidate;
+                result = resource->dev->d11->CreateBuffer(&bufferDesc, nullptr, resource->buf.Put());
+                if (SUCCEEDED(result)) break;
+            }
+            if (SUCCEEDED(result)) break;
+        }
+        if (FAILED(result)) {
+            Log("CreateBuffer tiled failed requested-width=%llu hr=0x%08lx",
+                static_cast<unsigned long long>(resource->desc.Width), result);
+            return result;
+        }
+        resource->nativeWidth = bufferDesc.ByteWidth;
+        Log("CreateBuffer tiled succeeded requested-width=%llu native-width=%u bind=0x%x misc=0x%x",
+            static_cast<unsigned long long>(resource->desc.Width),
+            bufferDesc.ByteWidth, bufferDesc.BindFlags, bufferDesc.MiscFlags);
+        return S_OK;
+    }
+
+    const UINT byteWidth = static_cast<UINT>(resource->desc.Width);
+    resource->nativeWidth = byteWidth;
+    if (resource->heap != D3D12_HEAP_TYPE_DEFAULT) {
+        try {
+            resource->shadow.assign(byteWidth, 0);
+        } catch (const std::bad_alloc&) {
+            return E_OUTOFMEMORY;
+        }
+    }
+
+    if (resource->heap == D3D12_HEAP_TYPE_READBACK) {
+        D3D11_BUFFER_DESC bufferDesc{};
+        bufferDesc.ByteWidth = byteWidth;
+        bufferDesc.Usage = D3D11_USAGE_DEFAULT;
+        const HRESULT bufferResult = resource->dev->d11->CreateBuffer(&bufferDesc, nullptr, resource->buf.Put());
+        if (FAILED(bufferResult)) return bufferResult;
+        D3D11_BUFFER_DESC stagingDesc{};
+        stagingDesc.ByteWidth = byteWidth;
+        stagingDesc.Usage = D3D11_USAGE_STAGING;
+        stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+        return resource->dev->d11->CreateBuffer(&stagingDesc, nullptr, resource->staging.Put());
+    }
+
+    D3D11_BUFFER_DESC bufferDesc{};
+    bufferDesc.ByteWidth = byteWidth;
+    bufferDesc.Usage = D3D11_USAGE_DEFAULT;
+    bufferDesc.BindFlags = BindFlags(resource->desc);
+    bufferDesc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS |
+        D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+    const HRESULT result = resource->dev->d11->CreateBuffer(&bufferDesc, nullptr, resource->buf.Put());
+    if (FAILED(result)) return result;
+
+    if (resource->heap == D3D12_HEAP_TYPE_UPLOAD && byteWidth)
+        resource->dev->ctx->UpdateSubresource(resource->buf.Get(), 0, nullptr, resource->shadow.data(), 0, 0);
+    return S_OK;
+}
+
+HRESULT CreateTexture(Resource* resource) {
+    if (resource->heap != D3D12_HEAP_TYPE_DEFAULT) return E_NOTIMPL;
+
+    const UINT bindFlags = BindFlags(resource->desc);
+    switch (resource->desc.Dimension) {
+    case D3D12_RESOURCE_DIMENSION_TEXTURE1D: {
+        D3D11_TEXTURE1D_DESC d{};
+        d.Width = static_cast<UINT>(resource->desc.Width);
+        d.MipLevels = resource->desc.MipLevels;
+        d.ArraySize = resource->desc.DepthOrArraySize;
+        d.Format = resource->desc.Format;
+        d.Usage = D3D11_USAGE_DEFAULT;
+        d.BindFlags = bindFlags;
+        Ptr<ID3D11Texture1D> texture;
+        const HRESULT result = resource->dev->d11->CreateTexture1D(&d, nullptr, texture.Put());
+        if (SUCCEEDED(result)) {
+            ID3D11Resource* base = texture.Get();
+            base->AddRef();
+            resource->tex = Ptr<ID3D11Resource>::Attach(base);
+        }
+        return result;
+    }
+    case D3D12_RESOURCE_DIMENSION_TEXTURE2D: {
+        D3D11_TEXTURE2D_DESC d{};
+        d.Width = static_cast<UINT>(resource->desc.Width);
+        d.Height = resource->desc.Height;
+        d.MipLevels = resource->desc.MipLevels;
+        d.ArraySize = resource->desc.DepthOrArraySize;
+        d.Format = resource->desc.Format;
+        d.SampleDesc.Count = resource->desc.SampleDesc.Count;
+        d.SampleDesc.Quality = resource->desc.SampleDesc.Quality;
+        d.Usage = D3D11_USAGE_DEFAULT;
+        d.BindFlags = bindFlags;
+        if (resource->tiled) d.MiscFlags |= D3D11_RESOURCE_MISC_TILED;
+        if (d.Width == d.Height && d.ArraySize >= 6 && (d.ArraySize % 6) == 0 && d.SampleDesc.Count == 1)
+            d.MiscFlags |= D3D11_RESOURCE_MISC_TEXTURECUBE;
+        if (resource->desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER) return E_NOTIMPL;
+        Ptr<ID3D11Texture2D> texture;
+        if (Cfg().traceCallers) {
+            Log("CreateTexture2D begin width=%u height=%u mips=%u array=%u format=%u sample=%u bind=0x%x misc=0x%x tiled=%u",
+                d.Width, d.Height, d.MipLevels, d.ArraySize, d.Format, d.SampleDesc.Count,
+                d.BindFlags, d.MiscFlags, resource->tiled);
+        }
+        HRESULT result = resource->dev->d11->CreateTexture2D(&d, nullptr, texture.Put());
+        if (FAILED(result) && (d.MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE)) {
+            d.MiscFlags &= ~D3D11_RESOURCE_MISC_TEXTURECUBE;
+            result = resource->dev->d11->CreateTexture2D(&d, nullptr, texture.Put());
+        }

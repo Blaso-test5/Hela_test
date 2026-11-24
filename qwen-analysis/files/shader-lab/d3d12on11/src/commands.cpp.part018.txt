@@ -1,0 +1,167 @@
+                regions[i].Width, regions[i].Height, regions[i].Depth});
+        }
+        for (UINT i = 0; i < rangeCount; ++i) {
+            const UINT range = static_cast<UINT>(rangeFlags[i]);
+            if (range != D3D12_TILE_RANGE_FLAG_NONE && range != D3D12_TILE_RANGE_FLAG_NULL &&
+                range != D3D12_TILE_RANGE_FLAG_SKIP &&
+                range != D3D12_TILE_RANGE_FLAG_REUSE_SINGLE_TILE) {
+                Log("Rejected UpdateTileMappings request with unsupported range flag 0x%x", range);
+                return;
+            }
+            nativeRangeFlags.push_back(range);
+            if (!heap && range != D3D12_TILE_RANGE_FLAG_NULL &&
+                range != D3D12_TILE_RANGE_FLAG_SKIP) {
+                Log("Rejected UpdateTileMappings request that maps tiles without a tile-pool heap");
+                return;
+            }
+        }
+    } catch (const std::bad_alloc&) {
+        Log("UpdateTileMappings could not allocate mapping arrays");
+        return;
+    }
+
+    Ptr<ID3D11Buffer> tilePool;
+    if (heap) {
+        ID3D11Buffer* nativePool = nullptr;
+        const HRESULT poolResult = heap->GetTilePool(&nativePool);
+        if (FAILED(poolResult)) {
+            Log("UpdateTileMappings could not create tile pool: hr=0x%08lx", poolResult);
+            return;
+        }
+        tilePool = Ptr<ID3D11Buffer>::Attach(nativePool);
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(dev->ctxLock);
+    const HRESULT result = dev->ctx2->UpdateTileMappings(texture->Raw(), regionCount,
+        nativeCoordinates.data(), nativeRegions.data(), tilePool.Get(), rangeCount,
+        nativeRangeFlags.data(), nativeHeapOffsets.empty() ? nullptr : nativeHeapOffsets.data(),
+        rangeTileCounts, static_cast<UINT>(flags));
+    if (FAILED(result))
+        Log("UpdateTileMappings failed: hr=0x%08lx", result);
+    else
+        Log("UpdateTileMappings completed resource-regions=%u heap-ranges=%u tile-pool=%s",
+            regionCount, rangeCount, tilePool ? "present" : "none");
+}
+
+void STDMETHODCALLTYPE CommandQueue::CopyTileMappings(ID3D12Resource* destination,
+    const D3D12_TILED_RESOURCE_COORDINATE* destinationCoordinate, ID3D12Resource* source,
+    const D3D12_TILED_RESOURCE_COORDINATE* sourceCoordinate,
+    const D3D12_TILE_REGION_SIZE* region, D3D12_TILE_MAPPING_FLAGS flags) {
+    TraceApi("CommandQueue::CopyTileMappings");
+    auto* dst = AsResource(destination);
+    auto* src = AsResource(source);
+    if (!dev->ctx2 || !dst || !src || !dst->tiled || !src->tiled ||
+        !destinationCoordinate || !sourceCoordinate || !region ||
+        (static_cast<UINT>(flags) & ~D3D12_TILE_MAPPING_FLAG_NO_HAZARD) != 0) {
+        Log("Rejected invalid CopyTileMappings request");
+        return;
+    }
+    const D3D11_TILED_RESOURCE_COORDINATE nativeDestination{
+        destinationCoordinate->X, destinationCoordinate->Y,
+        destinationCoordinate->Z, destinationCoordinate->Subresource
+    };
+    const D3D11_TILED_RESOURCE_COORDINATE nativeSource{
+        sourceCoordinate->X, sourceCoordinate->Y, sourceCoordinate->Z,
+        sourceCoordinate->Subresource
+    };
+    const D3D11_TILE_REGION_SIZE nativeRegion{
+        region->NumTiles, region->UseBox, region->Width, region->Height, region->Depth
+    };
+    std::lock_guard<std::recursive_mutex> lock(dev->ctxLock);
+    const HRESULT result = dev->ctx2->CopyTileMappings(dst->Raw(), &nativeDestination,
+        src->Raw(), &nativeSource, &nativeRegion, static_cast<UINT>(flags));
+    if (FAILED(result))
+        Log("CopyTileMappings failed: hr=0x%08lx", result);
+    else
+        Log("CopyTileMappings completed");
+}
+
+HRESULT STDMETHODCALLTYPE CommandQueue::Signal(ID3D12Fence* sourceFence, UINT64 value) {
+    TraceApi("CommandQueue::Signal");
+    if (Cfg().diagnosticRenderTrace)
+        TraceStats().signalCount.fetch_add(1, std::memory_order_relaxed);
+    auto* fence = AsFence(sourceFence);
+    if (!fence) {
+        if (Cfg().diagnosticRenderTrace)
+            Log("[RENDER_TRACE] [tid=%lu] Signal invalid fence=%p value=%llu hr=0x%08lx",
+                GetCurrentThreadId(), sourceFence, static_cast<unsigned long long>(value), E_INVALIDARG);
+        return E_INVALIDARG;
+    }
+    if (Cfg().diagnosticRenderTrace)
+        Log("[RENDER_TRACE] [tid=%lu] Signal begin fence=%p value=%llu",
+            GetCurrentThreadId(), fence, static_cast<unsigned long long>(value));
+    std::lock_guard<std::recursive_mutex> lock(dev->ctxLock);
+    const HRESULT result = WaitForContext(dev);
+    TraceApi("CommandQueue::Signal");
+    if (SUCCEEDED(result)) fence->CompleteTo(value);
+    const HRESULT signalResult = FAILED(result) ? result : S_OK;
+    if (Cfg().diagnosticRenderTrace)
+        Log("[RENDER_TRACE] [tid=%lu] Signal fence=%p value=%llu hr=0x%08lx",
+            GetCurrentThreadId(), fence, static_cast<unsigned long long>(value), signalResult);
+    return signalResult;
+}
+
+HRESULT STDMETHODCALLTYPE CommandQueue::Wait(ID3D12Fence* sourceFence, UINT64 value) {
+    TraceApi("CommandQueue::Wait");
+    const bool trace = Cfg().diagnosticRenderTrace;
+    if (trace) TraceStats().waitCount.fetch_add(1, std::memory_order_relaxed);
+    auto* fence = AsFence(sourceFence);
+    if (!fence) {
+        if (trace)
+            Log("[RENDER_TRACE] [tid=%lu] Queue Wait invalid fence=%p expected=%llu hr=0x%08lx",
+                GetCurrentThreadId(), sourceFence, static_cast<unsigned long long>(value), E_INVALIDARG);
+        return E_INVALIDARG;
+    }
+    if (trace)
+        Log("[RENDER_TRACE] [tid=%lu] Queue Wait begin fence=%p expected=%llu completed=%llu",
+            GetCurrentThreadId(), fence, static_cast<unsigned long long>(value),
+            static_cast<unsigned long long>(fence->GetCompletedValue()));
+    if (fence->GetCompletedValue() >= value) return S_OK;
+    HANDLE eventHandle = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    if (!eventHandle) return HRESULT_FROM_WIN32(GetLastError());
+    const HRESULT result = fence->SetEventOnCompletion(value, eventHandle);
+    HRESULT waitResultHr = result;
+    if (SUCCEEDED(result)) {
+        TraceApi("CommandQueue::Wait");
+        if (trace) {
+            for (;;) {
+                const DWORD waitResult = WaitForSingleObject(eventHandle, 2000);
+                if (waitResult == WAIT_OBJECT_0) break;
+                if (waitResult == WAIT_TIMEOUT) {
+                    Log("[RENDER_TRACE] [tid=%lu] Fence wait STILL WAITING fence=%p expected=%llu completed=%llu",
+                        GetCurrentThreadId(), fence, static_cast<unsigned long long>(value),
+                        static_cast<unsigned long long>(fence->GetCompletedValue()));
+                    continue;
+                }
+                const DWORD error = GetLastError();
+                waitResultHr = waitResult == WAIT_FAILED
+                    ? HRESULT_FROM_WIN32(error) : E_UNEXPECTED;
+                break;
+            }
+        } else {
+            const DWORD waitResult = WaitForSingleObject(eventHandle, INFINITE);
+            if (waitResult != WAIT_OBJECT_0) {
+                const DWORD error = GetLastError();
+                waitResultHr = waitResult == WAIT_FAILED
+                    ? HRESULT_FROM_WIN32(error) : E_UNEXPECTED;
+            }
+        }
+    }
+    CloseHandle(eventHandle);
+    if (trace)
+        Log("[RENDER_TRACE] [tid=%lu] Queue Wait fence=%p expected=%llu completed=%llu hr=0x%08lx",
+            GetCurrentThreadId(), fence, static_cast<unsigned long long>(value),
+            static_cast<unsigned long long>(fence->GetCompletedValue()), waitResultHr);
+    return waitResultHr;
+}
+
+HRESULT STDMETHODCALLTYPE CommandQueue::GetClockCalibration(UINT64* gpuTimestamp,
+    UINT64* cpuTimestamp) {
+    D3D12ON11_TRACE_CALLER("CommandQueue::GetClockCalibration");
+    if (!gpuTimestamp || !cpuTimestamp) {
+        Log("GetClockCalibration rejected null output pointer");
+        return E_INVALIDARG;
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(dev->ctxLock);
+    D3D11_QUERY_DESC desc{D3D11_QUERY_TIMESTAMP, 0};

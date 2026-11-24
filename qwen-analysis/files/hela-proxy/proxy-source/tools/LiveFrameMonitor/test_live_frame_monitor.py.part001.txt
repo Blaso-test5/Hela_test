@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+"""
+Unit tests for tools/LiveFrameMonitor/live_frame_monitor.py.
+Covers:
+  - Delayed file creation, incremental partial-line append, and log truncation/rotation
+  - Split/interleaved native Present #100 `[READBACK_SRC]` and `[READBACK]` headers + 5-point
+    Top-left/Top-right/Center/Bottom-left/Bottom-right RGBA sample lines without `Non-black pixels:`
+  - Black/alpha sample semantics (RGB=(0,0,0) is black regardless of alpha; RGB!=(0,0,0) is non-black)
+  - Strict Present #100 slot isolation (never falls back to Present #200+ if #100 is absent)
+  - `--stop-after-present100` immediate completion once both #100 readbacks are complete, with bounded
+    BMP timeout when BMP files are absent
+  - Manifest-pinned live module fingerprint attestation and configurable Present capture targets
+  - Manager restoration of absent vanilla proxy files and legacy restore manifests
+  - PowerShell `Start-HelaLiveMonitor.ps1` argument quoting for paths containing spaces
+  - Atomic completeness detection for partial vs finished 24-bit BMP files
+  - Bounded memory ring-buffer caps
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import shutil
+import struct
+import subprocess
+import tempfile
+import time
+import unittest
+from pathlib import Path
+
+import live_frame_monitor as lfm
+
+
+TOOL_DIR = Path(__file__).resolve().parent
+FIXTURE_LOG = TOOL_DIR / "fixtures" / "sample_live_stream.log"
+LAUNCHER_PS1 = TOOL_DIR / "Start-HelaLiveMonitor.ps1"
+PROXY_MANAGER_PS1 = TOOL_DIR / "ProxyManager.ps1"
+
+
+def _make_24bit_bmp_bytes(width: int, height: int, fill_bgr: bytes = b"\x00\x00\x00") -> bytes:
+    row_stride = ((width * 3 + 3) // 4) * 4
+    padding = b"\x00" * (row_stride - width * 3)
+    row_bytes = (fill_bgr * width) + padding
+    pixel_data = row_bytes * height
+    file_size = 54 + len(pixel_data)
+    header = struct.pack(
+        "<2sIHHIiiiHHIIIIII",
+        b"BM",
+        file_size,
+        0,
+        0,
+        54,
+        40,
+        width,
+        height,
+        1,
+        24,
+        0,
+        len(pixel_data),
+        2835,
+        2835,
+        0,
+        0,
+    )
+    return header + pixel_data
+
+
+def _run_proxy_manager_restore(
+    powershell: str,
+    game_exe: Path,
+    run_directory: Path,
+) -> subprocess.CompletedProcess[str]:
+    quote = lambda value: "'" + str(value).replace("'", "''") + "'"
+    command = (
+        f"& {quote(PROXY_MANAGER_PS1)} -Action Restore "
+        f"-GameExePath {quote(game_exe)} -RunDirectory {quote(run_directory)} -Confirm:$false"
+    )
+    return subprocess.run(
+        [
+            powershell,
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            command,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+class LiveFrameMonitorTests(unittest.TestCase):
+    def test_proxy_manager_requires_gpu_specific_run_root(self) -> None:
+        powershell = shutil.which("powershell") or shutil.which("pwsh")
+        if not powershell or not PROXY_MANAGER_PS1.is_file():
+            self.skipTest("PowerShell or ProxyManager.ps1 not available in test environment")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            game_exe = Path(tmpdir) / "Hela-Win64-Shipping.exe"
+            game_exe.write_bytes(b"synthetic executable placeholder")
+            result = subprocess.run(
+                [
+                    powershell,
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(PROXY_MANAGER_PS1),
+                    "-Action",
+                    "Prepare",
+                    "-GameExePath",
+                    str(game_exe),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout + "\n" + result.stderr)
+        self.assertIn("-RunRoot is required", result.stdout + "\n" + result.stderr)
+
+    def test_proxy_manager_skips_creating_existing_drive_root(self) -> None:
+        powershell = shutil.which("powershell") or shutil.which("pwsh")
+        if not powershell or not PROXY_MANAGER_PS1.is_file():
+            self.skipTest("PowerShell or ProxyManager.ps1 not available in test environment")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            game_exe = root / "Hela-Win64-Shipping.exe"
+            source = root / "source.txt"
+            destination = Path(root.anchor) / f"proxy-manager-move-{time.monotonic_ns()}.txt"
+            game_exe.write_bytes(b"synthetic executable placeholder")
+            source.write_text("move probe", encoding="ascii")
+            quote = lambda value: "'" + str(value).replace("'", "''") + "'"
+            command = (
+                "$ErrorActionPreference = 'Stop'; "
+                f". {quote(PROXY_MANAGER_PS1)} -Action Inventory -GameExePath {quote(game_exe)}; "
+                "$global:moveCalled = $false; "
+                "function Move-Item { $global:moveCalled = $true }; "
+                f"$moved = Move-IfPresent -Path {quote(source)} -Destination {quote(destination)}; "
+                "if (-not $moved -or -not $global:moveCalled) { throw 'Move-IfPresent did not restore the file' }"
+            )
+            result = subprocess.run(
+                [
+                    powershell,
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    command,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + "\n" + result.stderr)
+
+    def test_file_creation_partial_append_and_truncation_reset(self) -> None:
+        events = []
+        state = lfm.LiveMonitorState(event_callback=lambda s, e: events.append((s, e)))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "d3d12on11.log"
+            tailer = lfm.LogFileTailer(log_path, state=state)
+
+            # 1. File does not exist yet
+            self.assertEqual(tailer.poll(), 0)
+
+            # 2. Write a partial line without newline: must NOT be parsed yet
+            log_path.write_bytes(b"[SHADER PLACEHOLDER] stage=CS hash=d17286aa32897a75 ")
+            self.assertEqual(tailer.poll(), 0)
+            self.assertEqual(len(state.shaders_placeholder), 0)
+
+            # 3. Complete the line and add another
+            with log_path.open("ab") as f:
+                f.write(b"reason=no-usable-SM5-bytecode\n")
+                f.write(b"Resource 0000024096331C38 operations=66 draws=66 skipped=0 clears=0\n")
+            self.assertEqual(tailer.poll(), 2)
+            self.assertIn("d17286aa32897a75", state.shaders_placeholder)
+            self.assertIn("0000024096331C38", state.resources_by_ptr)
+            self.assertEqual(state.generation, 1)
+
+            # 4. Truncate/rotate the log file to a shorter file
+            log_path.write_bytes(b"[SHADER READY] stage=VS hash=20e0826b236597a1\n")
+            fed = tailer.poll()
+            self.assertEqual(fed, 1)
+            self.assertEqual(state.generation, 2)
+            self.assertEqual(state.truncation_count, 1)
+            self.assertEqual(len(state.shaders_placeholder), 0)
+            self.assertIn("20e0826b236597a1", state.shaders_ready)
+
+    def test_interleaved_v001_native_readback_headers_and_5point_samples(self) -> None:
+        """
+        Regression test for the GTX 950M v001 native log shape:
+        - `[READBACK_SRC] Present #100 CopyResource source=...` is followed by interleaved shader/thread lines
+        - Then a second header `[READBACK_SRC] Present #100 size=1280x720 format=24` appears
+        - Followed by Top-left / Top-right / Center / Bottom-left / Bottom-right RGBA sample lines

@@ -1,0 +1,65 @@
+// GENERATO da tools/gen_stubs.py - non modificare a mano.
+#pragma once
+
+struct Stub_ID3D12Heap : Obj<ID3D12Heap> {
+    using Obj<ID3D12Heap>::Obj;
+    virtual D3D12_HEAP_DESC STDMETHODCALLTYPE GetDesc(void) { Unimpl("ID3D12Heap::GetDesc"); return {}; }
+};
+
+struct Stub_ID3D12Resource : Obj<ID3D12Resource> {
+    using Obj<ID3D12Resource>::Obj;
+    virtual HRESULT STDMETHODCALLTYPE Map(UINT Subresource, const D3D12_RANGE *pReadRange, void **ppData) { Unimpl("ID3D12Resource::Map"); return E_NOTIMPL; }
+    virtual void STDMETHODCALLTYPE Unmap(UINT Subresource, const D3D12_RANGE *pWrittenRange) { Unimpl("ID3D12Resource::Unmap"); }
+    virtual D3D12_RESOURCE_DESC STDMETHODCALLTYPE GetDesc(void) { Unimpl("ID3D12Resource::GetDesc"); return {}; }
+    virtual D3D12_GPU_VIRTUAL_ADDRESS STDMETHODCALLTYPE GetGPUVirtualAddress(void) { Unimpl("ID3D12Resource::GetGPUVirtualAddress"); return {}; }
+    virtual HRESULT STDMETHODCALLTYPE WriteToSubresource(UINT DstSubresource, const D3D12_BOX *pDstBox, const void *pSrcData, UINT SrcRowPitch, UINT SrcDepthPitch) { Unimpl("ID3D12Resource::WriteToSubresource"); return E_NOTIMPL; }
+    virtual HRESULT STDMETHODCALLTYPE ReadFromSubresource(void *pDstData, UINT DstRowPitch, UINT DstDepthPitch, UINT SrcSubresource, const D3D12_BOX *pSrcBox) { Unimpl("ID3D12Resource::ReadFromSubresource"); return E_NOTIMPL; }
+    virtual HRESULT STDMETHODCALLTYPE GetHeapProperties(D3D12_HEAP_PROPERTIES *pHeapProperties, D3D12_HEAP_FLAGS *pHeapFlags) { Unimpl("ID3D12Resource::GetHeapProperties"); return E_NOTIMPL; }
+};
+
+struct Stub_ID3D12DescriptorHeap : Obj<ID3D12DescriptorHeap> {
+    using Obj<ID3D12DescriptorHeap>::Obj;
+    virtual D3D12_DESCRIPTOR_HEAP_DESC STDMETHODCALLTYPE GetDesc(void) { Unimpl("ID3D12DescriptorHeap::GetDesc"); return {}; }
+    virtual D3D12_CPU_DESCRIPTOR_HANDLE STDMETHODCALLTYPE GetCPUDescriptorHandleForHeapStart(void) { Unimpl("ID3D12DescriptorHeap::GetCPUDescriptorHandleForHeapStart"); return {}; }
+    virtual D3D12_GPU_DESCRIPTOR_HANDLE STDMETHODCALLTYPE GetGPUDescriptorHandleForHeapStart(void) { Unimpl("ID3D12DescriptorHeap::GetGPUDescriptorHandleForHeapStart"); return {}; }
+};
+
+struct Stub_ID3D12QueryHeap : Obj<ID3D12QueryHeap> {
+    using Obj<ID3D12QueryHeap>::Obj;
+};
+
+struct Stub_ID3D12CommandSignature : Obj<ID3D12CommandSignature> {
+    using Obj<ID3D12CommandSignature>::Obj;
+};
+
+struct Stub_ID3D12GraphicsCommandList : Obj<ID3D12GraphicsCommandList> {
+    using Obj<ID3D12GraphicsCommandList>::Obj;
+    virtual D3D12_COMMAND_LIST_TYPE STDMETHODCALLTYPE GetType(void) { Unimpl("ID3D12GraphicsCommandList::GetType"); return {}; }
+    virtual HRESULT STDMETHODCALLTYPE Close(void) { Unimpl("ID3D12GraphicsCommandList::Close"); return E_NOTIMPL; }
+    virtual HRESULT STDMETHODCALLTYPE Reset(ID3D12CommandAllocator *pAllocator, ID3D12PipelineState *pInitialState) { Unimpl("ID3D12GraphicsCommandList::Reset"); return E_NOTIMPL; }
+    virtual void STDMETHODCALLTYPE ClearState(ID3D12PipelineState *pPipelineState) { Unimpl("ID3D12GraphicsCommandList::ClearState"); }
+    virtual void STDMETHODCALLTYPE DrawInstanced(UINT VertexCountPerInstance, UINT InstanceCount, UINT StartVertexLocation, UINT StartInstanceLocation) { Unimpl("ID3D12GraphicsCommandList::DrawInstanced"); }
+    virtual void STDMETHODCALLTYPE DrawIndexedInstanced(UINT IndexCountPerInstance, UINT InstanceCount, UINT StartIndexLocation, INT BaseVertexLocation, UINT StartInstanceLocation) { Unimpl("ID3D12GraphicsCommandList::DrawIndexedInstanced"); }
+    virtual void STDMETHODCALLTYPE Dispatch(UINT ThreadGroupCountX, UINT ThreadGroupCountY, UINT ThreadGroupCountZ) { Unimpl("ID3D12GraphicsCommandList::Dispatch"); }
+    virtual void STDMETHODCALLTYPE CopyBufferRegion(ID3D12Resource *pDstBuffer, UINT64 DstOffset, ID3D12Resource *pSrcBuffer, UINT64 SrcOffset, UINT64 NumBytes) { Unimpl("ID3D12GraphicsCommandList::CopyBufferRegion"); }
+    virtual void STDMETHODCALLTYPE CopyTextureRegion(const D3D12_TEXTURE_COPY_LOCATION *pDst, UINT DstX, UINT DstY, UINT DstZ, const D3D12_TEXTURE_COPY_LOCATION *pSrc, const D3D12_BOX *pSrcBox) { Unimpl("ID3D12GraphicsCommandList::CopyTextureRegion"); }
+    virtual void STDMETHODCALLTYPE CopyResource(ID3D12Resource *pDstResource, ID3D12Resource *pSrcResource) { Unimpl("ID3D12GraphicsCommandList::CopyResource"); }
+    virtual void STDMETHODCALLTYPE CopyTiles(ID3D12Resource *pTiledResource, const D3D12_TILED_RESOURCE_COORDINATE *pTileRegionStartCoordinate, const D3D12_TILE_REGION_SIZE *pTileRegionSize, ID3D12Resource *pBuffer, UINT64 BufferStartOffsetInBytes, D3D12_TILE_COPY_FLAGS Flags) { Unimpl("ID3D12GraphicsCommandList::CopyTiles"); }
+    virtual void STDMETHODCALLTYPE ResolveSubresource(ID3D12Resource *pDstResource, UINT DstSubresource, ID3D12Resource *pSrcResource, UINT SrcSubresource, DXGI_FORMAT Format) { Unimpl("ID3D12GraphicsCommandList::ResolveSubresource"); }
+    virtual void STDMETHODCALLTYPE IASetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY PrimitiveTopology) { Unimpl("ID3D12GraphicsCommandList::IASetPrimitiveTopology"); }
+    virtual void STDMETHODCALLTYPE RSSetViewports(UINT NumViewports, const D3D12_VIEWPORT *pViewports) { Unimpl("ID3D12GraphicsCommandList::RSSetViewports"); }
+    virtual void STDMETHODCALLTYPE RSSetScissorRects(UINT NumRects, const D3D12_RECT *pRects) { Unimpl("ID3D12GraphicsCommandList::RSSetScissorRects"); }
+    virtual void STDMETHODCALLTYPE OMSetBlendFactor(const FLOAT BlendFactor[ 4 ]) { Unimpl("ID3D12GraphicsCommandList::OMSetBlendFactor"); }
+    virtual void STDMETHODCALLTYPE OMSetStencilRef(UINT StencilRef) { Unimpl("ID3D12GraphicsCommandList::OMSetStencilRef"); }
+    virtual void STDMETHODCALLTYPE SetPipelineState(ID3D12PipelineState *pPipelineState) { Unimpl("ID3D12GraphicsCommandList::SetPipelineState"); }
+    virtual void STDMETHODCALLTYPE ResourceBarrier(UINT NumBarriers, const D3D12_RESOURCE_BARRIER *pBarriers) { Unimpl("ID3D12GraphicsCommandList::ResourceBarrier"); }
+    virtual void STDMETHODCALLTYPE ExecuteBundle(ID3D12GraphicsCommandList *pCommandList) { Unimpl("ID3D12GraphicsCommandList::ExecuteBundle"); }
+    virtual void STDMETHODCALLTYPE SetDescriptorHeaps(UINT NumDescriptorHeaps, ID3D12DescriptorHeap *const *ppDescriptorHeaps) { Unimpl("ID3D12GraphicsCommandList::SetDescriptorHeaps"); }
+    virtual void STDMETHODCALLTYPE SetComputeRootSignature(ID3D12RootSignature *pRootSignature) { Unimpl("ID3D12GraphicsCommandList::SetComputeRootSignature"); }
+    virtual void STDMETHODCALLTYPE SetGraphicsRootSignature(ID3D12RootSignature *pRootSignature) { Unimpl("ID3D12GraphicsCommandList::SetGraphicsRootSignature"); }
+    virtual void STDMETHODCALLTYPE SetComputeRootDescriptorTable(UINT RootParameterIndex, D3D12_GPU_DESCRIPTOR_HANDLE BaseDescriptor) { Unimpl("ID3D12GraphicsCommandList::SetComputeRootDescriptorTable"); }
+    virtual void STDMETHODCALLTYPE SetGraphicsRootDescriptorTable(UINT RootParameterIndex, D3D12_GPU_DESCRIPTOR_HANDLE BaseDescriptor) { Unimpl("ID3D12GraphicsCommandList::SetGraphicsRootDescriptorTable"); }
+    virtual void STDMETHODCALLTYPE SetComputeRoot32BitConstant(UINT RootParameterIndex, UINT SrcData, UINT DestOffsetIn32BitValues) { Unimpl("ID3D12GraphicsCommandList::SetComputeRoot32BitConstant"); }
+    virtual void STDMETHODCALLTYPE SetGraphicsRoot32BitConstant(UINT RootParameterIndex, UINT SrcData, UINT DestOffsetIn32BitValues) { Unimpl("ID3D12GraphicsCommandList::SetGraphicsRoot32BitConstant"); }
+    virtual void STDMETHODCALLTYPE SetComputeRoot32BitConstants(UINT RootParameterIndex, UINT Num32BitValuesToSet, const void *pSrcData, UINT DestOffsetIn32BitValues) { Unimpl("ID3D12GraphicsCommandList::SetComputeRoot32BitConstants"); }
+    virtual void STDMETHODCALLTYPE SetGraphicsRoot32BitConstants(UINT RootParameterIndex, UINT Num32BitValuesToSet, const void *pSrcData, UINT DestOffsetIn32BitValues) { Unimpl("ID3D12GraphicsCommandList::SetGraphicsRoot32BitConstants"); }

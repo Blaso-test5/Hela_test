@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "path": "evidence/render-trace-create-placed/part0001.ndjson",
+      "recordStart": 1,
+      "recordEnd": 51,
+      "recordCount": 51,
+      "byteCount": 7954,
+      "sha256": "0c16b1f65b40e29a1b8299594ea67c820326f3e3c698a077f2d134049c92f19f"
+    },
+    {
+      "path": "evidence/render-trace-create-placed/part0002.ndjson",
+      "recordStart": 52,
+      "recordEnd": 100,
+      "recordCount": 49,
+      "byteCount": 7867,
+      "sha256": "b2946df394b9bb9832066403e714d48bfcc50951a5fec6efc3bd7fb7673bd335"
+    },
+    {
+      "path": "evidence/render-trace-create-placed/part0003.ndjson",
+      "recordStart": 101,
+      "recordEnd": 126,
+      "recordCount": 26,
+      "byteCount": 4121,
+      "sha256": "46bd39eea43dca335eddd16483028dcd9f088f17e7679bdaaf419585f97700cb"
+    }
+  ]
+}

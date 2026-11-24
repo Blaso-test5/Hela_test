@@ -1,0 +1,11 @@
+                $processStatus | ConvertTo-Json -Depth 6 |
+                    Set-Content -LiteralPath $ProcessStatusPath -Encoding UTF8
+            }
+        }
+    }
+}
+
+if ($LaunchGame) {
+    Assert-RunLogMatchesManifest -Manifest $RunManifest -Path $LogPath
+    Write-Host "[Launcher] Runtime DLL and shader fingerprints match $($RunManifest.testVersion)." -ForegroundColor Green
+}

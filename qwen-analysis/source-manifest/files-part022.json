@@ -1,0 +1,176 @@
+[
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "src/pix-events.ts",
+    "totalLineCount": 289,
+    "sourceByteCount": 11203,
+    "sha256": "3e3608e1fb4f956a1f24281b4c726398afe883bb8c7d1dce68fb6e70470cd68e",
+    "publishedSha256": "3e3608e1fb4f956a1f24281b4c726398afe883bb8c7d1dce68fb6e70470cd68e",
+    "publishedByteCount": 11203,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/src/pix-events.ts.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 221,
+        "byteCount": 7925,
+        "sha256": "c67fe1433954441f257057bf84c77f288607088b43958090ee3b7b211a2a5eb3"
+      },
+      {
+        "path": "files/shader-lab/src/pix-events.ts.part002.txt",
+        "lineStart": 222,
+        "lineEnd": 289,
+        "byteCount": 3278,
+        "sha256": "b542b6fe6fd7d2afd01ad27ba8461070fcb8ce3c1ba2982540646a53e71bc8c4"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "src/pix-tool.ts",
+    "totalLineCount": 148,
+    "sourceByteCount": 9258,
+    "sha256": "26e170c00fd771179f330e4479fc2e0ebc8833c4ac705ac3f9c20594bf7e2cb3",
+    "publishedSha256": "26e170c00fd771179f330e4479fc2e0ebc8833c4ac705ac3f9c20594bf7e2cb3",
+    "publishedByteCount": 9258,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/src/pix-tool.ts.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 123,
+        "byteCount": 7952,
+        "sha256": "a02a4f0faafc1e75fc3590f54e673c4eb8be4123c120cbcfd98c59fc59a8c7c7"
+      },
+      {
+        "path": "files/shader-lab/src/pix-tool.ts.part002.txt",
+        "lineStart": 124,
+        "lineEnd": 148,
+        "byteCount": 1306,
+        "sha256": "a2ff58ebacf53d21dd3b24157aef2d7d559dcc7d77084f7646318f623124c169"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "src/precompile-test.ts",
+    "totalLineCount": 187,
+    "sourceByteCount": 7707,
+    "sha256": "459a769dbed08de49741ebc04b9626246ecf185035424dc3a29c1b9a9add267a",
+    "publishedSha256": "459a769dbed08de49741ebc04b9626246ecf185035424dc3a29c1b9a9add267a",
+    "publishedByteCount": 7707,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/src/precompile-test.ts",
+        "lineStart": 1,
+        "lineEnd": 187,
+        "byteCount": 7707,
+        "sha256": "459a769dbed08de49741ebc04b9626246ecf185035424dc3a29c1b9a9add267a"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "src/test.ts",
+    "totalLineCount": 484,
+    "sourceByteCount": 22948,
+    "sha256": "60f15024900d9d94c3286798288831ef979ea5a288fa86610e6733016f8390cd",
+    "publishedSha256": "60f15024900d9d94c3286798288831ef979ea5a288fa86610e6733016f8390cd",
+    "publishedByteCount": 22948,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/src/test.ts.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 157,
+        "byteCount": 7994,
+        "sha256": "d3058f844bb798664f16041fb2cdfa3c275bad829638e3c088d3ba244d39fc27"
+      },
+      {
+        "path": "files/shader-lab/src/test.ts.part002.txt",
+        "lineStart": 158,
+        "lineEnd": 316,
+        "byteCount": 7958,
+        "sha256": "11e8c7c5058b8195e15c83b90a3b8759ff151ee5e0067ffc902e12150a98c8ce"
+      },
+      {
+        "path": "files/shader-lab/src/test.ts.part003.txt",
+        "lineStart": 317,
+        "lineEnd": 484,
+        "byteCount": 6996,
+        "sha256": "72095d4f8e7dc91563f2ca6b70906bc3ccb5e498b4df419b7c8177c54c900209"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "tools/hela-package/package-gate.mjs",
+    "totalLineCount": 333,
+    "sourceByteCount": 12768,
+    "sha256": "3af9dcd1f87e988d85d74710719cc661709424afab4a44305836a02afdf0b11b",
+    "publishedSha256": "3af9dcd1f87e988d85d74710719cc661709424afab4a44305836a02afdf0b11b",
+    "publishedByteCount": 12768,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/tools/hela-package/package-gate.mjs.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 203,
+        "byteCount": 7991,
+        "sha256": "3f6c09b17775b0e1da133c581ef6259a288a9f9df522ab1b4090561fd822c3a4"
+      },
+      {
+        "path": "files/shader-lab/tools/hela-package/package-gate.mjs.part002.txt",
+        "lineStart": 204,
+        "lineEnd": 333,
+        "byteCount": 4777,
+        "sha256": "ea8ce4737ae0c2e16bfa4a49d33a14de4c015b4e3af830ec7489bf7d6f89a78b"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "tools/hela-package/package-gate.test.mjs",
+    "totalLineCount": 233,
+    "sourceByteCount": 9731,
+    "sha256": "fc86faa70c8500618e97341d3c16757c576ef1860fd7f2c4af4f31e52c2cb467",
+    "publishedSha256": "fc86faa70c8500618e97341d3c16757c576ef1860fd7f2c4af4f31e52c2cb467",
+    "publishedByteCount": 9731,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/tools/hela-package/package-gate.test.mjs.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 188,
+        "byteCount": 7947,
+        "sha256": "e5c30e0b48dd2f8e57175db6fbd643a7557e15d7cdc0ff3970f85651928913ee"
+      },
+      {
+        "path": "files/shader-lab/tools/hela-package/package-gate.test.mjs.part002.txt",
+        "lineStart": 189,
+        "lineEnd": 233,
+        "byteCount": 1784,
+        "sha256": "77bd964f7e3dff2773a8a0c7f8f5e7b9432474c3e84401c13399985cc4ed4576"
+      }
+    ]
+  }
+]

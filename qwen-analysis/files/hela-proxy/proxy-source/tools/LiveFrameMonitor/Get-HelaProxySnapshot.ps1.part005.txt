@@ -1,0 +1,146 @@
+        $sha = ''
+        if ($null -ne $f.actual -and $null -ne $f.actual.sha256) { $sha = ' sha256=' + $f.actual.sha256.Substring(0, 16) + '...' }
+        $req = ''
+        if ($f.required -eq $true) { $req = ' [required]' }
+        $line = '  {0,-13} {1}/{2}{3}{4}' -f $f.status, $f.category, $f.name, $req, $sha
+        Write-Host $line -ForegroundColor (Get-StatusColor $f.status)
+        Write-Host ('                  ' + $f.reason) -ForegroundColor DarkGray
+    }
+    Write-Host ''
+    $c = $Result.summary.counts
+    Write-Host ('  Counts: Match={0} Mismatch={1} Missing={2} Extra={3} NotAttestable={4} Observed={5} NotInspected={6}' -f $c.Match, $c.Mismatch, $c.Missing, $c.Extra, $c.NotAttestable, $c.Observed, $c.NotInspected)
+    $color = 'Yellow'
+    if ($Result.summary.verdict -eq 'Match' -or $Result.summary.verdict -eq 'InventoryOnly') { $color = 'Green' }
+    elseif ($Result.summary.verdict -eq 'Mismatch') { $color = 'Red' }
+    Write-Host ('  Verdict: ' + $Result.summary.verdict + '  (exit code ' + $Result.summary.exitCode + ')') -ForegroundColor $color
+    Write-Host ''
+}
+
+# ----------------------------------------------------------------------------------------------
+# Main
+# ----------------------------------------------------------------------------------------------
+
+$exitCode = 2
+try {
+    $mode = 'Inventory'
+    if ($PSCmdlet.ParameterSetName -eq 'Run') { $mode = 'RunManifest' }
+    elseif ($PSCmdlet.ParameterSetName -eq 'Restore') { $mode = 'RestorePoint' }
+
+    $ovName = $null
+    if ($PSBoundParameters.ContainsKey('OverridesDirectoryName')) {
+        $ovName = ConvertTo-SafeRelativePath $OverridesDirectoryName '-OverridesDirectoryName'
+    }
+
+    $ref = $null
+    $protectedDirs = New-Object System.Collections.Generic.List[string]
+    $protectedFiles = New-Object System.Collections.Generic.List[string]
+    if ($mode -eq 'RunManifest') {
+        $mp = Resolve-FullPath $RunManifestPath '-RunManifestPath'
+        $ref = ConvertFrom-RunManifest (Read-JsonObject $mp) $mp
+        $protectedFiles.Add($mp)
+    } elseif ($mode -eq 'RestorePoint') {
+        $rp = Resolve-FullPath $RestorePointPath '-RestorePointPath'
+        $loc = Resolve-RestoreManifestPath $rp
+        $ref = ConvertFrom-RestoreManifest (Read-JsonObject $loc.manifest) $loc.manifest
+        $protectedDirs.Add($loc.dir)
+        $protectedFiles.Add($loc.manifest)
+    }
+
+    $notes = New-Object System.Collections.Generic.List[string]
+    if ($null -ne $ref) { $notes.AddRange($ref.notes) }
+
+    $gameSource = 'parameter'
+    $gameRaw = $null
+    if ($PSBoundParameters.ContainsKey('GameDirectory')) {
+        $gameRaw = $GameDirectory
+    } elseif ($mode -eq 'RestorePoint') {
+        if ($null -eq $ref.gameDirectoryRecorded) { throw 'GameDirectory was not provided and the restore manifest has no game_directory.' }
+        if (-not [System.IO.Path]::IsPathRooted($ref.gameDirectoryRecorded)) { throw "game_directory in the restore manifest is not an absolute path: '$($ref.gameDirectoryRecorded)'." }
+        $gameRaw = $ref.gameDirectoryRecorded
+        $gameSource = 'restore-manifest'
+    }
+    $gameFull = Resolve-FullPath $gameRaw '-GameDirectory'
+    if (-not [System.IO.Directory]::Exists($gameFull)) { throw "Game directory does not exist: $gameFull" }
+    if ($mode -eq 'RestorePoint' -and $gameSource -eq 'parameter' -and $null -ne $ref.gameDirectoryRecorded) {
+        $recFull = $null
+        try { $recFull = Resolve-FullPath $ref.gameDirectoryRecorded 'game_directory' } catch { }
+        if ($null -ne $recFull -and -not $recFull.Equals($gameFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $notes.Add("GameDirectory differs from game_directory recorded in the restore manifest ('$($ref.gameDirectoryRecorded)'); the parameter was used.")
+        }
+    }
+
+    $jsonOutFull = $null
+    if ($PSBoundParameters.ContainsKey('JsonOut')) {
+        $jsonOutFull = Resolve-JsonOutPath -Raw $JsonOut -GameFull $gameFull -ProtectedDirs $protectedDirs -ProtectedFiles $protectedFiles
+    }
+
+    # --- inspection -------------------------------------------------------------------------
+    $findings = New-Object System.Collections.Generic.List[object]
+    foreach ($name in $script:RuntimeFiles) {
+        $st = Get-FileState ([System.IO.Path]::Combine($gameFull, $name))
+        if ($mode -eq 'Inventory') {
+            $findings.Add((New-ObservedFinding -Category 'runtime' -Name $name -Act $st))
+        } else {
+            $findings.Add((Compare-FileToExpectation -Category 'runtime' -Name $name -Exp $ref.runtime[$name] -Act $st))
+        }
+    }
+    Add-OverrideFindings -List $findings -GameFull $gameFull -OvName $ovName -Ref $ref -Mode $mode
+
+    # --- summary ----------------------------------------------------------------------------
+    $counts = [ordered]@{ Match = 0; Mismatch = 0; Missing = 0; Extra = 0; NotAttestable = 0; Observed = 0; NotInspected = 0 }
+    foreach ($f in $findings) { $counts[$f.status] = $counts[$f.status] + 1 }
+    if ($mode -eq 'Inventory') {
+        $verdict = 'InventoryOnly'; $exitCode = 0
+    } elseif (($counts.Mismatch + $counts.Missing + $counts.Extra) -gt 0) {
+        $verdict = 'Mismatch'; $exitCode = 1
+    } elseif ($counts.NotAttestable -gt 0) {
+        $verdict = 'Inconclusive'; $exitCode = 3
+    } else {
+        $verdict = 'Match'; $exitCode = 0
+    }
+
+    $refInfo = $null
+    if ($null -ne $ref) {
+        $refInfo = [ordered]@{
+            kind                  = $ref.kind
+            path                  = $ref.path
+            schema                = $ref.schema
+            format                = $ref.format
+            testVersion           = $ref.testVersion
+            createdUtc            = $ref.createdUtc
+            runtimeAttestation    = $ref.runtimeAttestation
+            gameDirectoryRecorded = $ref.gameDirectoryRecorded
+        }
+    }
+    $ovInfo = [ordered]@{ name = $ovName; path = $null; present = $null; inspected = $false }
+    if ($null -ne $ovName) {
+        $ovPath = Get-ContainedPath -Root $gameFull -Relative $ovName
+        $ovInfo = [ordered]@{ name = $ovName; path = $ovPath; present = [System.IO.Directory]::Exists($ovPath); inspected = $true }
+    }
+
+    $result = [ordered]@{
+        schema             = 'hela-proxy-snapshot/v1'
+        generatedUtc       = [DateTime]::UtcNow.ToString('o')
+        tool               = [ordered]@{ name = $script:ToolName; version = $script:ToolVersion; readOnly = $true }
+        mode               = $mode
+        gameDirectory      = [ordered]@{ path = $gameFull; source = $gameSource; exists = $true }
+        reference          = $refInfo
+        overridesDirectory = $ovInfo
+        notes              = $notes.ToArray()
+        items              = $findings.ToArray()
+        summary            = [ordered]@{ verdict = $verdict; exitCode = $exitCode; counts = $counts }
+    }
+
+    Write-Summary $result
+    $json = $result | ConvertTo-Json -Depth 10
+    Write-Output $json
+
+    if ($null -ne $jsonOutFull) {
+        Write-NewTextFile -Path $jsonOutFull -Text $json
+        Write-Host ('JSON report written to: ' + $jsonOutFull)
+    }
+} catch {
+    $exitCode = 2
+    Write-Error -Message ("$($script:ToolName): " + $_.Exception.Message) -ErrorAction Continue
+}
+exit $exitCode

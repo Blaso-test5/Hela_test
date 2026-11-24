@@ -1,0 +1,152 @@
+            Log("CheckFeatureSupport end feature=%s result=0x%08lx reason=short-buffer required=%zu",
+                featureName, E_INVALIDARG, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS1));
+            return E_INVALIDARG;
+        }
+        auto* info = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS1*>(data);
+        *info = {};
+        if (Cfg().diagnosticCapabilities) {
+            info->WaveOps = TRUE;
+            info->WaveLaneCountMin = 32;
+            info->WaveLaneCountMax = 32;
+            info->TotalLaneCount = 32;
+            info->Int64ShaderOps = TRUE;
+        }
+        Log("CheckFeatureSupport end feature=%s result=0x%08lx wave-ops=%u wave-lanes=%u..%u total-lanes=%u expanded-compute-states=%u int64-shader-ops=%u",
+            featureName, S_OK, info->WaveOps, info->WaveLaneCountMin,
+            info->WaveLaneCountMax, info->TotalLaneCount,
+            info->ExpandedComputeResourceStates, info->Int64ShaderOps);
+        return S_OK;
+    }
+    case D3D12_FEATURE_D3D12_OPTIONS9: {
+        if (size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS9)) {
+            Log("CheckFeatureSupport end feature=%s result=0x%08lx reason=short-buffer required=%zu",
+                featureName, E_INVALIDARG, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS9));
+            return E_INVALIDARG;
+        }
+        auto* info = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS9*>(data);
+        *info = {};
+        if (Cfg().diagnosticCapabilities)
+            info->AtomicInt64OnTypedResourceSupported = TRUE;
+        Log("CheckFeatureSupport end feature=%s result=0x%08lx mesh-stats=%u full-rt-array-index=%u atomic-int64-typed=%u atomic-int64-groupshared=%u mesh-derivatives=%u wave-mma-tier=%u",
+            featureName, S_OK, info->MeshShaderPipelineStatsSupported,
+            info->MeshShaderSupportsFullRangeRenderTargetArrayIndex,
+            info->AtomicInt64OnTypedResourceSupported,
+            info->AtomicInt64OnGroupSharedSupported,
+            info->DerivativesInMeshAndAmplificationShadersSupported, info->WaveMMATier);
+        return S_OK;
+    }
+    default:
+        Log("CheckFeatureSupport end feature=%s(%u) result=0x%08lx reason=unimplemented",
+            featureName, static_cast<UINT>(feature), E_INVALIDARG);
+        Unimpl("ID3D12Device::CheckFeatureSupport unsupported feature");
+        return E_INVALIDARG;
+    }
+}
+
+HRESULT STDMETHODCALLTYPE Device::CreateDescriptorHeap(const D3D12_DESCRIPTOR_HEAP_DESC* desc, REFIID riid, void** out) {
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    if (!desc || !desc->NumDescriptors || desc->Type >= D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES ||
+        (desc->Flags & ~D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE))
+        return E_INVALIDARG;
+    if (desc->Type != D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV &&
+        desc->Type != D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER &&
+        (desc->Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE))
+        return E_INVALIDARG;
+    auto* heap = new (std::nothrow) DescriptorHeap(this, *desc);
+    if (!heap) return E_OUTOFMEMORY;
+    const HRESULT result = heap->QueryInterface(riid, out);
+    heap->Release();
+    return result;
+}
+
+D3D12_RESOURCE_ALLOCATION_INFO STDMETHODCALLTYPE Device::GetResourceAllocationInfo(
+    UINT, UINT count, const D3D12_RESOURCE_DESC* descs) {
+    D3D12_RESOURCE_ALLOCATION_INFO info{};
+    info.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+    if (!descs || !count) {
+        info.SizeInBytes = UINT64_MAX;
+        return info;
+    }
+    UINT64 total = 0;
+    for (UINT i = 0; i < count; ++i) {
+        if (descs[i].Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
+            total = AlignUp(total, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
+            total += AlignUp(descs[i].Width, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
+            continue;
+        }
+        const auto format = GetFormatInfo(descs[i].Format);
+        if (!format.bits) {
+            info.SizeInBytes = UINT64_MAX;
+            return info;
+        }
+        total = AlignUp(total, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
+        UINT64 width = descs[i].Width;
+        UINT height = descs[i].Height;
+        for (UINT mip = 0; mip < std::max<UINT>(descs[i].MipLevels, 1); ++mip) {
+            const UINT64 blocksWide = (width + format.blockW - 1) / format.blockW;
+            const UINT64 blocksHigh = (height + format.blockH - 1) / format.blockH;
+            const UINT64 depth = descs[i].Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D
+                ? std::max<UINT>(1, descs[i].DepthOrArraySize >> mip) : descs[i].DepthOrArraySize;
+            const UINT64 rowPitch = AlignUp((blocksWide * format.bits + 7) / 8, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+            total += AlignUp(rowPitch * blocksHigh * depth, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+            width = std::max<UINT64>(1, width >> 1);
+            height = std::max<UINT>(1, height >> 1);
+        }
+    }
+    info.SizeInBytes = AlignUp(total, info.Alignment);
+    return info;
+}
+
+D3D12_HEAP_PROPERTIES STDMETHODCALLTYPE Device::GetCustomHeapProperties(UINT, D3D12_HEAP_TYPE type) {
+    D3D12_HEAP_PROPERTIES properties{};
+    properties.Type = type;
+    properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+    properties.CreationNodeMask = properties.VisibleNodeMask = 1;
+    return properties;
+}
+
+HRESULT STDMETHODCALLTYPE Device::CreateCommittedResource(const D3D12_HEAP_PROPERTIES* heapProperties,
+    D3D12_HEAP_FLAGS heapFlags, const D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initialState,
+    const D3D12_CLEAR_VALUE* clearValue, REFIID riid, void** out) {
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    Log("CreateCommittedResource request dimension=%u width=%llu height=%u depth-or-array=%u mips=%u format=%u heap=%u state=0x%x clear=%s",
+        desc ? desc->Dimension : D3D12_RESOURCE_DIMENSION_UNKNOWN,
+        static_cast<unsigned long long>(desc ? desc->Width : 0),
+        desc ? desc->Height : 0, desc ? desc->DepthOrArraySize : 0,
+        desc ? desc->MipLevels : 0, desc ? desc->Format : DXGI_FORMAT_UNKNOWN,
+        heapProperties ? heapProperties->Type : D3D12_HEAP_TYPE_CUSTOM,
+        static_cast<UINT>(initialState), clearValue ? "present" : "none");
+    Resource* resource = nullptr;
+    const HRESULT createResult = Resource::Create(this, heapProperties, heapFlags, desc, &resource);
+    if (FAILED(createResult)) {
+        Log("CreateCommittedResource failed: dimension=%u format=%u heap=%u hr=0x%08lx",
+            desc ? desc->Dimension : D3D12_RESOURCE_DIMENSION_UNKNOWN,
+            desc ? desc->Format : DXGI_FORMAT_UNKNOWN,
+            heapProperties ? heapProperties->Type : D3D12_HEAP_TYPE_CUSTOM,
+            createResult);
+        return createResult;
+    }
+    const HRESULT queryResult = resource->QueryInterface(riid, out);
+    resource->Release();
+    Log("CreateCommittedResource result=0x%08lx", queryResult);
+    return queryResult;
+}
+
+HRESULT STDMETHODCALLTYPE Device::CreateReservedResource(const D3D12_RESOURCE_DESC* desc,
+    D3D12_RESOURCE_STATES initialState, const D3D12_CLEAR_VALUE* clearValue, REFIID riid, void** out) {
+    D3D12ON11_TRACE_CALLER("Device::CreateReservedResource");
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    Log("CreateReservedResource request dimension=%u width=%llu height=%u depth-or-array=%u mips=%u format=%u layout=%u flags=0x%x state=0x%x clear=%s",
+        desc ? desc->Dimension : D3D12_RESOURCE_DIMENSION_UNKNOWN,
+        static_cast<unsigned long long>(desc ? desc->Width : 0),
+        desc ? desc->Height : 0, desc ? desc->DepthOrArraySize : 0,
+        desc ? desc->MipLevels : 0, desc ? desc->Format : DXGI_FORMAT_UNKNOWN,
+        desc ? desc->Layout : D3D12_TEXTURE_LAYOUT_UNKNOWN,
+        desc ? desc->Flags : D3D12_RESOURCE_FLAG_NONE,
+        static_cast<UINT>(initialState), clearValue ? "present" : "none");
+    const bool validTexture2D = desc &&
+        desc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D &&

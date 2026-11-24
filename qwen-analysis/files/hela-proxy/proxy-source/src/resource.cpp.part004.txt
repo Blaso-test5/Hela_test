@@ -1,0 +1,66 @@
+    if (!copy || !buf) return;
+    D3D11_BUFFER_DESC copyDesc{};
+    copy->GetDesc(&copyDesc);
+    if (!CopyBufferPrefix(dev->ctx.Get(), copy, buf.Get(), copyDesc.ByteWidth) &&
+        Cfg().diagnosticRenderTrace) {
+        Log("[RENDER_TRACE] [tid=%lu] SyncStruct source range invalid resource=%p "
+            "copy_bytes=%u stride=%u",
+            GetCurrentThreadId(), this, copyDesc.ByteWidth, stride);
+    }
+}
+
+void Resource::WriteBackStruct(UINT stride) {
+    auto found = structCopies.find(stride);
+    if (found != structCopies.end() && buf) {
+        D3D11_BUFFER_DESC copyDesc{};
+        found->second->GetDesc(&copyDesc);
+        if (!CopyBufferPrefix(dev->ctx.Get(), buf.Get(), found->second.Get(), copyDesc.ByteWidth) &&
+            Cfg().diagnosticRenderTrace) {
+            Log("[RENDER_TRACE] [tid=%lu] WriteBackStruct destination range invalid "
+                "resource=%p copy_bytes=%u stride=%u",
+                GetCurrentThreadId(), this, copyDesc.ByteWidth, stride);
+        }
+    }
+}
+
+HRESULT Resource::RefreshReadback() {
+    if (heap != D3D12_HEAP_TYPE_READBACK || !staging || !buf || shadow.empty()) return E_INVALIDARG;
+    dev->ctx->CopyResource(staging.Get(), buf.Get());
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    const HRESULT result = dev->ctx->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+    if (FAILED(result)) return result;
+    memcpy(shadow.data(), mapped.pData, shadow.size());
+    dev->ctx->Unmap(staging.Get(), 0);
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE Resource::Map(UINT subresource, const D3D12_RANGE* readRange, void** data) {
+    if (!data) return E_POINTER;
+    *data = nullptr;
+    if (subresource != 0 || !IsBuffer()) return E_INVALIDARG;
+    if (heap == D3D12_HEAP_TYPE_DEFAULT) return DXGI_ERROR_INVALID_CALL;
+    if (readRange && (readRange->Begin > readRange->End || readRange->End > desc.Width)) return E_INVALIDARG;
+    if (heap == D3D12_HEAP_TYPE_READBACK) {
+        const HRESULT result = RefreshReadback();
+        if (FAILED(result)) return result;
+    }
+    std::lock_guard<std::mutex> lock(mu);
+    ++mapCount;
+    *data = shadow.data();
+    return S_OK;
+}
+
+void STDMETHODCALLTYPE Resource::Unmap(UINT subresource, const D3D12_RANGE* writtenRange) {
+    if (subresource != 0 || !IsBuffer() || heap != D3D12_HEAP_TYPE_UPLOAD) return;
+    std::lock_guard<std::mutex> lock(mu);
+    if (mapCount > 0) --mapCount;
+    if (writtenRange && writtenRange->Begin <= writtenRange->End && writtenRange->End <= desc.Width)
+        SyncToGpu(writtenRange->Begin, writtenRange->End - writtenRange->Begin);
+    else if (!writtenRange)
+        SyncToGpu(0, UINT64_MAX);
+    else
+        Log("Ignored invalid written range [%llu, %llu) for a %llu-byte resource",
+            static_cast<unsigned long long>(writtenRange->Begin),
+            static_cast<unsigned long long>(writtenRange->End),
+            static_cast<unsigned long long>(desc.Width));
+}

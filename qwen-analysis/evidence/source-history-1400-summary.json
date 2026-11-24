@@ -1,0 +1,42 @@
+{
+  "schema": "qwen.hela.bb-source-history",
+  "present": 1400,
+  "readbackCopySourceRef": "address_ref_064",
+  "resourceSummaries": [
+    {
+      "resourceRef": "address_ref_066",
+      "matchesReadbackCopySource": false,
+      "operations": 598,
+      "draws": 598,
+      "skipped": 0,
+      "clears": 0,
+      "entryCount": 129,
+      "allEntriesIncluded": false
+    },
+    {
+      "resourceRef": "address_ref_064",
+      "matchesReadbackCopySource": true,
+      "operations": 597,
+      "draws": 597,
+      "skipped": 0,
+      "clears": 0,
+      "entryCount": 129,
+      "allEntriesIncluded": true
+    },
+    {
+      "resourceRef": "address_ref_065",
+      "matchesReadbackCopySource": false,
+      "operations": 596,
+      "draws": 596,
+      "skipped": 0,
+      "clears": 0,
+      "entryCount": 129,
+      "allEntriesIncluded": false
+    }
+  ],
+  "matchingResourceEntryCount": 129,
+  "expectedRingSize": 128,
+  "allParsedEntriesIncluded": true,
+  "entriesObserved": 129,
+  "ringInterpretation": "the parser returned 129 entries; all are included, and the extra entry's relation to the 128-entry ring is not inferred"
+}

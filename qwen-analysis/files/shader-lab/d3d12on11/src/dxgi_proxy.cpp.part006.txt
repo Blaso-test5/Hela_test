@@ -1,0 +1,85 @@
+HRESULT STDMETHODCALLTYPE SwapChain::ResizeBuffers(UINT count, UINT width, UINT height,
+    DXGI_FORMAT format, UINT flags) {
+    ReleaseBackbuffers();
+    return real->ResizeBuffers(count, width, height, format, flags);
+}
+
+HRESULT STDMETHODCALLTYPE SwapChain::ResizeBuffers1(UINT count, UINT width, UINT height,
+    DXGI_FORMAT format, UINT flags, const UINT*, IUnknown* const*) {
+    ReleaseBackbuffers();
+    return real->ResizeBuffers(count, width, height, format, flags);
+}
+
+HRESULT CreateWrappedFactory(UINT flags, REFIID riid, void** out) {
+    LogDxgiModuleFingerprint();
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    Ptr<IDXGIFactory7> native;
+    HRESULT result = GetSystemDxgi().Create(flags, __uuidof(IDXGIFactory7),
+        reinterpret_cast<void**>(native.Put()));
+    if (FAILED(result)) return result;
+    auto* wrapper = new (std::nothrow) Factory(native.Get());
+    if (!wrapper) return E_OUTOFMEMORY;
+    native.Get()->AddRef();
+    result = wrapper->QueryInterface(riid, out);
+    wrapper->Release();
+    return result;
+}
+
+}
+
+extern "C" HRESULT WINAPI CreateDXGIFactory(REFIID riid, void** out) {
+    return CreateWrappedFactory(0, riid, out);
+}
+
+extern "C" HRESULT WINAPI CreateDXGIFactory1(REFIID riid, void** out) {
+    return CreateWrappedFactory(0, riid, out);
+}
+
+extern "C" HRESULT WINAPI CreateDXGIFactory2(UINT flags, REFIID riid, void** out) {
+    return CreateWrappedFactory(flags, riid, out);
+}
+
+extern "C" HRESULT WINAPI DXGIDeclareAdapterRemovalSupport() {
+    using Fn = HRESULT(WINAPI*)();
+    auto function = reinterpret_cast<Fn>(GetSystemDxgi().GetExport("DXGIDeclareAdapterRemovalSupport"));
+    return function ? function() : HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
+}
+
+extern "C" HRESULT WINAPI DXGIGetDebugInterface1(UINT flags, REFIID riid, void** debug) {
+    using Fn = HRESULT(WINAPI*)(UINT, REFIID, void**);
+    auto function = reinterpret_cast<Fn>(GetSystemDxgi().GetExport("DXGIGetDebugInterface1"));
+    return function ? function(flags, riid, debug) : HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
+}
+
+#define DXGI_FORWARD_ARGS \
+    uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t a4, \
+    uintptr_t a5, uintptr_t a6, uintptr_t a7, uintptr_t a8, \
+    uintptr_t a9, uintptr_t a10, uintptr_t a11, uintptr_t a12
+#define DXGI_FORWARD_CALL \
+    a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12
+#define DEFINE_DXGI_FORWARDER(name) \
+    extern "C" uintptr_t WINAPI DxgiForward_##name(DXGI_FORWARD_ARGS) { \
+        using Fn = uintptr_t(WINAPI*)(DXGI_FORWARD_ARGS); \
+        auto function = reinterpret_cast<Fn>(GetSystemDxgi().GetExport(#name)); \
+        return function ? function(DXGI_FORWARD_CALL) : static_cast<uintptr_t>(HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND)); \
+    }
+
+DEFINE_DXGI_FORWARDER(ApplyCompatResolutionQuirking)
+DEFINE_DXGI_FORWARDER(CompatString)
+DEFINE_DXGI_FORWARDER(CompatValue)
+DEFINE_DXGI_FORWARDER(DXGID3D10CreateDevice)
+DEFINE_DXGI_FORWARDER(DXGID3D10CreateLayeredDevice)
+DEFINE_DXGI_FORWARDER(DXGID3D10GetLayeredDeviceSize)
+DEFINE_DXGI_FORWARDER(DXGID3D10RegisterLayers)
+DEFINE_DXGI_FORWARDER(DXGIDumpJournal)
+DEFINE_DXGI_FORWARDER(DXGIReportAdapterConfiguration)
+DEFINE_DXGI_FORWARDER(PIXBeginCapture)
+DEFINE_DXGI_FORWARDER(PIXEndCapture)
+DEFINE_DXGI_FORWARDER(PIXGetCaptureState)
+DEFINE_DXGI_FORWARDER(SetAppCompatStringPointer)
+DEFINE_DXGI_FORWARDER(UpdateHMDEmulationStatus)
+
+#undef DEFINE_DXGI_FORWARDER
+#undef DXGI_FORWARD_CALL
+#undef DXGI_FORWARD_ARGS

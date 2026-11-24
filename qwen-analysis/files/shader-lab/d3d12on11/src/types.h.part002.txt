@@ -1,0 +1,150 @@
+    uint64_t shaderHash = 0, pixelShaderHash = 0;
+    uint64_t geometryShaderHash = 0, hullShaderHash = 0, domainShaderHash = 0;
+    Ptr<ID3D11VertexShader> vs; Ptr<ID3D11PixelShader> ps; Ptr<ID3D11GeometryShader> gs;
+    Ptr<ID3D11HullShader> hs; Ptr<ID3D11DomainShader> ds; Ptr<ID3D11ComputeShader> cs;
+    Ptr<ID3D11InputLayout> il;
+    Ptr<ID3D11RasterizerState> rs; Ptr<ID3D11BlendState> bs; Ptr<ID3D11DepthStencilState> dss;
+    UINT sampleMask = 0xffffffffu;
+    Ptr<IUnknown> rootSig;
+    using Stub_ID3D12PipelineState::Stub_ID3D12PipelineState;
+    static HRESULT CreateGraphics(Device* d, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, PipelineState** out);
+    static HRESULT CreateCompute(Device* d, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, PipelineState** out);
+};
+
+struct CommandSignature : Stub_ID3D12CommandSignature {
+    D3D12_INDIRECT_ARGUMENT_TYPE argumentType;
+    UINT byteStride;
+    Ptr<IUnknown> rootSignature;
+    CommandSignature(Device* d, D3D12_INDIRECT_ARGUMENT_TYPE type, UINT stride,
+        ID3D12RootSignature* root)
+        : Stub_ID3D12CommandSignature(d), argumentType(type), byteStride(stride),
+          rootSignature(root) {}
+};
+
+// ------------------------------------------------------------------ fence / queue / lista di comandi
+struct Fence : Stub_ID3D12Fence {
+    std::mutex m;
+    UINT64 val = 0;
+    struct Waiter { UINT64 v; HANDLE ev; };
+    std::vector<Waiter> waiters;
+    Fence(Device* d, UINT64 init) : Stub_ID3D12Fence(d), val(init) {}
+    void CompleteTo(UINT64 v);
+    UINT64 STDMETHODCALLTYPE GetCompletedValue() override;
+    HRESULT STDMETHODCALLTYPE SetEventOnCompletion(UINT64 v, HANDLE ev) override;
+    HRESULT STDMETHODCALLTYPE Signal(UINT64 v) override { CompleteTo(v); return S_OK; }
+};
+
+struct CommandAllocator : Stub_ID3D12CommandAllocator {
+    using Stub_ID3D12CommandAllocator::Stub_ID3D12CommandAllocator;
+    HRESULT STDMETHODCALLTYPE Reset() override { return S_OK; }
+};
+
+struct ExecState {
+    Device* dev = nullptr;
+    ID3D11DeviceContext* c = nullptr;
+    uint64_t drawsExecuted = 0;
+    uint64_t drawsSkipped = 0;
+    uint64_t rtvBound = 0;
+    uint64_t backbufferDraws = 0;
+    uint64_t copyToBackbuffer = 0;
+    std::array<Ptr<ID3D11Resource>, 8> rtvResources;
+    std::array<D3D12_VIEWPORT, D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE> viewports{};
+    UINT numViewports = 0;
+    bool skipDraws = false;
+    bool skipDispatches = false;
+    bool hasGraphicsPipeline = false;
+    bool hasComputePipeline = false;
+    bool graphicsPlaceholderVs = false;
+    bool computePlaceholderCs = false;
+    UINT graphicsMissingShaderStages = 0;
+    UINT computeMissingShaderStages = 0;
+    uintptr_t graphicsPipelineIdentity = 0;
+    uint64_t graphicsShaderHash = 0;
+    uint64_t graphicsPixelShaderHash = 0;
+    uint64_t graphicsGeometryShaderHash = 0;
+    uint64_t graphicsHullShaderHash = 0;
+    uint64_t graphicsDomainShaderHash = 0;
+    uint64_t computeShaderHash = 0;
+    bool hasVertexBuffer = false;
+    bool hasIndexBuffer = false;
+    Ptr<ID3D12Resource> indexBufferResource;
+    UINT indexBufferViewSize = 0;
+    bool rtvBackbuffer = false;
+    std::array<bool, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> vertexBuffers{};
+    Ptr<ID3D11RenderTargetView> rtvs[8];
+    UINT numRtv = 0;
+    Ptr<ID3D11DepthStencilView> dsv;
+    Ptr<ID3D11BlendState> bs;
+    Ptr<ID3D11DepthStencilState> dss;
+    float blend[4] = {1, 1, 1, 1};
+    UINT stencilRef = 0, sampleMask = 0xffffffffu;
+    std::vector<Ptr<IUnknown>> readbacks;
+    std::vector<std::pair<Ptr<IUnknown>, UINT>> structWrites;   // (Resource, stride)
+    void ApplyOM() { c->OMSetBlendState(bs.Get(), blend, sampleMask); c->OMSetDepthStencilState(dss.Get(), stencilRef); }
+};
+using Cmd = std::function<void(ExecState&)>;
+
+struct RootArg {
+    uint8_t kind = 0;
+    UINT64 value = 0;
+    std::vector<UINT> consts;
+    Ptr<IUnknown> keep;
+};   // 1=consts 2=cbv 3=srv 4=uav 5=table
+struct BindSnap {
+    Ptr<IUnknown> keep;
+    RootSignature* rs = nullptr;
+    std::vector<RootArg> args;
+    std::vector<Ptr<IUnknown>> descriptorHeaps;
+};
+struct BindState {
+    Ptr<IUnknown> keep; RootSignature* rs = nullptr; std::vector<RootArg> args;
+    std::shared_ptr<const BindSnap> snap;
+};
+
+struct CommandList : Stub_ID3D12GraphicsCommandList {
+    D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    std::vector<Cmd> cmds;
+    bool closed = false;
+    BindState gfx, comp;
+    std::vector<Ptr<IUnknown>> descriptorHeaps;
+    CommandList(Device* d, D3D12_COMMAND_LIST_TYPE t) : Stub_ID3D12GraphicsCommandList(d), type(t) {}
+    void Run(ExecState& ex) { for (auto& c : cmds) c(ex); }
+    void Add(Cmd c) { cmds.push_back(std::move(c)); }
+    std::shared_ptr<const BindSnap> Snap(BindState& b);
+    void SetRootArg(BindState& b, UINT idx, RootArg&& a);
+    void SetRootConstants(BindState& b, UINT idx, UINT count, const void* values, UINT offset);
+    void DrawCommon(Cmd draw, bool gfxBind);
+
+    D3D12_COMMAND_LIST_TYPE STDMETHODCALLTYPE GetType() override { return type; }
+    HRESULT STDMETHODCALLTYPE Close() override;
+    HRESULT STDMETHODCALLTYPE Reset(ID3D12CommandAllocator* a, ID3D12PipelineState* p) override;
+    void STDMETHODCALLTYPE ClearState(ID3D12PipelineState* p) override;
+    void STDMETHODCALLTYPE DrawInstanced(UINT vc, UINT ic, UINT sv, UINT si) override;
+    void STDMETHODCALLTYPE DrawIndexedInstanced(UINT ic, UINT inst, UINT si, INT bv, UINT sinst) override;
+    void STDMETHODCALLTYPE Dispatch(UINT x, UINT y, UINT z) override;
+    void STDMETHODCALLTYPE ExecuteIndirect(ID3D12CommandSignature* signature, UINT maxCommandCount,
+        ID3D12Resource* argumentBuffer, UINT64 argumentBufferOffset,
+        ID3D12Resource* countBuffer, UINT64 countBufferOffset) override;
+    void STDMETHODCALLTYPE CopyBufferRegion(ID3D12Resource* dst, UINT64 dOff, ID3D12Resource* src, UINT64 sOff, UINT64 n) override;
+    void STDMETHODCALLTYPE CopyTextureRegion(const D3D12_TEXTURE_COPY_LOCATION* dst, UINT dx, UINT dy, UINT dz,
+                                             const D3D12_TEXTURE_COPY_LOCATION* src, const D3D12_BOX* box) override;
+    void STDMETHODCALLTYPE CopyResource(ID3D12Resource* dst, ID3D12Resource* src) override;
+    void STDMETHODCALLTYPE CopyTiles(ID3D12Resource* tiledResource,
+        const D3D12_TILED_RESOURCE_COORDINATE* coordinate, const D3D12_TILE_REGION_SIZE* region,
+        ID3D12Resource* buffer, UINT64 offset, D3D12_TILE_COPY_FLAGS flags) override;
+    void STDMETHODCALLTYPE ResolveSubresource(ID3D12Resource* dst, UINT ds, ID3D12Resource* src, UINT ss, DXGI_FORMAT f) override;
+    void STDMETHODCALLTYPE IASetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY t) override;
+    void STDMETHODCALLTYPE RSSetViewports(UINT n, const D3D12_VIEWPORT* v) override;
+    void STDMETHODCALLTYPE RSSetScissorRects(UINT n, const D3D12_RECT* r) override;
+    void STDMETHODCALLTYPE OMSetBlendFactor(const FLOAT f[4]) override;
+    void STDMETHODCALLTYPE OMSetStencilRef(UINT r) override;
+    void STDMETHODCALLTYPE SetPipelineState(ID3D12PipelineState* p) override;
+    void STDMETHODCALLTYPE ResourceBarrier(UINT count, const D3D12_RESOURCE_BARRIER* barriers) override;
+    void STDMETHODCALLTYPE ExecuteBundle(ID3D12GraphicsCommandList* l) override;
+    void STDMETHODCALLTYPE SetDescriptorHeaps(UINT count, ID3D12DescriptorHeap* const* heaps) override;
+    void STDMETHODCALLTYPE SetComputeRootSignature(ID3D12RootSignature* rs) override;
+    void STDMETHODCALLTYPE SetGraphicsRootSignature(ID3D12RootSignature* rs) override;
+    void STDMETHODCALLTYPE SetComputeRootDescriptorTable(UINT i, D3D12_GPU_DESCRIPTOR_HANDLE h) override;
+    void STDMETHODCALLTYPE SetGraphicsRootDescriptorTable(UINT i, D3D12_GPU_DESCRIPTOR_HANDLE h) override;
+    void STDMETHODCALLTYPE SetComputeRoot32BitConstant(UINT i, UINT d, UINT off) override;
+    void STDMETHODCALLTYPE SetGraphicsRoot32BitConstant(UINT i, UINT d, UINT off) override;

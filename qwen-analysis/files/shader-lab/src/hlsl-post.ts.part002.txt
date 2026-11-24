@@ -1,0 +1,39 @@
+    warnings.push("Presenti variabili 'static' non inizializzate generate da valori undef del DXIL: FXC può segnalare avvisi.");
+
+  const generatedEntry = metadata.stage ? SPIRV_CROSS_ENTRY[metadata.stage] : undefined;
+  const hasMainEntry = /\b(?:void|[\w<>]+)\s+main\s*\(/.test(out);
+  const hasGeneratedEntry = generatedEntry
+    ? new RegExp(`\\b(?:void|[A-Za-z_]\\w*(?:\\s*<[^>]+>)?)\\s+${esc(generatedEntry)}\\s*\\(`).test(out)
+    : false;
+  if (hasMainEntry) entryPoint = "main";
+  else if (hasGeneratedEntry)
+    entryPoint = generatedEntry;
+  if (metadata.stage === "cs" && !metadata.numThreads) {
+    warnings.push("NumThreads non presente nel disassemblato DXIL: FXC richiede [numthreads] per il compute shader.");
+  } else if (metadata.stage === "cs" && metadata.numThreads) {
+    const dimensions = metadata.numThreads.match(/^\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/);
+    const threadCounts = dimensions?.slice(1).map(Number);
+    if (!threadCounts || threadCounts.some((n) => n === 0) ||
+        threadCounts[0] > 1024 || threadCounts[1] > 1024 || threadCounts[2] > 64 ||
+        threadCounts[0] * threadCounts[1] * threadCounts[2] > 1024) {
+      warnings.push(`Metadato NumThreads non valido (${metadata.numThreads}): attributo [numthreads] non aggiunto.`);
+    } else if (!entryPoint) {
+      warnings.push(`Entry point compute SPIRV-Cross (${generatedEntry}) non trovato: [numthreads] non aggiunto.`);
+    } else {
+      const attribute = `[numthreads(${threadCounts.join(",")})]`;
+      const entryRe = new RegExp(`(\\bvoid\\s+${entryPoint}\\s*\\()`);
+      const at = out.search(entryRe);
+      const prefix = out.slice(0, at);
+      const existing = prefix.match(/\[\s*numthreads\s*\(\s*[\d\s,]+\)\s*\]\s*$/);
+      if (existing) {
+        if (existing[0].replace(/\s/g, "") !== attribute) {
+          warnings.push(`L'attributo [numthreads] esistente non coincide con il DXIL (${metadata.numThreads}): verifica manualmente.`);
+        }
+      } else {
+        out = out.slice(0, at) + `${attribute}\n` + out.slice(at);
+        changes.push(`Ripristinato [numthreads]${metadata.numThreads} dal metadato DXIL`);
+      }
+    }
+  }
+  return { hlsl: out, changes, registerMap, warnings, entryPoint };
+}

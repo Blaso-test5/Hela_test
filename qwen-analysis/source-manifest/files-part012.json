@@ -1,0 +1,68 @@
+[
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/generated/dxgi_swapchain_fwd.inc",
+    "totalLineCount": 44,
+    "sourceByteCount": 5603,
+    "sha256": "a780a9e88ca1d3a0b38096872f18aaf0031944b372f54041a7944dfc0d7c05e5",
+    "publishedSha256": "a780a9e88ca1d3a0b38096872f18aaf0031944b372f54041a7944dfc0d7c05e5",
+    "publishedByteCount": 5603,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/generated/dxgi_swapchain_fwd.inc",
+        "lineStart": 1,
+        "lineEnd": 44,
+        "byteCount": 5603,
+        "sha256": "a780a9e88ca1d3a0b38096872f18aaf0031944b372f54041a7944dfc0d7c05e5"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/src/backbuffer.cpp",
+    "totalLineCount": 109,
+    "sourceByteCount": 4626,
+    "sha256": "13e5af4cf0ffb3cbb9b4730336d76a83a1a706117906692d07b3ae69bb3f1f30",
+    "publishedSha256": "13e5af4cf0ffb3cbb9b4730336d76a83a1a706117906692d07b3ae69bb3f1f30",
+    "publishedByteCount": 4626,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/d3d12on11/src/backbuffer.cpp",
+        "lineStart": 1,
+        "lineEnd": 109,
+        "byteCount": 4626,
+        "sha256": "13e5af4cf0ffb3cbb9b4730336d76a83a1a706117906692d07b3ae69bb3f1f30"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/src/bridge.h",
+    "totalLineCount": 33,
+    "sourceByteCount": 1660,
+    "sha256": "70c294679bf27e52a6858f0c5e3f776770a2d5ff6e79c5bbb39d3116a1204965",
+    "publishedSha256": "70c294679bf27e52a6858f0c5e3f776770a2d5ff6e79c5bbb39d3116a1204965",
+    "publishedByteCount": 1660,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/d3d12on11/src/bridge.h.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 33,
+        "byteCount": 1660,
+        "sha256": "70c294679bf27e52a6858f0c5e3f776770a2d5ff6e79c5bbb39d3116a1204965"
+      }
+    ]
+  }
+]

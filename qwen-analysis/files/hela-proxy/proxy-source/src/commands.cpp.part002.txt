@@ -1,0 +1,187 @@
+            for (UINT i = 0; i < indexCount; ++i) {
+                if (indexSize == 2) {
+                    uint16_t value = 0;
+                    memcpy(&value, source + i * indexSize, sizeof(value));
+                    cpuIndices[i] = value;
+                } else {
+                    memcpy(&cpuIndices[i], source + i * indexSize, sizeof(cpuIndices[i]));
+                }
+            }
+            hasCpuShadow = true;
+        }
+    }
+
+    D3D11_BUFFER_DESC stagingDesc{};
+    stagingDesc.ByteWidth = static_cast<UINT>(byteCount);
+    stagingDesc.Usage = D3D11_USAGE_STAGING;
+    stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    Ptr<ID3D11Buffer> staging;
+    const HRESULT createResult = state.dev && state.dev->d11
+        ? state.dev->d11->CreateBuffer(&stagingDesc, nullptr, staging.Put())
+        : E_POINTER;
+    if (FAILED(createResult)) {
+        Log("[TARGET_INDEX_DATA] hit=%u status=staging_create_failed hr=0x%08lx",
+            hit, createResult);
+        return;
+    }
+
+    D3D11_BOX sourceBox{};
+    sourceBox.left = static_cast<UINT>(sourceByteOffset);
+    sourceBox.right = static_cast<UINT>(sourceByteOffset + byteCount);
+    sourceBox.top = 0;
+    sourceBox.bottom = 1;
+    sourceBox.front = 0;
+    sourceBox.back = 1;
+    state.c->CopySubresourceRegion(staging.Get(), 0, 0, 0, 0,
+        indexBuffer, 0, &sourceBox);
+
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    const HRESULT mapResult = state.c->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+    if (FAILED(mapResult)) {
+        Log("[TARGET_INDEX_DATA] hit=%u status=staging_map_failed hr=0x%08lx",
+            hit, mapResult);
+        return;
+    }
+    const uint8_t* gpuBytes = static_cast<const uint8_t*>(mapped.pData);
+    for (UINT i = 0; i < indexCount; ++i) {
+        if (indexSize == 2) {
+            uint16_t value = 0;
+            memcpy(&value, gpuBytes + i * indexSize, sizeof(value));
+            gpuIndices[i] = value;
+        } else {
+            memcpy(&gpuIndices[i], gpuBytes + i * indexSize, sizeof(gpuIndices[i]));
+        }
+    }
+    state.c->Unmap(staging.Get(), 0);
+
+    std::array<long long, 6> effectiveIndices{};
+    for (UINT i = 0; i < indexCount; ++i)
+        effectiveIndices[i] = static_cast<long long>(gpuIndices[i]) + baseVertex;
+    Log("[TARGET_INDEX_DATA] hit=%u status=ok format=%u source_bytes=%u view_bytes=%u "
+        "ib_offset=%u start_index=%u base_vertex=%d count=%u cpu_shadow=%u "
+        "cpu=[%u,%u,%u,%u,%u,%u] d3d11=[%u,%u,%u,%u,%u,%u] "
+        "effective=[%lld,%lld,%lld,%lld,%lld,%lld]",
+        hit, static_cast<unsigned int>(indexFormat), sourceDesc.ByteWidth, indexViewSize,
+        indexOffset, startIndex, baseVertex, indexCount, hasCpuShadow ? 1u : 0u,
+        cpuIndices[0], cpuIndices[1], cpuIndices[2], cpuIndices[3], cpuIndices[4], cpuIndices[5],
+        gpuIndices[0], gpuIndices[1], gpuIndices[2], gpuIndices[3], gpuIndices[4], gpuIndices[5],
+        effectiveIndices[0], effectiveIndices[1], effectiveIndices[2],
+        effectiveIndices[3], effectiveIndices[4], effectiveIndices[5]);
+}
+
+void LogTargetVertexData(ExecState& state, UINT hit, ID3D11Buffer* vertexBuffer,
+    UINT stride, UINT vertexOffset) {
+    constexpr UINT vertexCount = 4;
+    if (!state.c || !vertexBuffer || !stride || stride > 256) {
+        Log("[TARGET_VERTEX_DATA] hit=%u status=invalid_context_or_layout stride=%u",
+            hit, stride);
+        return;
+    }
+
+    const UINT64 byteCount = static_cast<UINT64>(stride) * vertexCount;
+    D3D11_BUFFER_DESC sourceDesc{};
+    vertexBuffer->GetDesc(&sourceDesc);
+    if (vertexOffset > sourceDesc.ByteWidth ||
+        byteCount > sourceDesc.ByteWidth - vertexOffset) {
+        Log("[TARGET_VERTEX_DATA] hit=%u status=buffer_range_invalid offset=%u stride=%u "
+            "vertices=%u buffer_bytes=%u",
+            hit, vertexOffset, stride, vertexCount, sourceDesc.ByteWidth);
+        return;
+    }
+
+    D3D11_BUFFER_DESC stagingDesc{};
+    stagingDesc.ByteWidth = static_cast<UINT>(byteCount);
+    stagingDesc.Usage = D3D11_USAGE_STAGING;
+    stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    Ptr<ID3D11Buffer> staging;
+    const HRESULT createResult = state.dev && state.dev->d11
+        ? state.dev->d11->CreateBuffer(&stagingDesc, nullptr, staging.Put())
+        : E_POINTER;
+    if (FAILED(createResult)) {
+        Log("[TARGET_VERTEX_DATA] hit=%u status=staging-create-failed hr=0x%08lx",
+            hit, createResult);
+        return;
+    }
+
+    D3D11_BOX sourceBox{};
+    sourceBox.left = vertexOffset;
+    sourceBox.right = vertexOffset + static_cast<UINT>(byteCount);
+    sourceBox.top = 0;
+    sourceBox.bottom = 1;
+    sourceBox.front = 0;
+    sourceBox.back = 1;
+    state.c->CopySubresourceRegion(staging.Get(), 0, 0, 0, 0,
+        vertexBuffer, 0, &sourceBox);
+
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    const HRESULT mapResult = state.c->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+    if (FAILED(mapResult)) {
+        Log("[TARGET_VERTEX_DATA] hit=%u status=staging-map-failed hr=0x%08lx",
+            hit, mapResult);
+        return;
+    }
+    if (!mapped.pData) {
+        state.c->Unmap(staging.Get(), 0);
+        Log("[TARGET_VERTEX_DATA] hit=%u status=invalid-mapped-data", hit);
+        return;
+    }
+
+    const auto* bytes = static_cast<const uint8_t*>(mapped.pData);
+    for (UINT vertex = 0; vertex < vertexCount; ++vertex) {
+        std::string hex;
+        hex.reserve(static_cast<size_t>(stride) * 2);
+        for (UINT byte = 0; byte < stride; ++byte) {
+            char value[3]{};
+            snprintf(value, sizeof(value), "%02x", bytes[vertex * stride + byte]);
+            hex += value;
+        }
+        Log("[TARGET_VERTEX_DATA] hit=%u vertex=%u byte_offset=%u stride=%u hex=%s",
+            hit, vertex, vertexOffset + vertex * stride, stride, hex.c_str());
+    }
+    state.c->Unmap(staging.Get(), 0);
+}
+
+void LogTargetDrawDiagnostic(ExecState& state, UINT indexCount, UINT instanceCount,
+    UINT startIndex, INT baseVertex, UINT startInstance,
+    TargetDrawPipelineStats& pipelineStats) {
+    if (!Cfg().diagnosticRenderTrace || !state.c ||
+        state.graphicsShaderHash != kTargetDiagnosticVs ||
+        (state.graphicsPixelShaderHash != kTargetDiagnosticPs0 &&
+         state.graphicsPixelShaderHash != kTargetDiagnosticPs1))
+        return;
+
+    PollTargetDrawPipelineStats(state.c);
+
+    ID3D11RenderTargetView* rawRtv = nullptr;
+    ID3D11DepthStencilView* rawDsv = nullptr;
+    state.c->OMGetRenderTargets(1, &rawRtv, &rawDsv);
+    Ptr<ID3D11RenderTargetView> rtv = Ptr<ID3D11RenderTargetView>::Attach(rawRtv);
+    Ptr<ID3D11DepthStencilView> dsv = Ptr<ID3D11DepthStencilView>::Attach(rawDsv);
+    ID3D11Resource* rawRtvResource = nullptr;
+    if (rtv) rtv->GetResource(&rawRtvResource);
+    Ptr<ID3D11Resource> rtvResource = Ptr<ID3D11Resource>::Attach(rawRtvResource);
+
+    const uint64_t nextDrawIndex =
+        TraceStats().drawExec.load(std::memory_order_relaxed) + 1;
+    const UINT captureIndex = TargetDrawCaptureIndex();
+    const bool selectedCapture = captureIndex == nextDrawIndex;
+    UINT resourceHit = 0;
+    const UINT hit = ClaimTargetDrawDiagSlot(
+        rtvResource.Get(), resourceHit, selectedCapture);
+    if (!hit) return;
+    if (selectedCapture) {
+        Log("[TARGET_DRAW_CAPTURE] expected_draw_index=%llu hit=%u rtv_resource=%p "
+            "vs=%016llx ps=%016llx",
+            static_cast<unsigned long long>(nextDrawIndex), hit, rtvResource.Get(),
+            static_cast<unsigned long long>(state.graphicsShaderHash),
+            static_cast<unsigned long long>(state.graphicsPixelShaderHash));
+    }
+
+    auto logBoundCb = [&](const char* stage) {
+        ID3D11Buffer* rawBuffer = nullptr;
+        if (strcmp(stage, "VS") == 0)
+            state.c->VSGetConstantBuffers(0, 1, &rawBuffer);
+        else
+            state.c->PSGetConstantBuffers(0, 1, &rawBuffer);
+        Ptr<ID3D11Buffer> buffer = Ptr<ID3D11Buffer>::Attach(rawBuffer);
+        if (!buffer) {

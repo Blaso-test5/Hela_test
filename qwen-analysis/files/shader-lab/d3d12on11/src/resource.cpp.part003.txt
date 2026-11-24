@@ -1,0 +1,176 @@
+            found->second.resource, resource);
+        return;
+    }
+    const PlacedRangeInfo released = found->second;
+    placedRanges.erase(found);
+    if (Cfg().diagnosticRenderTrace && released.resource) {
+        auto& stats = TraceStats();
+        stats.placedReleased.fetch_add(1, std::memory_order_relaxed);
+        stats.placedLive.fetch_sub(1, std::memory_order_relaxed);
+        Log("[RENDER_TRACE] [tid=%lu] ReleasePlacedRange heap=%p res=%p range=[%llu..%llu) live=%zu",
+            GetCurrentThreadId(), this, released.resource,
+            static_cast<unsigned long long>(released.offset),
+            static_cast<unsigned long long>(released.offset + released.size), placedRanges.size());
+    }
+}
+
+UINT Resource::NumSubresources() const {
+    if (desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) return 1;
+    const UINT mips = std::max<UINT>(desc.MipLevels, 1);
+    const UINT arrays = desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ? 1 : desc.DepthOrArraySize;
+    return mips * arrays;
+}
+
+ID3D11Buffer* Resource::GpuBuffer() {
+    if (!buf) return nullptr;
+    return buf.Get();
+}
+
+void Resource::SyncToGpu(UINT64 offset, UINT64 size) {
+    if (!buf || shadow.empty() || offset >= shadow.size()) return;
+    const UINT64 end = size == UINT64_MAX ? shadow.size() : std::min<UINT64>(shadow.size(), offset + size);
+    if (end <= offset || end - offset > UINT_MAX || offset > UINT_MAX) return;
+    D3D11_BOX box{};
+    box.left = static_cast<UINT>(offset);
+    box.right = static_cast<UINT>(end);
+    box.top = 0;
+    box.bottom = 1;
+    box.front = 0;
+    box.back = 1;
+    dev->ctx->UpdateSubresource(buf.Get(), 0, &box, shadow.data() + offset, 0, 0);
+}
+
+ID3D11Buffer* Resource::CbWindow(UINT64 offset, UINT64 size) {
+    if (!IsBuffer() || size == 0 || size > D3D11_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16 ||
+        offset > desc.Width || size > desc.Width - offset)
+        return nullptr;
+    const UINT64 byteWidth = AlignUp(size, 16);
+    if (byteWidth > D3D11_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16) return nullptr;
+    std::lock_guard<std::mutex> lock(mu);
+    const auto key = std::make_pair(offset, size);
+    auto found = cbWindows.find(key);
+    if (found != cbWindows.end()) {
+        if (!shadow.empty()) {
+            std::vector<uint8_t> bytes(static_cast<size_t>(byteWidth), 0);
+            memcpy(bytes.data(), shadow.data() + offset, static_cast<size_t>(size));
+            dev->ctx->UpdateSubresource(found->second.Get(), 0, nullptr, bytes.data(), 0, 0);
+        } else if (buf) {
+            D3D11_BOX box{};
+            box.left = static_cast<UINT>(offset);
+            box.right = static_cast<UINT>(offset + size);
+            box.top = 0;
+            box.bottom = 1;
+            box.front = 0;
+            box.back = 1;
+            dev->ctx->CopySubresourceRegion(found->second.Get(), 0, 0, 0, 0, buf.Get(), 0, &box);
+        }
+        return found->second.Get();
+    }
+
+    D3D11_BUFFER_DESC bufferDesc{};
+    bufferDesc.ByteWidth = static_cast<UINT>(byteWidth);
+    bufferDesc.Usage = D3D11_USAGE_DEFAULT;
+    bufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    Ptr<ID3D11Buffer> window;
+    if (FAILED(dev->d11->CreateBuffer(&bufferDesc, nullptr, window.Put()))) return nullptr;
+
+    std::vector<uint8_t> bytes(static_cast<size_t>(byteWidth), 0);
+    if (!shadow.empty()) {
+        memcpy(bytes.data(), shadow.data() + offset, static_cast<size_t>(size));
+        dev->ctx->UpdateSubresource(window.Get(), 0, nullptr, bytes.data(), 0, 0);
+    } else if (buf) {
+        D3D11_BOX box{};
+        box.left = static_cast<UINT>(offset);
+        box.right = static_cast<UINT>(offset + size);
+        box.top = 0;
+        box.bottom = 1;
+        box.front = 0;
+        box.back = 1;
+        dev->ctx->CopySubresourceRegion(window.Get(), 0, 0, 0, 0, buf.Get(), 0, &box);
+    }
+
+    auto inserted = cbWindows.emplace(key, std::move(window));
+    return inserted.first->second.Get();
+}
+
+ID3D11Buffer* Resource::StructCopy(UINT stride) {
+    if (!IsBuffer() || stride == 0 || desc.Width > UINT_MAX) {
+        if (Cfg().diagnosticRenderTrace)
+            Log("[RENDER_TRACE] [tid=%lu] StructCopy rejected resource=%p width=%llu stride=%u buffer=%u",
+                GetCurrentThreadId(), this, static_cast<unsigned long long>(desc.Width), stride, IsBuffer());
+        return nullptr;
+    }
+    auto found = structCopies.find(stride);
+    if (found != structCopies.end()) return found->second.Get();
+
+    UINT64 effectiveWidth = nativeWidth ? std::min(desc.Width, nativeWidth) : desc.Width;
+    if (tiled) effectiveWidth = std::min<UINT64>(effectiveWidth, 64ull * 1024ull * 1024ull);
+    const UINT byteWidth = static_cast<UINT>((effectiveWidth / stride) * stride);
+    if (!byteWidth) {
+        if (Cfg().diagnosticRenderTrace)
+            Log("[RENDER_TRACE] [tid=%lu] StructCopy computed zero ByteWidth resource=%p width=%llu native-width=%llu stride=%u",
+                GetCurrentThreadId(), this, static_cast<unsigned long long>(desc.Width),
+                static_cast<unsigned long long>(nativeWidth), stride);
+        return nullptr;
+    }
+    if (Cfg().diagnosticRenderTrace && desc.Width % stride != 0) {
+        static std::atomic<UINT> nonAlignedLogCount{0};
+        if (nonAlignedLogCount.fetch_add(1, std::memory_order_relaxed) < 16) {
+            Log("[STRUCT_COPY_TRUNCATE] resource=%p width=%llu stride=%u "
+                "copy_bytes=%u trailing_bytes=%llu",
+                this, static_cast<unsigned long long>(desc.Width), stride, byteWidth,
+                static_cast<unsigned long long>(desc.Width % stride));
+        }
+    }
+
+    D3D11_BUFFER_DESC bufferDesc{};
+    bufferDesc.ByteWidth = byteWidth;
+    bufferDesc.Usage = D3D11_USAGE_DEFAULT;
+    bufferDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    if (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) bufferDesc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+    bufferDesc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+    bufferDesc.StructureByteStride = stride;
+    Ptr<ID3D11Buffer> copy;
+    const HRESULT createResult = dev->d11->CreateBuffer(&bufferDesc, nullptr, copy.Put());
+    if (FAILED(createResult)) {
+        if (Cfg().diagnosticRenderTrace)
+            Log("[RENDER_TRACE] [tid=%lu] StructCopy CreateBuffer failed resource=%p width=%llu effective-width=%llu stride=%u hr=0x%08lx",
+                GetCurrentThreadId(), this, static_cast<unsigned long long>(desc.Width),
+                static_cast<unsigned long long>(effectiveWidth), stride, createResult);
+        return nullptr;
+    }
+
+    if (buf && !CopyBufferPrefix(dev->ctx.Get(), copy.Get(), buf.Get(), byteWidth)) {
+        if (Cfg().diagnosticRenderTrace)
+            Log("[RENDER_TRACE] [tid=%lu] StructCopy source range invalid resource=%p "
+                "copy_bytes=%u stride=%u",
+                GetCurrentThreadId(), this, byteWidth, stride);
+        return nullptr;
+    }
+    if (!shadow.empty()) {
+        if (shadow.size() < byteWidth) {
+            if (Cfg().diagnosticRenderTrace)
+                Log("[RENDER_TRACE] [tid=%lu] StructCopy shadow too small resource=%p "
+                    "shadow_bytes=%zu copy_bytes=%u stride=%u",
+                    GetCurrentThreadId(), this, shadow.size(), byteWidth, stride);
+            return nullptr;
+        }
+        dev->ctx->UpdateSubresource(copy.Get(), 0, nullptr, shadow.data(), 0, 0);
+    }
+    auto inserted = structCopies.emplace(stride, std::move(copy));
+    return inserted.first->second.Get();
+}
+
+void Resource::SyncStruct(UINT stride) {
+    ID3D11Buffer* copy = StructCopy(stride);
+    if (!copy || !buf) return;
+    D3D11_BUFFER_DESC copyDesc{};
+    copy->GetDesc(&copyDesc);
+    if (!CopyBufferPrefix(dev->ctx.Get(), copy, buf.Get(), copyDesc.ByteWidth) &&
+        Cfg().diagnosticRenderTrace) {
+        Log("[RENDER_TRACE] [tid=%lu] SyncStruct source range invalid resource=%p "
+            "copy_bytes=%u stride=%u",
+            GetCurrentThreadId(), this, copyDesc.ByteWidth, stride);
+    }
+}
+

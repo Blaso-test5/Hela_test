@@ -1,0 +1,278 @@
+          ],
+          "programs": [
+            {
+              "chunk": "SHEX",
+              "programType": 5,
+              "programTypeName": "CS",
+              "major": 5,
+              "minor": 0
+            }
+          ],
+          "id": "bb592abf5ce2bad1"
+        },
+        {
+          "fileName": "c71574a8f462e2c1.cso",
+          "bytes": 3884,
+          "sha256": "05373e5f80bb3242faf00495dfd1f6b1fd6310372633faf67269cbd675ebd8e1",
+          "matchesExpectedSha256": true,
+          "hasDxbcContainer": true,
+          "hasDxil": false,
+          "hasLegacy": true,
+          "partFourCCs": [
+            "RDEF",
+            "ISGN",
+            "OSGN",
+            "SHEX",
+            "STAT"
+          ],
+          "programs": [
+            {
+              "chunk": "SHEX",
+              "programType": 5,
+              "programTypeName": "CS",
+              "major": 5,
+              "minor": 0
+            }
+          ],
+          "id": "c71574a8f462e2c1"
+        },
+        {
+          "fileName": "d77600bde0076c33.cso",
+          "bytes": 1560,
+          "sha256": "9f6fee68b9c8c824f106426db501012ebc176e35a22c7a8cd47e3e94719207b4",
+          "matchesExpectedSha256": true,
+          "hasDxbcContainer": true,
+          "hasDxil": false,
+          "hasLegacy": true,
+          "partFourCCs": [
+            "RDEF",
+            "ISGN",
+            "OSGN",
+            "SHEX",
+            "STAT"
+          ],
+          "programs": [
+            {
+              "chunk": "SHEX",
+              "programType": 0,
+              "programTypeName": "PS",
+              "major": 5,
+              "minor": 0
+            }
+          ],
+          "id": "d77600bde0076c33"
+        },
+        {
+          "fileName": "df79d6ce6e6eaa48.cso",
+          "bytes": 4688,
+          "sha256": "961953dc0dd59a6345d053ba4c23bc50104c2d4ef03425488ce57cc5c628e11c",
+          "matchesExpectedSha256": true,
+          "hasDxbcContainer": true,
+          "hasDxil": false,
+          "hasLegacy": true,
+          "partFourCCs": [
+            "RDEF",
+            "ISGN",
+            "OSGN",
+            "SHEX",
+            "STAT"
+          ],
+          "programs": [
+            {
+              "chunk": "SHEX",
+              "programType": 5,
+              "programTypeName": "CS",
+              "major": 5,
+              "minor": 0
+            }
+          ],
+          "id": "df79d6ce6e6eaa48"
+        },
+        {
+          "fileName": "f79b80f0f2f58f68.cso",
+          "bytes": 796,
+          "sha256": "bf56dd5f681dd2fa8f483f5e1fa308dd432b39e78af032ace10634255fc15711",
+          "matchesExpectedSha256": true,
+          "hasDxbcContainer": true,
+          "hasDxil": false,
+          "hasLegacy": true,
+          "partFourCCs": [
+            "RDEF",
+            "ISGN",
+            "OSGN",
+            "SHEX",
+            "STAT"
+          ],
+          "programs": [
+            {
+              "chunk": "SHEX",
+              "programType": 0,
+              "programTypeName": "PS",
+              "major": 5,
+              "minor": 0
+            }
+          ],
+          "id": "f79b80f0f2f58f68"
+        }
+      ]
+    },
+    "packageReport": {
+      "ok": true,
+      "lifecycle": "staged-only",
+      "installed": false,
+      "networkUsed": false,
+      "manifestSha256": "20af53c2bb232183cffffb4f1f1d41c0d9b5673fbcca94a14277cabba709305e"
+    },
+    "artifactFilesIncluded": false
+  },
+  "configuration": {
+    "configLogFields": [
+      {
+        "lineNumber": 5,
+        "fields": {
+          "ini": "<game-root>\\Binaries\\Win64\\D3D12On11Patch\\d3d12on11.ini",
+          "log": "1",
+          "debug-layer": "0",
+          "advertised-shader-model": "6_7"
+        }
+      },
+      {
+        "lineNumber": 6,
+        "fields": {
+          "diagnostic-capabilities": "1"
+        }
+      },
+      {
+        "lineNumber": 7,
+        "fields": {
+          "caller-trace": "0"
+        }
+      },
+      {
+        "lineNumber": 8,
+        "fields": {
+          "diagnostic-render-trace": "1"
+        }
+      },
+      {
+        "lineNumber": 9,
+        "fields": {
+          "crash-diagnostics": "0"
+        }
+      },
+      {
+        "lineNumber": 10,
+        "fields": {
+          "shader-dump": "0",
+          "dump-dir": "<local-path>/GHIDRA",
+          "overrides-dir": "<local-path>/GHIDRA",
+          "binding-map": "<game-root>\\Binaries\\Win64\\D3D12On11Patch\\binding-map.json",
+          "entries": "1"
+        }
+      }
+    ],
+    "effectiveD3D12ON11Environment": {
+      "D3D12ON11_BACKBUFFER_READBACK": null,
+      "D3D12ON11_BINDING_MAP": null,
+      "D3D12ON11_DIAGNOSTIC_CAPABILITIES": "1",
+      "D3D12ON11_DIAGNOSTIC_MASK_NVIDIA": "1",
+      "D3D12ON11_DIAGNOSTIC_RENDER_TRACE": "1",
+      "D3D12ON11_DUMP": "<run-local>\\launch-profile\\dump",
+      "D3D12ON11_DUMP_SHADERS": "0",
+      "D3D12ON11_FULL_READBACK": null,
+      "D3D12ON11_FULL_READBACK_PRESENT": null,
+      "D3D12ON11_MASK_VENDOR_ID": "ffff",
+      "D3D12ON11_OVERRIDES": "<run-local>\\launch-profile\\overrides",
+      "D3D12ON11_SHADER_MODEL": "6_7",
+      "D3D12ON11_TARGET_DRAW_CAPTURE_INDEX": null,
+      "D3D12ON11_TILED_RESOURCES_TIER": "3",
+      "D3D12ON11_TRACE_CALLERS": "0"
+    },
+    "bindingMap": {
+      "proxyMapConfigured": false,
+      "proxyMapPath": null,
+      "proxyParsedEntries": null,
+      "stagingMapFiles": [],
+      "stagingEntryCount": 0,
+      "mapsIdentical": null,
+      "status": "not configured and no staged binding_map.json found"
+    },
+    "targetDrawCaptureIndex": {
+      "set": false,
+      "value": null
+    },
+    "iniPath": "<game-root>\\Binaries\\Win64\\D3D12On11Patch\\d3d12on11.ini",
+    "logEnabled": "1",
+    "debugLayerEnabled": false,
+    "advertisedShaderModel": "6_7",
+    "diagnosticCapabilities": "1",
+    "callerTrace": "0",
+    "diagnosticRenderTrace": "1",
+    "crashDiagnostics": false,
+    "shaderDump": "0",
+    "dumpDir": "<run-local>\\launch-profile\\dump",
+    "overridesDir": "<run-local>\\launch-profile\\overrides"
+  },
+  "gpuDriverContext": {
+    "userProvidedGpu": "GTX 1050 Ti",
+    "maskedNvidiaAdapter": true,
+    "adapterSource": "proxy-unwrap",
+    "exposedVendor": "0xffff",
+    "vendorId": "not recorded in this run evidence",
+    "deviceId": "not recorded in this run evidence",
+    "d3d11FeatureLevel": "not recorded in this run evidence",
+    "tiledResourcesTier": 3,
+    "debugLayerEnabled": false
+  },
+  "moduleFingerprints": [
+    {
+      "lineNumber": 2,
+      "role": "d3d12",
+      "sha256": "23e2c8ba52a1cba32d01595c505e047b21b2744a3df807cade734f648ccd7fbe",
+      "bytes": 403968
+    },
+    {
+      "lineNumber": 12,
+      "role": "dxgi_proxy",
+      "sha256": "edd099d49c4b669c05e1fd46f4af0e251cbee7065a9d596aa93c6d4fafca4aad",
+      "bytes": 48128
+    }
+  ],
+  "bmpFacts": [
+    {
+      "present": 100,
+      "side": "backbuffer",
+      "path": "<run-local>/readbacks/HelaReadback_Present100_backbuffer.bmp",
+      "fileName": "HelaReadback_Present100_backbuffer.bmp",
+      "bytes": 2764854,
+      "sha256": "045af28288696ffcf8467196c717bd0b54c464701cebdc39c3985948dd2ba75b",
+      "width": 1280,
+      "height": 720,
+      "bpp": 24,
+      "orientation": "top-down",
+      "nonBlackCount": 48994,
+      "totalPixels": 921600,
+      "validBmp": true
+    },
+    {
+      "present": 100,
+      "side": "source",
+      "path": "<run-local>/readbacks/HelaReadback_Present100_source.bmp",
+      "fileName": "HelaReadback_Present100_source.bmp",
+      "bytes": 2764854,
+      "sha256": "045af28288696ffcf8467196c717bd0b54c464701cebdc39c3985948dd2ba75b",
+      "width": 1280,
+      "height": 720,
+      "bpp": 24,
+      "orientation": "top-down",
+      "nonBlackCount": 48994,
+      "totalPixels": 921600,
+      "validBmp": true
+    },
+    {
+      "present": 1400,
+      "side": "backbuffer",
+      "path": "<run-local>/readbacks/HelaReadback_Present1400_backbuffer.bmp",
+      "fileName": "HelaReadback_Present1400_backbuffer.bmp",
+      "bytes": 2764854,
+      "sha256": "d43ec90910e666b315661be75dfea0af9722ff471aa30593999567dffc53ac9c",

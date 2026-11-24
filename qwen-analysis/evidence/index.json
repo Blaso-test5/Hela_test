@@ -1,0 +1,19 @@
+{
+  "schema": "qwen.evidence.index",
+  "runId": "proxy-main-4450b7d-1050ti-profile14-20261124-104217038",
+  "rawDataExcluded": true,
+  "indexParts": [
+    {
+      "path": "evidence/index-part001.json",
+      "itemCount": 20,
+      "byteCount": 7702,
+      "sha256": "6c027eb67fe2e1b86e0ffeae0aea311c5ffb7ce204e3db14f31e7d64eb06185c"
+    },
+    {
+      "path": "evidence/index-part002.json",
+      "itemCount": 8,
+      "byteCount": 2943,
+      "sha256": "15b8d796fc9336b6c0369c32c0ba1fe918dca2dd4541a9fad4afc2f0bc5d296c"
+    }
+  ]
+}

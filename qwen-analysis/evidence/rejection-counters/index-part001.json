@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "path": "evidence/rejection-counters/part0001.ndjson",
+      "recordStart": 1,
+      "recordEnd": 9,
+      "recordCount": 9,
+      "byteCount": 744,
+      "sha256": "e64fe9d4b3c2df190b8436a3ba62349cd001d6eb0d3e966806a86019df8faaae"
+    }
+  ]
+}

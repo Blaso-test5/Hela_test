@@ -1,0 +1,15 @@
+{
+  "schema": "qwen.evidence.dataset-index",
+  "dataset": "draw-shader-use-groups",
+  "recordCount": 30,
+  "byteCount": 7795,
+  "sha256": "79d3389d4379bac69fca8f7aad8800c08ad04c2e563af20a3b8adb0170df439f",
+  "indexParts": [
+    {
+      "path": "evidence/draw-shader-use-groups/index-part001.json",
+      "itemCount": 1,
+      "byteCount": 278,
+      "sha256": "cc90b87183628cf3bcd870df457a4ec4550dfbb86ede5179fbd4a4fb61c33076"
+    }
+  ]
+}

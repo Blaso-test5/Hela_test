@@ -1,0 +1,184 @@
+                            x = col_byte // bytes_per_pixel
+                            first_xy = (x, y)
+                            first_rgb = (r_val, g_val, b_val)
+
+            return BmpInspection(
+                label=label,
+                path=str(bmp_path),
+                file_size_bytes=actual_size,
+                expected_min_bytes=expected_min_size,
+                width=abs_w,
+                height=abs_h,
+                bits_per_pixel=bpp,
+                total_pixels=abs_w * abs_h,
+                non_black_pixels=non_black,
+                first_non_black_xy=first_xy,
+                first_non_black_rgb=first_rgb,
+            )
+    except OSError:
+        return None
+
+
+class LiveMonitorState:
+    """
+    Bounded-memory state machine that ingests proxy log lines one by one and emits
+    concise real-time diagnostic events.
+    Correlates split/interleaved readback blocks by (kind, present) without losing state
+    when unrelated shader/thread lines are logged in between.
+    """
+
+    def __init__(
+        self,
+        event_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        run_manifest: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        self.event_callback = event_callback
+        self.run_manifest = run_manifest
+        self.module_fingerprint_observations: Dict[str, List[str]] = {}
+        self.module_fingerprint_failures: Dict[str, str] = {}
+        self.generation: int = 1
+        self.truncation_count: int = 0
+        self.lines_processed: int = 0
+
+        self.resources_by_ptr: Dict[str, ResourceHistory] = {}
+        self.current_history_resource: Optional[ResourceHistory] = None
+
+        # Bounded maps of (kind, present) -> ReadbackRecord
+        self.readbacks_by_key: "OrderedDict[Tuple[str, int], ReadbackRecord]" = OrderedDict()
+        self.last_open_readback_by_kind: Dict[str, ReadbackRecord] = {}
+        self.last_touched_readback: Optional[ReadbackRecord] = None
+
+        self.latest_readback_src: Optional[ReadbackRecord] = None
+        self.latest_readback_bb: Optional[ReadbackRecord] = None
+        self.present100_readback_src: Optional[ReadbackRecord] = None
+        self.present100_readback_bb: Optional[ReadbackRecord] = None
+
+        self.shaders_ready: Dict[str, ShaderStatus] = {}
+        self.shaders_placeholder: Dict[str, ShaderStatus] = {}
+        self.total_ready_events: int = 0
+        self.total_placeholder_events: int = 0
+
+        self.copy_to_bb_recent: Deque[Dict[str, Any]] = deque(maxlen=MAX_RECENT_COPY_TO_BB)
+        self.copy_to_bb_seq100: Optional[Dict[str, Any]] = None
+
+        self.heartbeats: Deque[Dict[str, Any]] = deque(maxlen=MAX_HEARTBEATS)
+        self.dispatch_clues: Deque[Dict[str, Any]] = deque(maxlen=MAX_DISPATCH_CLUES)
+        self.dispatch_clue_total: int = 0
+
+        self.bmp_results: Dict[str, BmpInspection] = {}
+        self.recent_events: Deque[Dict[str, Any]] = deque(maxlen=MAX_LIVE_EVENTS)
+
+    def _emit(self, event_type: str, summary: str, payload: Optional[Dict[str, Any]] = None) -> None:
+        evt = {
+            "generation": self.generation,
+            "line_no": self.lines_processed,
+            "event_type": event_type,
+            "summary": summary,
+            "payload": payload or {},
+        }
+        self.recent_events.append(evt)
+        if self.event_callback:
+            self.event_callback(summary, evt)
+
+    def on_log_truncated_or_rotated(self, reason: str) -> None:
+        """Resets per-run transient parse cursors while recording the rotation/truncation."""
+        self.truncation_count += 1
+        self.generation += 1
+        self.lines_processed = 0
+        self.resources_by_ptr.clear()
+        self.current_history_resource = None
+        self.readbacks_by_key.clear()
+        self.last_open_readback_by_kind.clear()
+        self.last_touched_readback = None
+        self.latest_readback_src = None
+        self.latest_readback_bb = None
+        self.present100_readback_src = None
+        self.present100_readback_bb = None
+        self.shaders_ready.clear()
+        self.shaders_placeholder.clear()
+        self.module_fingerprint_observations.clear()
+        self.module_fingerprint_failures.clear()
+        self.total_ready_events = 0
+        self.total_placeholder_events = 0
+        self.copy_to_bb_recent.clear()
+        self.copy_to_bb_seq100 = None
+        self.heartbeats.clear()
+        self.dispatch_clues.clear()
+        self.dispatch_clue_total = 0
+        self._emit("LOG_RESET", f"[GEN #{self.generation}] Log reset detected ({reason}); state cleared.")
+
+    def _get_or_create_readback(self, kind: str, present_num: int, line_no: int) -> ReadbackRecord:
+        key = (kind, present_num)
+        if key in self.readbacks_by_key:
+            rb = self.readbacks_by_key[key]
+            self.readbacks_by_key.move_to_end(key)
+        else:
+            if len(self.readbacks_by_key) >= MAX_TRACKED_READBACK_PRESENTS:
+                # Evict oldest non-Present-100 entry first so Present #100 is never lost
+                evict_key = next(
+                    (k for k in self.readbacks_by_key if k[1] != 100),
+                    next(iter(self.readbacks_by_key)),
+                )
+                del self.readbacks_by_key[evict_key]
+            rb = ReadbackRecord(kind=kind, present=present_num, line_no=line_no)
+            self.readbacks_by_key[key] = rb
+
+        self.last_open_readback_by_kind[kind] = rb
+        self.last_touched_readback = rb
+        if kind == "source":
+            self.latest_readback_src = rb
+            if present_num == 100:
+                self.present100_readback_src = rb
+        else:
+            self.latest_readback_bb = rb
+            if present_num == 100:
+                self.present100_readback_bb = rb
+        return rb
+
+    def _merge_readback_header_fields(self, rb: ReadbackRecord, tail: str) -> None:
+        m_src = RE_SOURCE_PTR.search(tail)
+        if m_src:
+            rb.source = norm_ptr(m_src.group(1))
+        kv = {k.lower(): int(v) for k, v in RE_KEY_INT.findall(tail)}
+        if "dimension" in kv:
+            rb.dimension = kv["dimension"]
+        if "width" in kv:
+            rb.width = kv["width"]
+        if "height" in kv:
+            rb.height = kv["height"]
+        if "format" in kv:
+            rb.format = kv["format"]
+        if "sequence" in kv:
+            rb.sequence = kv["sequence"]
+        if "buffer" in kv:
+            rb.buffer = kv["buffer"]
+        m_sz = RE_SIZE_WH.search(tail)
+        if m_sz:
+            rb.width = int(m_sz.group(1))
+            rb.height = int(m_sz.group(2))
+
+    def _resolve_target_readback_for_sample_line(self, line: str) -> Optional[ReadbackRecord]:
+        """
+        Determines which open ReadbackRecord should receive a sample/summary continuation line.
+        - If the line carries an explicit `[READBACK_SRC]` or `[READBACK]` prefix, routes to
+          the latest open record of that specific kind.
+        - Otherwise routes to `last_touched_readback` if it is still collecting samples/summary,
+          or falls back to any open incomplete readback record.
+        """
+        m_tag = RE_READBACK_TAG_PREFIX.match(line)
+        if m_tag:
+            tag = m_tag.group(1).upper()
+            kind = "source" if tag == "READBACK_SRC" else "backbuffer"
+            return self.last_open_readback_by_kind.get(kind)
+
+        if self.last_touched_readback is not None:
+            # Prefer last_touched_readback if it doesn't yet have all 5 samples or explicit summary
+            if (
+                len(self.last_touched_readback.sample_pixels_rgba) < EXPECTED_POINT_SAMPLES
+                or not self.last_touched_readback.has_explicit_summary
+            ):
+                return self.last_touched_readback
+
+        # Fallback: check most recently updated readbacks in reverse order
+        for rb in reversed(list(self.readbacks_by_key.values())):
+            if len(rb.sample_pixels_rgba) < EXPECTED_POINT_SAMPLES or not rb.has_explicit_summary:

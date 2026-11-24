@@ -1,0 +1,162 @@
+    Add([topology](ExecState& state) { state.c->IASetPrimitiveTopology(static_cast<D3D11_PRIMITIVE_TOPOLOGY>(topology)); });
+}
+
+void STDMETHODCALLTYPE CommandList::RSSetViewports(UINT count, const D3D12_VIEWPORT* viewports) {
+    if (!viewports || count > D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE) return;
+    std::vector<D3D11_VIEWPORT> native(count);
+    for (UINT i = 0; i < count; ++i) {
+        native[i].TopLeftX = viewports[i].TopLeftX;
+        native[i].TopLeftY = viewports[i].TopLeftY;
+        native[i].Width = viewports[i].Width;
+        native[i].Height = viewports[i].Height;
+        native[i].MinDepth = viewports[i].MinDepth;
+        native[i].MaxDepth = viewports[i].MaxDepth;
+    }
+    std::vector<D3D12_VIEWPORT> diagnosticViewports(viewports, viewports + count);
+    Add([native = std::move(native), diagnosticViewports = std::move(diagnosticViewports)](ExecState& state) {
+        state.c->RSSetViewports(static_cast<UINT>(native.size()), native.data());
+        state.numViewports = static_cast<UINT>(diagnosticViewports.size());
+        std::copy(diagnosticViewports.begin(), diagnosticViewports.end(), state.viewports.begin());
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::RSSetScissorRects(UINT count, const D3D12_RECT* rects) {
+    if (!rects || count > D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE) return;
+    std::vector<D3D11_RECT> native(rects, rects + count);
+    Add([native = std::move(native)](ExecState& state) {
+        state.c->RSSetScissorRects(static_cast<UINT>(native.size()), native.data());
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::OMSetBlendFactor(const FLOAT factor[4]) {
+    if (!factor) return;
+    float copy[4] = {factor[0], factor[1], factor[2], factor[3]};
+    Add([copy](ExecState& state) {
+        memcpy(state.blend, copy, sizeof(copy));
+        state.ApplyOM();
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::OMSetStencilRef(UINT reference) {
+    Add([reference](ExecState& state) {
+        state.stencilRef = reference;
+        state.ApplyOM();
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::SetPipelineState(ID3D12PipelineState* pipelineState) {
+    Ptr<IUnknown> keep = pipelineState ? Ptr<IUnknown>(pipelineState) : Ptr<IUnknown>();
+    Add([keep](ExecState& state) {
+        if (auto* pipeline = dynamic_cast<PipelineState*>(keep.Get())) ApplyPipeline(state, pipeline);
+        else if (keep) Unimpl("ID3D12GraphicsCommandList::SetPipelineState object");
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::ResourceBarrier(UINT count, const D3D12_RESOURCE_BARRIER* barriers) {
+    if (count && !barriers) {
+        Log("ResourceBarrier received a null barrier array");
+        return;
+    }
+    for (UINT i = 0; i < count; ++i) {
+        if (barriers[i].Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION) {
+            Unimpl("ID3D12GraphicsCommandList::ResourceBarrier transition (ignored)");
+        } else if (barriers[i].Type == D3D12_RESOURCE_BARRIER_TYPE_ALIASING ||
+                   barriers[i].Type == D3D12_RESOURCE_BARRIER_TYPE_UAV) {
+            Unimpl("ID3D12GraphicsCommandList::ResourceBarrier aliasing/UAV");
+        } else {
+            Unimpl("ID3D12GraphicsCommandList::ResourceBarrier unknown type");
+        }
+    }
+}
+
+void STDMETHODCALLTYPE CommandList::ExecuteBundle(ID3D12GraphicsCommandList* list) {
+    auto* bundle = dynamic_cast<CommandList*>(list);
+    if (!bundle) {
+        Unimpl("ID3D12GraphicsCommandList::ExecuteBundle");
+        return;
+    }
+    Ptr<IUnknown> keep(static_cast<ID3D12GraphicsCommandList*>(bundle));
+    Add([keep](ExecState& state) {
+        auto* commandList = dynamic_cast<CommandList*>(keep.Get());
+        if (commandList && commandList->closed) commandList->Run(state);
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::SetComputeRootSignature(ID3D12RootSignature* signature) {
+    comp.rs = dynamic_cast<RootSignature*>(signature);
+    comp.keep = signature ? Ptr<IUnknown>(signature) : Ptr<IUnknown>();
+    comp.args.clear();
+    comp.snap.reset();
+}
+
+void STDMETHODCALLTYPE CommandList::SetGraphicsRootSignature(ID3D12RootSignature* signature) {
+    gfx.rs = dynamic_cast<RootSignature*>(signature);
+    gfx.keep = signature ? Ptr<IUnknown>(signature) : Ptr<IUnknown>();
+    gfx.args.clear();
+    gfx.snap.reset();
+}
+
+void STDMETHODCALLTYPE CommandList::SetComputeRootDescriptorTable(UINT index, D3D12_GPU_DESCRIPTOR_HANDLE handle) {
+    RootArg arg{}; arg.kind = 5; arg.value = handle.ptr;
+    UINT descriptorIndex = 0;
+    if (auto* heap = FindHeapByGpu(handle.ptr, &descriptorIndex)) arg.keep = Ptr<IUnknown>(static_cast<ID3D12DescriptorHeap*>(heap));
+    SetRootArg(comp, index, std::move(arg));
+}
+void STDMETHODCALLTYPE CommandList::SetGraphicsRootDescriptorTable(UINT index, D3D12_GPU_DESCRIPTOR_HANDLE handle) {
+    RootArg arg{}; arg.kind = 5; arg.value = handle.ptr;
+    UINT descriptorIndex = 0;
+    if (auto* heap = FindHeapByGpu(handle.ptr, &descriptorIndex)) arg.keep = Ptr<IUnknown>(static_cast<ID3D12DescriptorHeap*>(heap));
+    SetRootArg(gfx, index, std::move(arg));
+}
+void STDMETHODCALLTYPE CommandList::SetComputeRoot32BitConstant(UINT index, UINT value, UINT offset) {
+    SetRootConstants(comp, index, 1, &value, offset);
+}
+void STDMETHODCALLTYPE CommandList::SetGraphicsRoot32BitConstant(UINT index, UINT value, UINT offset) {
+    SetRootConstants(gfx, index, 1, &value, offset);
+}
+void STDMETHODCALLTYPE CommandList::SetComputeRoot32BitConstants(UINT index, UINT count, const void* values, UINT offset) {
+    SetRootConstants(comp, index, count, values, offset);
+}
+void STDMETHODCALLTYPE CommandList::SetGraphicsRoot32BitConstants(UINT index, UINT count, const void* values, UINT offset) {
+    SetRootConstants(gfx, index, count, values, offset);
+}
+
+void CommandList::SetRootConstants(BindState& bind, UINT index, UINT count, const void* values, UINT offset) {
+    if (!values || !count || !bind.rs || index >= bind.rs->params.size() ||
+        bind.rs->params[index].type != D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS ||
+        offset > bind.rs->params[index].num32 || count > bind.rs->params[index].num32 - offset) {
+        Log("Rejected invalid root-constant write at parameter %u", index);
+        return;
+    }
+    RootArg arg{};
+    if (index < bind.args.size() && bind.args[index].kind == 1) arg = bind.args[index];
+    if (arg.consts.size() < bind.rs->params[index].num32)
+        arg.consts.resize(bind.rs->params[index].num32, 0);
+    std::copy_n(static_cast<const UINT*>(values), count, arg.consts.begin() + offset);
+    arg.kind = 1;
+    arg.value = 0;
+    SetRootArg(bind, index, std::move(arg));
+}
+
+namespace {
+void SetRootAddress(BindState& state, UINT index, UINT64 address, uint8_t kind) {
+    RootArg arg{};
+    arg.kind = kind;
+    arg.value = address;
+    UINT64 offset = 0;
+    if (Resource* resource = ResolveVA(address, &offset))
+        arg.keep = Ptr<IUnknown>(static_cast<ID3D12Resource*>(resource));
+    else
+        Log("Root descriptor address 0x%llx does not resolve to a live resource",
+            static_cast<unsigned long long>(address));
+    if (state.args.size() <= index) state.args.resize(static_cast<size_t>(index) + 1);
+    state.args[index] = std::move(arg);
+    state.snap.reset();
+}
+}
+
+void STDMETHODCALLTYPE CommandList::SetComputeRootConstantBufferView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) { SetRootAddress(comp, i, a, 2); }
+void STDMETHODCALLTYPE CommandList::SetGraphicsRootConstantBufferView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) { SetRootAddress(gfx, i, a, 2); }
+void STDMETHODCALLTYPE CommandList::SetComputeRootShaderResourceView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) { SetRootAddress(comp, i, a, 3); }
+void STDMETHODCALLTYPE CommandList::SetGraphicsRootShaderResourceView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) { SetRootAddress(gfx, i, a, 3); }
+void STDMETHODCALLTYPE CommandList::SetComputeRootUnorderedAccessView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) { SetRootAddress(comp, i, a, 4); }

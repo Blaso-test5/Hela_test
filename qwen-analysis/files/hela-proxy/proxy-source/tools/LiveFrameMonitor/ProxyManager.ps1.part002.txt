@@ -1,0 +1,191 @@
+        $property = $manifest.runtime.PSObject.Properties[$role]
+        if ($null -eq $property -or [string]$property.Value -notmatch '^[0-9a-fA-F]{64}$') {
+            throw "Manifest is missing a valid runtime.$role SHA-256."
+        }
+    }
+    foreach ($property in $manifest.overrides.PSObject.Properties) {
+        if ($property.Name -notmatch '^[^\\/:*?"<>|]+\.cso$' -or
+            [string]$property.Value -notmatch '^[0-9a-fA-F]{64}$') {
+            throw "Invalid override entry in manifest: $($property.Name)"
+        }
+    }
+    foreach ($name in @($manifest.requiredOverrides)) {
+        if ($null -eq $manifest.overrides.PSObject.Properties[$name]) {
+            throw "Required override is not pinned in the manifest: $name"
+        }
+    }
+    $null = Assert-LaunchProfile -Manifest $manifest
+    return $manifest
+}
+
+function Invoke-HelaPackageGate {
+    param(
+        [Parameter(Mandatory = $true)][string]$PackagePath,
+        [Parameter(Mandatory = $true)][string]$ManifestPath,
+        [Parameter(Mandatory = $true)][string]$TestVersion,
+        [Parameter(Mandatory = $true)][int]$OverrideCount
+    )
+
+    if (-not (Test-Path -LiteralPath $PackageGateScript -PathType Leaf)) {
+        throw "Hela package gate not found: $PackageGateScript"
+    }
+
+    $result = & $PackageGateScript -PackagePath $PackagePath -RunManifestPath $ManifestPath
+    if ($null -eq $result -or
+        $result.schema -cne "hela-package-gate-bridge/v1" -or
+        $result.package_id -cne $TestVersion -or
+        [int]$result.override_count -ne $OverrideCount -or
+        $result.lifecycle -cne "staged-only" -or
+        [bool]$result.mutation_performed) {
+        throw "Hela package gate did not return a valid staged-only attestation."
+    }
+
+    return $result
+}
+
+function Assert-PackageMatchesManifest {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][string]$PackagePath,
+        [Parameter(Mandatory = $true)][string]$ManifestPath
+    )
+    $package = [IO.Path]::GetFullPath($PackagePath)
+    $runtimePath = Join-Path $package "runtime"
+    $overridePath = Join-Path $package "overrides"
+    if (-not (Test-Path -LiteralPath $runtimePath -PathType Container) -or
+        -not (Test-Path -LiteralPath $overridePath -PathType Container)) {
+        throw "Package must contain runtime\ and overrides\ directories: $package"
+    }
+    foreach ($role in @("d3d12", "dxgi")) {
+        $path = Join-Path $runtimePath "$role.dll"
+        $actual = Get-Sha256 -Path $path
+        $expected = ([string]$Manifest.runtime.$role).ToLowerInvariant()
+        if ($actual -ne $expected) {
+            throw "Package fingerprint mismatch for $role.dll: expected $expected, got $actual"
+        }
+    }
+
+    $expectedNames = @($Manifest.overrides.PSObject.Properties | ForEach-Object { $_.Name } | Sort-Object)
+    $actualFiles = @(Get-ChildItem -LiteralPath $overridePath -File -Recurse -Force)
+    $actualNames = @($actualFiles | ForEach-Object { $_.Name } | Sort-Object)
+    if (Compare-Object -ReferenceObject $expectedNames -DifferenceObject $actualNames) {
+        throw "Package override file set differs from the run manifest."
+    }
+    foreach ($file in $actualFiles) {
+        if ($file.DirectoryName -ine $overridePath) {
+            throw "Shader overrides must be flat files directly under: $overridePath"
+        }
+        $property = $Manifest.overrides.PSObject.Properties[$file.Name]
+        if ($null -eq $property) {
+            throw "Unpinned shader override in package: $($file.Name)"
+        }
+        $expected = ([string]$property.Value).ToLowerInvariant()
+        $actual = Get-Sha256 -Path $file.FullName
+        if ($actual -ne $expected) {
+            throw "Package fingerprint mismatch for $($file.Name): expected $expected, got $actual"
+        }
+    }
+    $packageGate = Invoke-HelaPackageGate `
+        -PackagePath $package `
+        -ManifestPath $ManifestPath `
+        -TestVersion ([string]$Manifest.testVersion) `
+        -OverrideCount $actualFiles.Count
+    return [ordered]@{
+        package_path = $package
+        test_version = [string]$Manifest.testVersion
+        runtime = [ordered]@{
+            d3d12 = [string]$Manifest.runtime.d3d12
+            dxgi = [string]$Manifest.runtime.dxgi
+        }
+        override_count = $actualFiles.Count
+        package_gate = $packageGate
+    }
+}
+
+function Assert-GameStopped {
+    if (-not (Test-Path -LiteralPath $GameExePath -PathType Leaf)) {
+        throw "Game executable not found: $GameExePath"
+    }
+    $fullExePath = [IO.Path]::GetFullPath($GameExePath)
+    $running = @(Get-Process -Name "Hela-Win64-Shipping" -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -and $_.Path -ieq $fullExePath })
+    if ($running.Count -gt 0) {
+        throw "Hela is already running (PID $($running[0].Id)); close it before installing a test version."
+    }
+}
+
+function Clear-DirectoryContents {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        New-Item -ItemType Directory -Path $Path -Force | Out-Null
+        return
+    }
+    foreach ($item in Get-ChildItem -LiteralPath $Path -Force) {
+        Remove-Item -LiteralPath $item.FullName -Recurse -Force
+    }
+}
+
+function Copy-DirectoryContents {
+    param(
+        [Parameter(Mandatory = $true)][string]$Source,
+        [Parameter(Mandatory = $true)][string]$Destination
+    )
+    if (-not (Test-Path -LiteralPath $Destination -PathType Container)) {
+        New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+    }
+    foreach ($item in Get-ChildItem -LiteralPath $Source -Force) {
+        Copy-Item -LiteralPath $item.FullName -Destination $Destination -Recurse -Force
+    }
+}
+
+function Write-RestoreManifest {
+    param([Parameter(Mandatory = $true)][string]$RestoreRoot)
+    $runtime = [ordered]@{}
+    foreach ($name in @("d3d12.dll", "dxgi.dll")) {
+        $path = Join-Path $RestoreRoot $name
+        $runtime[$name] = if (Test-Path -LiteralPath $path -PathType Leaf) {
+            [ordered]@{
+                present = $true
+                sha256 = Get-Sha256 -Path $path
+            }
+        } else {
+            [ordered]@{
+                present = $false
+                sha256 = $null
+            }
+        }
+    }
+    $overridesRoot = Join-Path $RestoreRoot "overrides"
+    $restoreManifest = [ordered]@{
+        schema = "hela-proxy-restore/v1"
+        game_directory = $GameDir
+        created_utc = [DateTime]::UtcNow.ToString("o")
+        runtime = $runtime
+        overrides_directory_present = Test-Path -LiteralPath $InstalledOverridesDir -PathType Container
+        overrides = Get-DirectoryInventory -Path $overridesRoot
+    }
+    $restoreManifest | ConvertTo-Json -Depth 8 |
+        Set-Content -LiteralPath (Join-Path $RestoreRoot "restore-manifest.json") -Encoding UTF8
+}
+
+function Assert-RestorePoint {
+    param([Parameter(Mandatory = $true)][string]$RestoreRoot)
+    $manifestPath = Join-Path $RestoreRoot "restore-manifest.json"
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+        throw "Restore manifest not found: $manifestPath"
+    }
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    if ($manifest.schema -ne "hela-proxy-restore/v1" -or
+        [IO.Path]::GetFullPath([string]$manifest.game_directory) -ine $GameDir) {
+        throw "Restore point does not belong to this game directory: $RestoreRoot"
+    }
+    foreach ($name in @("d3d12.dll", "dxgi.dll")) {
+        $runtimeEntry = $manifest.runtime.PSObject.Properties[$name].Value
+        $expectedPresent = $true
+        $expectedHash = [string]$runtimeEntry
+        if ($runtimeEntry -isnot [string]) {
+            $expectedPresent = [bool]$runtimeEntry.present
+            $expectedHash = [string]$runtimeEntry.sha256
+        }
+        $savedPath = Join-Path $RestoreRoot $name
+        $savedPresent = Test-Path -LiteralPath $savedPath -PathType Leaf

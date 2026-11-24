@@ -1,0 +1,145 @@
+  if (logReport.attestation.modules.dxgi_proxy !== expectedDxgi) {
+    attestationFailures.push(
+      `dxgi.dll fingerprint mismatch: atteso ${expectedDxgi}, loggato ${logReport.attestation.modules.dxgi_proxy ?? "assente"}`,
+    );
+  }
+
+  if (manifest.launchProfile?.attestation) {
+    const att = manifest.launchProfile.attestation;
+    if (att.maskedNvidiaAdapter === true && !logReport.attestation.maskedNvidiaAdapter) {
+      attestationFailures.push(
+        `Adapter NVIDIA mascherato/proxy-unwrap non attestato (vendor=${logReport.attestation.exposedVendor ?? "n/d"}, source=${logReport.attestation.adapterSource ?? "n/d"}).`,
+      );
+    }
+    if (att.tiledResourcesTier !== undefined && logReport.attestation.tiledResourcesTier !== att.tiledResourcesTier) {
+      attestationFailures.push(
+        `Tiled-resource tier atteso ${att.tiledResourcesTier}, loggato ${logReport.attestation.tiledResourcesTier ?? "assente"}.`,
+      );
+    }
+    if (att.callerTrace !== undefined && logReport.attestation.callerTrace !== att.callerTrace) {
+      attestationFailures.push(
+        `caller-trace atteso ${att.callerTrace ? "1" : "0"}, loggato ${logReport.attestation.callerTrace === undefined ? "assente" : logReport.attestation.callerTrace ? "1" : "0"}.`,
+      );
+    }
+  }
+
+  for (const name of manifest.requiredOverrides) {
+    const hash = name.replace(/\.cso$/i, "").toLowerCase();
+    const expectedSha = manifest.overrides[name]?.toLowerCase();
+    const obs = logReport.shaders[hash];
+    if (!obs || obs.status !== "override-ready" || obs.overrideSha256 !== expectedSha) {
+      missingRequiredOverrides.push(name);
+      attestationFailures.push(
+        `Override richiesto '${name}' non attestato in SHADER READY con sha256=${expectedSha ?? "?"}.`,
+      );
+    }
+  }
+
+  const maxObservedPresent = logReport.presentProgress.maxObservedPresent;
+  const presentReached = maxObservedPresent > 0;
+  const targetPresentReached =
+    options.targetPresent !== undefined
+      ? logReport.presentProgress.maxReadbackPresent >= options.targetPresent
+      : undefined;
+
+  let allBmpPaths: string[] = [];
+  if (options.bmpPaths?.length) {
+    allBmpPaths = options.bmpPaths.map((p) => path.resolve(p));
+  } else {
+    const readbackDir = path.join(runDir, "readbacks");
+    if (fs.existsSync(readbackDir) && fs.statSync(readbackDir).isDirectory()) {
+      allBmpPaths = fs
+        .readdirSync(readbackDir)
+        .filter((f) => f.toLowerCase().endsWith(".bmp"))
+        .sort()
+        .map((f) => path.join(readbackDir, f));
+    }
+  }
+
+  const bmpPathsNotMatchingTarget: string[] = [];
+  let bmpPaths = allBmpPaths;
+  if (options.targetPresent !== undefined) {
+    bmpPaths = allBmpPaths.filter((bmpPath) => {
+      const match = path.basename(bmpPath).match(/^HelaReadback_Present(\d+)_(?:source|backbuffer)\.bmp$/i);
+      const matchesTarget = match !== null && Number(match[1]) === options.targetPresent;
+      if (!matchesTarget) bmpPathsNotMatchingTarget.push(bmpPath);
+      return matchesTarget;
+    });
+  }
+
+  const bmps = bmpPaths.map((p) => analyzeBmpFile(p));
+  const validBmps = bmps.filter((b) => b.valid);
+  const anyNonBlackPixel = validBmps.some((b) => b.nonBlackPixels > 0);
+
+  let bmpReadbackStatus: VerifyHelaRunReport["bmpReadbackStatus"];
+  if (bmps.length === 0) {
+    bmpReadbackStatus = "missing";
+  } else if (validBmps.length === 0) {
+    bmpReadbackStatus = "invalid";
+  } else if (!anyNonBlackPixel) {
+    bmpReadbackStatus = "black-readback";
+  } else {
+    bmpReadbackStatus = "nonzero-pixels-observed";
+  }
+
+  const attestationPassed = attestationFailures.length === 0;
+  let verdict: HelaRunVerdict;
+  let explanation: string;
+
+  if (!attestationPassed) {
+    verdict = "attestation-failed";
+    explanation = `Attestazione fallita (${attestationFailures.length} errori): non trattare questa run come prova valida.`;
+  } else if (!presentReached || targetPresentReached === false) {
+    verdict = "present-not-reached";
+    explanation =
+      options.targetPresent !== undefined
+        ? `Attestazione superata, ma readback Present target #${options.targetPresent} non raggiunto (max readback: #${logReport.presentProgress.maxReadbackPresent}; heartbeat: #${logReport.presentProgress.maxHeartbeatPresent}).`
+        : "Attestazione superata, ma nessun Present osservato nel log (swap/present rimasti a 0).";
+  } else if (bmpReadbackStatus === "missing" || bmpReadbackStatus === "invalid") {
+    verdict = "present-reached-readback-missing";
+    explanation =
+      `Present #${maxObservedPresent} osservato, ma nessun BMP readback valido per il target${options.targetPresent !== undefined ? ` #${options.targetPresent}` : ""} ` +
+      `(${bmpReadbackStatus}${bmpPathsNotMatchingTarget.length ? `; ignorati ${bmpPathsNotMatchingTarget.length} BMP di altri target o con nome non riconosciuto` : ""}).`;
+  } else if (bmpReadbackStatus === "black-readback") {
+    verdict = "present-reached-black-readback";
+    explanation =
+      `Present #${maxObservedPresent} raggiunto con attestazione valida, ma tutti i ${validBmps.length} readback BMP ` +
+      "risultano completamente neri (0 pixel non neri). Il raggiungimento di Present NON dimostra rendering del menu.";
+  } else {
+    verdict = "present-reached-nonzero-pixels-observed";
+    explanation =
+      `Present #${maxObservedPresent} raggiunto e pixel non neri osservati nei BMP readback. ` +
+      "ATTENZIONE: pixel non neri NON equivalgono a menu validato; occorrono correlazione causale draw/risorsa e ispezione visiva.";
+  }
+
+  return {
+    runDir,
+    verdict,
+    testVersion: manifest.testVersion,
+    attestationPassed,
+    attestationFailures,
+    missingRequiredOverrides,
+    presentStatus: {
+      reached: presentReached,
+      maxObservedPresent,
+      maxHeartbeatPresent: logReport.presentProgress.maxHeartbeatPresent,
+      maxReadbackPresent: logReport.presentProgress.maxReadbackPresent,
+      ...(options.targetPresent !== undefined
+        ? { targetPresent: options.targetPresent, targetPresentReached }
+        : {}),
+    },
+    bmpReadbackStatus,
+    bmpPathsNotMatchingTarget,
+    bmps,
+    sampledReadbacksFromLog: logReport.sampledReadbacks,
+    menuValidated: false,
+    menuValidationBoundary: MENU_VALIDATION_BOUNDARY,
+    logSummary: logReport.summary,
+    executedGraphicsPairs: logReport.executedGraphicsPairs,
+    readbackCorrelations: logReport.readbackCorrelations,
+    placeholdersPreview: logReport.placeholdersRanked.slice(0, 25),
+    explanation,
+  };
+}
+
+export { formatReport };

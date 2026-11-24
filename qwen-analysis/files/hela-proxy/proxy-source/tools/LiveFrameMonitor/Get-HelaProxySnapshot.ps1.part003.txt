@@ -1,0 +1,157 @@
+    $notes.Add('A run manifest does not state whether the overrides directory exists; only the set of .cso files is compared.')
+    return @{
+        kind                  = 'run-manifest'
+        path                  = $Path
+        schema                = 'hela-run-manifest/v1'
+        format                = 'run-manifest'
+        testVersion           = $testVersion
+        createdUtc            = $null
+        runtimeAttestation    = 'module-and-shader-sha256'
+        gameDirectoryRecorded = $null
+        runtime               = $runtime
+        overridesDir          = @{ expectedPresent = $null; basis = 'run-manifest-does-not-specify' }
+        overrides             = $entries
+        notes                 = $notes
+    }
+}
+
+function ConvertFrom-RestoreManifest {
+    param($M, [string]$Path)
+    $ctx = "Restore manifest '$Path'"
+
+    $schema = Get-JsonProp $M 'schema'
+    if (-not $schema.Exists -or $schema.Value -isnot [string] -or $schema.Value -cne 'hela-proxy-restore/v1') {
+        throw "$ctx`: schema must be 'hela-proxy-restore/v1'."
+    }
+    $recorded = $null
+    $gd = Get-JsonProp $M 'game_directory'
+    if ($gd.Exists -and $null -ne $gd.Value) {
+        if ($gd.Value -isnot [string] -or [string]::IsNullOrWhiteSpace($gd.Value)) { throw "$ctx`: game_directory must be a non-empty string." }
+        $recorded = $gd.Value
+    }
+    $created = $null
+    $cu = Get-JsonProp $M 'created_utc'
+    if ($cu.Exists -and $null -ne $cu.Value) {
+        if ($cu.Value -isnot [string]) { throw "$ctx`: created_utc must be a string." }
+        $created = $cu.Value
+    }
+
+    $rt = Get-JsonProp $M 'runtime'
+    if (-not $rt.Exists -or -not (Test-IsObject $rt.Value)) { throw "$ctx`: runtime must be an object." }
+
+    $notes = New-Object System.Collections.Generic.List[string]
+    $runtime = [ordered]@{}
+    $anyObj = $false
+    $anyStr = $false
+    foreach ($name in $script:RuntimeFiles) {
+        $p = Get-JsonProp $rt.Value $name
+        $v = $p.Value
+        if (-not $p.Exists -or $null -eq $v) {
+            $runtime[$name] = @{ present = $null; sha256 = $null; bytes = $null; basis = 'manifest-has-no-entry' }
+            $notes.Add("runtime '$name' has no entry in the restore manifest: its original state is not attestable.")
+        } elseif ($v -is [string]) {
+            # Legacy: a string means "file was present, this is its hash".
+            $anyStr = $true
+            $runtime[$name] = @{ present = $true; sha256 = (Assert-Sha256 $v "$ctx`: runtime['$name']"); bytes = $null; basis = 'legacy-string' }
+        } elseif (Test-IsObject $v) {
+            $anyObj = $true
+            $pp = Get-JsonProp $v 'present'
+            if (-not $pp.Exists -or $pp.Value -isnot [bool]) { throw "$ctx`: runtime['$name'].present must be a boolean." }
+            $sp = Get-JsonProp $v 'sha256'
+            $hasSha = ($sp.Exists -and $null -ne $sp.Value)
+            if ($pp.Value) {
+                $sha = $null
+                if ($hasSha) {
+                    $sha = Assert-Sha256 $sp.Value "$ctx`: runtime['$name'].sha256"
+                } else {
+                    $notes.Add("runtime '$name' was recorded as present without a hash: its content is not attestable.")
+                }
+                $runtime[$name] = @{ present = $true; sha256 = $sha; bytes = $null; basis = 'modern-object' }
+            } else {
+                if ($hasSha) { throw "$ctx`: runtime['$name'] has present=false but also a sha256." }
+                $runtime[$name] = @{ present = $false; sha256 = $null; bytes = $null; basis = 'modern-object' }
+            }
+        } else {
+            throw "$ctx`: runtime['$name'] must be a hash string (legacy) or an object {present, sha256}."
+        }
+    }
+
+    $df = Get-JsonProp $M 'overrides_directory_present'
+    $dirExpected = $true
+    $dirBasis = 'legacy-assumed'
+    if ($df.Exists) {
+        if ($df.Value -isnot [bool]) { throw "$ctx`: overrides_directory_present must be a boolean." }
+        $dirExpected = $df.Value
+        $dirBasis = 'manifest'
+    } else {
+        $notes.Add('overrides_directory_present is missing: legacy semantics assume the overrides directory was present. This is an assumption; absence is never inferred from legacy data.')
+    }
+
+    $ovArr = Get-JsonProp $M 'overrides'
+    if (-not $ovArr.Exists -or $ovArr.Value -isnot [System.Array]) { throw "$ctx`: overrides must be an array." }
+    $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $entries = New-Object System.Collections.Generic.List[object]
+    foreach ($o in $ovArr.Value) {
+        if (-not (Test-IsObject $o)) { throw "$ctx`: overrides entries must be objects {path, bytes, sha256}." }
+        $pp = Get-JsonProp $o 'path'
+        if (-not $pp.Exists -or $pp.Value -isnot [string]) { throw "$ctx`: overrides entry without a string path." }
+        $rel = ConvertTo-SafeRelativePath $pp.Value "$ctx`: overrides path"
+        if (-not $rel.EndsWith('.cso', [System.StringComparison]::OrdinalIgnoreCase)) { throw "$ctx`: overrides path '$($pp.Value)' must end with .cso." }
+        if (-not $seen.Add($rel)) { throw "$ctx`: duplicate overrides path '$rel'." }
+        $bp = Get-JsonProp $o 'bytes'
+        if (-not $bp.Exists -or ($bp.Value -isnot [int] -and $bp.Value -isnot [long]) -or $bp.Value -lt 0) { throw "$ctx`: overrides['$rel'].bytes must be a non-negative integer." }
+        $sp = Get-JsonProp $o 'sha256'
+        if (-not $sp.Exists) { throw "$ctx`: overrides['$rel'].sha256 is required." }
+        $entries.Add([pscustomobject]@{ path = $rel; sha256 = (Assert-Sha256 $sp.Value "$ctx`: overrides['$rel'].sha256"); bytes = $bp.Value; required = $null })
+    }
+    if ($dirExpected -eq $false -and $entries.Count -gt 0) {
+        throw "$ctx`: overrides_directory_present is false but overrides lists files."
+    }
+
+    $modernSignal = ($anyObj -or $df.Exists)
+    if (-not $modernSignal) {
+        $format = 'restore-legacy'
+        $notes.Add('Legacy restore manifest: runtime files are recorded as present; the original absence of a runtime file or of the overrides directory cannot be attested.')
+    } elseif ($anyStr) {
+        $format = 'restore-mixed'
+        $notes.Add('Restore manifest mixes legacy and modern fields; each field is interpreted with its own semantics.')
+    } else {
+        $format = 'restore-modern'
+    }
+
+    return @{
+        kind                  = 'restore-point'
+        path                  = $Path
+        schema                = 'hela-proxy-restore/v1'
+        format                = $format
+        testVersion           = $null
+        createdUtc            = $created
+        runtimeAttestation    = $null
+        gameDirectoryRecorded = $recorded
+        runtime               = $runtime
+        overridesDir          = @{ expectedPresent = $dirExpected; basis = $dirBasis }
+        overrides             = $entries
+        notes                 = $notes
+    }
+}
+
+function Resolve-RestoreManifestPath {
+    param([string]$Full)
+    if ([System.IO.File]::Exists($Full)) {
+        return @{ manifest = $Full; dir = [System.IO.Path]::GetDirectoryName($Full) }
+    }
+    if (-not [System.IO.Directory]::Exists($Full)) { throw "RestorePointPath not found: $Full" }
+    foreach ($n in @('restore-manifest.json', 'manifest.json')) {
+        $c = [System.IO.Path]::Combine($Full, $n)
+        if ([System.IO.File]::Exists($c)) { return @{ manifest = $c; dir = $Full } }
+    }
+    $hits = New-Object System.Collections.Generic.List[string]
+    foreach ($f in [System.IO.Directory]::GetFiles($Full, '*.json')) {
+        try {
+            $o = Read-JsonObject $f
+            $s = Get-JsonProp $o 'schema'
+            if ($s.Exists -and $s.Value -is [string] -and $s.Value -ceq 'hela-proxy-restore/v1') { $hits.Add($f) }
+        } catch { }
+    }
+    if ($hits.Count -eq 1) { return @{ manifest = $hits[0]; dir = $Full } }
+    if ($hits.Count -eq 0) { throw "No hela-proxy-restore/v1 manifest found in restore point directory: $Full" }

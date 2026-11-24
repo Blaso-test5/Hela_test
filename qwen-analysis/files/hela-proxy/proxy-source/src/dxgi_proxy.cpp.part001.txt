@@ -1,0 +1,203 @@
+#define CreateDXGIFactory CreateDXGIFactorySystemDeclaration
+#define CreateDXGIFactory1 CreateDXGIFactory1SystemDeclaration
+#define CreateDXGIFactory2 CreateDXGIFactory2SystemDeclaration
+#include "core.h"
+#undef CreateDXGIFactory
+#undef CreateDXGIFactory1
+#undef CreateDXGIFactory2
+
+#include "types.h"
+#include "bridge.h"
+#include "dxgi_factory_fwd.inc"
+#include "dxgi_swapchain_fwd.inc"
+#include <cerrno>
+
+namespace {
+std::once_flag g_dxgiFingerprintOnce;
+
+void LogDxgi(const char* format, ...) {
+    char message[512]{};
+    va_list args;
+    va_start(args, format);
+    const int written = vsnprintf(message, sizeof(message), format, args);
+    va_end(args);
+    if (written < 0) return;
+    message[sizeof(message) - 1] = '\0';
+    D3D12On11LogMessage(message);
+}
+
+void LogDxgiModuleFingerprint() {
+    std::call_once(g_dxgiFingerprintOnce, [] {
+        HMODULE module = nullptr;
+        if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                reinterpret_cast<LPCSTR>(&LogDxgiModuleFingerprint), &module)) {
+            D3D12On11LogMessage("MODULE_FINGERPRINT_FAILED role=dxgi_proxy reason=module-handle-error");
+            return;
+        }
+        D3D12On11LogModuleFingerprint(module, "dxgi_proxy");
+    });
+}
+
+bool DiagnosticMaskNvidiaAdapter() {
+    wchar_t value[2]{};
+    return GetEnvironmentVariableW(L"D3D12ON11_DIAGNOSTIC_MASK_NVIDIA",
+        value, ARRAYSIZE(value)) == 1 && value[0] == L'1';
+}
+
+bool BackbufferReadbackEnabled() {
+    wchar_t value[2]{};
+    return GetEnvironmentVariableW(L"D3D12ON11_BACKBUFFER_READBACK",
+        value, ARRAYSIZE(value)) == 1 && value[0] == L'1';
+}
+
+bool BackbufferInjectionEnabled() {
+    wchar_t value[2]{};
+    return GetEnvironmentVariableW(L"D3D12ON11_INJECTION_TEST",
+        value, ARRAYSIZE(value)) == 1 && value[0] == L'1';
+}
+
+bool FullReadbackEnabled() {
+    wchar_t value[2]{};
+    return GetEnvironmentVariableW(L"D3D12ON11_FULL_READBACK",
+        value, ARRAYSIZE(value)) == 1 && value[0] == L'1';
+}
+
+UINT FullReadbackPresent() {
+    wchar_t value[16]{};
+    const DWORD length = GetEnvironmentVariableW(
+        L"D3D12ON11_FULL_READBACK_PRESENT", value, ARRAYSIZE(value));
+    if (!length) return 100;
+    if (length >= ARRAYSIZE(value)) {
+        LogDxgi("[READBACK_FULL_CONFIG_ERROR] D3D12ON11_FULL_READBACK_PRESENT "
+            "is too long; only the default Present #100 will be captured");
+        return 0;
+    }
+
+    wchar_t* end = nullptr;
+    errno = 0;
+    const unsigned long parsed = wcstoul(value, &end, 10);
+    if (errno == ERANGE || end == value || *end != L'\0' ||
+        parsed < 100 || parsed > UINT_MAX || parsed % 100 != 0) {
+        LogDxgi("[READBACK_FULL_CONFIG_ERROR] Invalid "
+            "D3D12ON11_FULL_READBACK_PRESENT='%ls'; expected a positive "
+            "multiple of 100, so only the default Present #100 will be captured",
+            value);
+        return 0;
+    }
+    return static_cast<UINT>(parsed);
+}
+
+struct ReadbackPixel {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+    uint8_t a;
+};
+
+bool ReadbackPixelAt(const D3D11_MAPPED_SUBRESOURCE& mapped,
+    const D3D11_TEXTURE2D_DESC& desc, UINT x, UINT y, ReadbackPixel& pixel) {
+    if (x >= desc.Width || y >= desc.Height || !mapped.pData) return false;
+    const auto* row = static_cast<const uint8_t*>(mapped.pData) +
+        static_cast<size_t>(y) * mapped.RowPitch;
+    if (desc.Format == DXGI_FORMAT_R10G10B10A2_UNORM) {
+        uint32_t packed = 0;
+        std::memcpy(&packed, row + static_cast<size_t>(x) * sizeof(packed), sizeof(packed));
+        pixel.r = static_cast<uint8_t>((((packed & 0x3ffu) * 255u) + 511u) / 1023u);
+        pixel.g = static_cast<uint8_t>(((((packed >> 10) & 0x3ffu) * 255u) + 511u) / 1023u);
+        pixel.b = static_cast<uint8_t>(((((packed >> 20) & 0x3ffu) * 255u) + 511u) / 1023u);
+        pixel.a = static_cast<uint8_t>(((packed >> 30) & 0x3u) * 85u);
+        return true;
+    }
+
+    const bool bgra = desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM ||
+        desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    const bool rgba = desc.Format == DXGI_FORMAT_R8G8B8A8_UNORM ||
+        desc.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    if (!bgra && !rgba) return false;
+
+    const uint8_t* value = row + static_cast<size_t>(x) * 4;
+    pixel.r = value[bgra ? 2 : 0];
+    pixel.g = value[1];
+    pixel.b = value[bgra ? 0 : 2];
+    pixel.a = value[3];
+    return true;
+}
+
+bool SaveMappedTextureAsBmp(const D3D11_MAPPED_SUBRESOURCE& mapped,
+    const D3D11_TEXTURE2D_DESC& desc, const wchar_t* filename,
+    uint64_t presentCount, const char* label) {
+    if (!filename || !desc.Width || !desc.Height ||
+        desc.Width > LONG_MAX || desc.Height > LONG_MAX) {
+        LogDxgi("[READBACK_FULL] Present #%llu %s invalid BMP dimensions=%ux%u",
+            static_cast<unsigned long long>(presentCount), label, desc.Width, desc.Height);
+        return false;
+    }
+
+    const uint64_t rowBytes = static_cast<uint64_t>(desc.Width) * 3;
+    const uint64_t paddedRowBytes = (rowBytes + 3u) & ~uint64_t(3u);
+    constexpr uint64_t headerBytes = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+    if (paddedRowBytes > SIZE_MAX || paddedRowBytes > MAXDWORD - headerBytes ||
+        desc.Height > (MAXDWORD - headerBytes) / paddedRowBytes) {
+        LogDxgi("[READBACK_FULL] Present #%llu %s BMP dimensions exceed file limits=%ux%u",
+            static_cast<unsigned long long>(presentCount), label, desc.Width, desc.Height);
+        return false;
+    }
+    const uint64_t imageBytes = paddedRowBytes * desc.Height;
+
+    BITMAPFILEHEADER fileHeader{};
+    fileHeader.bfType = 0x4D42;
+    fileHeader.bfSize = static_cast<DWORD>(headerBytes + imageBytes);
+    fileHeader.bfOffBits = static_cast<DWORD>(headerBytes);
+    BITMAPINFOHEADER infoHeader{};
+    infoHeader.biSize = sizeof(infoHeader);
+    infoHeader.biWidth = static_cast<LONG>(desc.Width);
+    infoHeader.biHeight = -static_cast<LONG>(desc.Height);
+    infoHeader.biPlanes = 1;
+    infoHeader.biBitCount = 24;
+    infoHeader.biCompression = BI_RGB;
+    infoHeader.biSizeImage = static_cast<DWORD>(imageBytes);
+
+    FILE* file = nullptr;
+    const errno_t openResult = _wfopen_s(&file, filename, L"wb");
+    if (openResult != 0 || !file) {
+        LogDxgi("[READBACK_FULL] Present #%llu %s could not open %ls errno=%d",
+            static_cast<unsigned long long>(presentCount), label, filename, openResult);
+        return false;
+    }
+
+    bool succeeded = fwrite(&fileHeader, sizeof(fileHeader), 1, file) == 1 &&
+        fwrite(&infoHeader, sizeof(infoHeader), 1, file) == 1;
+    std::vector<uint8_t> row(static_cast<size_t>(paddedRowBytes));
+    for (UINT y = 0; succeeded && y < desc.Height; ++y) {
+        for (UINT x = 0; x < desc.Width; ++x) {
+            ReadbackPixel pixel{};
+            if (!ReadbackPixelAt(mapped, desc, x, y, pixel)) {
+                succeeded = false;
+                break;
+            }
+            const size_t offset = static_cast<size_t>(x) * 3;
+            row[offset] = pixel.b;
+            row[offset + 1] = pixel.g;
+            row[offset + 2] = pixel.r;
+        }
+        if (succeeded)
+            succeeded = fwrite(row.data(), 1, row.size(), file) == row.size();
+    }
+    if (fclose(file) != 0) succeeded = false;
+    if (!succeeded) {
+        LogDxgi("[READBACK_FULL] Present #%llu %s BMP write failed path=%ls",
+            static_cast<unsigned long long>(presentCount), label, filename);
+        return false;
+    }
+
+    LogDxgi("[READBACK_FULL] Present #%llu saved %s path=%ls size=%ux%u format=%u bytes=%llu",
+        static_cast<unsigned long long>(presentCount), label, filename,
+        desc.Width, desc.Height, desc.Format,
+        static_cast<unsigned long long>(headerBytes + imageBytes));
+    return true;
+}
+
+HRESULT ReadbackTextureSamples(Device* device, ID3D11Texture2D* texture,
+    const char* label, uint64_t presentCount, UINT bufferIndex,
+    const wchar_t* fullReadbackFilename = nullptr) {

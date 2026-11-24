@@ -1,0 +1,157 @@
+    if (stages & S_DS) state.c->DSSetShaderResources(slot, 1, views);
+    if (stages & S_GS) state.c->GSSetShaderResources(slot, 1, views);
+    if (stages & S_PS) state.c->PSSetShaderResources(slot, 1, views);
+    if (stages & S_CS) state.c->CSSetShaderResources(slot, 1, views);
+}
+
+void BindSampler(ExecState& state, UINT stages, UINT slot, ID3D11SamplerState* sampler) {
+    if (slot >= D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT) return;
+    ID3D11SamplerState* samplers[] = {sampler};
+    if (stages & S_VS) state.c->VSSetSamplers(slot, 1, samplers);
+    if (stages & S_HS) state.c->HSSetSamplers(slot, 1, samplers);
+    if (stages & S_DS) state.c->DSSetSamplers(slot, 1, samplers);
+    if (stages & S_GS) state.c->GSSetSamplers(slot, 1, samplers);
+    if (stages & S_PS) state.c->PSSetSamplers(slot, 1, samplers);
+    if (stages & S_CS) state.c->CSSetSamplers(slot, 1, samplers);
+}
+
+void BindUav(ExecState& state, UINT stages, UINT slot, ID3D11UnorderedAccessView* view) {
+    if (!view) return;
+    if (stages & S_CS) {
+        if (slot < D3D11_1_UAV_SLOT_COUNT) state.c->CSSetUnorderedAccessViews(slot, 1, &view, nullptr);
+    }
+    if (stages & S_PS) {
+        if (slot < D3D11_1_UAV_SLOT_COUNT && slot >= state.numRtv)
+            state.c->OMSetRenderTargetsAndUnorderedAccessViews(
+                D3D11_KEEP_RENDER_TARGETS_AND_DEPTH_STENCIL, nullptr, nullptr,
+                slot, 1, &view, nullptr);
+        else
+            Log("Pixel UAV slot %u conflicts with %u active render targets", slot, state.numRtv);
+    }
+}
+
+void BindDescriptor(ExecState& state, const Descriptor& descriptor, UINT slot, UINT stages) {
+    switch (descriptor.kind) {
+    case DKind::CBV: {
+        auto* resource = dynamic_cast<Resource*>(descriptor.keep.Get());
+        ID3D11Buffer* buffer = resource ? resource->CbWindow(descriptor.bufOff, descriptor.bufSize) : nullptr;
+        BindCb(state, stages, slot, buffer);
+        break;
+    }
+    case DKind::SRV:
+        if (descriptor.structStride && descriptor.res) {
+            descriptor.res->SyncStruct(descriptor.structStride);
+        } else {
+            auto* uploadResource = dynamic_cast<Resource*>(descriptor.keep.Get());
+            if (uploadResource && uploadResource->heap == D3D12_HEAP_TYPE_UPLOAD)
+                uploadResource->SyncToGpu(descriptor.bufOff, descriptor.bufSize);
+        }
+        BindSrv(state, stages, slot, descriptor.srv.Get());
+        break;
+    case DKind::UAV:
+        if (descriptor.structStride && descriptor.res) descriptor.res->SyncStruct(descriptor.structStride);
+        BindUav(state, stages, slot, descriptor.uav.Get());
+        if (descriptor.structStride && descriptor.res)
+            state.structWrites.emplace_back(descriptor.keep, descriptor.structStride);
+        break;
+    case DKind::Sampler:
+        BindSampler(state, stages, slot, descriptor.smp.Get());
+        break;
+    default:
+        break;
+    }
+}
+
+void BindDirectDescriptor(ExecState& state, const RootParam& param, const RootArg& arg, UINT stages) {
+    UINT64 offset = 0;
+    auto* resource = ResolveVA(arg.value, &offset);
+    if (!resource || !resource->IsBuffer()) {
+        Log("Root descriptor GPU VA 0x%llx does not resolve to a buffer",
+            static_cast<unsigned long long>(arg.value));
+        return;
+    }
+    if (arg.kind == 2) {
+        const UINT64 size = std::min<UINT64>(resource->desc.Width - offset,
+                                             D3D11_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16);
+        ID3D11Buffer* buffer = resource->CbWindow(offset, size & ~UINT64_C(15));
+        BindCb(state, stages, param.slot, buffer);
+        return;
+    }
+    const UINT64 elements = (resource->desc.Width - offset) / 4;
+    if (!elements || offset / 4 > UINT_MAX || elements > UINT_MAX) return;
+    if (arg.kind == 3) {
+        D3D11_SHADER_RESOURCE_VIEW_DESC desc{};
+        desc.Format = DXGI_FORMAT_R32_TYPELESS;
+        desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+        desc.BufferEx.FirstElement = static_cast<UINT>(offset / 4);
+        desc.BufferEx.NumElements = static_cast<UINT>(elements);
+        desc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
+        Ptr<ID3D11ShaderResourceView> view;
+        if (FAILED(state.dev->d11->CreateShaderResourceView(resource->GpuBuffer(), &desc, view.Put()))) return;
+        BindSrv(state, stages, param.slot, view.Get());
+    } else if (arg.kind == 4) {
+        D3D11_UNORDERED_ACCESS_VIEW_DESC desc{};
+        desc.Format = DXGI_FORMAT_R32_TYPELESS;
+        desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+        desc.Buffer.FirstElement = static_cast<UINT>(offset / 4);
+        desc.Buffer.NumElements = static_cast<UINT>(elements);
+        desc.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_RAW;
+        Ptr<ID3D11UnorderedAccessView> view;
+        if (FAILED(state.dev->d11->CreateUnorderedAccessView(resource->GpuBuffer(), &desc, view.Put()))) return;
+        BindUav(state, stages, param.slot, view.Get());
+    }
+}
+
+void BindRootSnapshot(ExecState& state, const std::shared_ptr<const BindSnap>& snapshot, bool compute) {
+    static std::atomic<UINT> failedSrvBindingLogCount{0};
+    static std::atomic<UINT> targetRootBindingLogCount{0};
+    constexpr uint64_t targetVs = 0x20e0826b236597a1ULL;
+    constexpr uint64_t targetPs0 = 0x44b0a992c2304254ULL;
+    constexpr uint64_t targetPs1 = 0xd77600bde0076c33ULL;
+    const bool targetPipeline = !compute && state.graphicsShaderHash == targetVs &&
+        (state.graphicsPixelShaderHash == targetPs0 ||
+         state.graphicsPixelShaderHash == targetPs1);
+    const UINT targetDraw = targetPipeline
+        ? targetRootBindingLogCount.fetch_add(1, std::memory_order_relaxed) + 1
+        : 0;
+    const bool logTarget = targetDraw > 0 && targetDraw <= 12;
+    if (!snapshot || !snapshot->rs) {
+        if (logTarget)
+            Log("[TARGET_ROOT_BIND] draw=%u status=no_snapshot", targetDraw);
+        return;
+    }
+    const auto& root = *snapshot->rs;
+    if (logTarget)
+        Log("[TARGET_ROOT_BIND] draw=%u root=%p params=%zu heaps=%zu",
+            targetDraw, snapshot->rs, root.params.size(), snapshot->descriptorHeaps.size());
+    for (const auto& sampler : root.statics)
+        BindSampler(state, VisibilityStages(sampler.vis, compute), sampler.slot, sampler.st.Get());
+
+    for (UINT i = 0; i < root.params.size(); ++i) {
+        const RootParam& param = root.params[i];
+        if (i >= snapshot->args.size()) {
+            if (logTarget)
+                Log("[TARGET_ROOT_PARAM] draw=%u index=%u type=%u visibility=%u arg_kind=missing "
+                    "ranges=%zu",
+                    targetDraw, i, static_cast<unsigned int>(param.type),
+                    static_cast<unsigned int>(param.vis), param.ranges.size());
+            continue;
+        }
+        const RootArg& arg = snapshot->args[i];
+        const UINT stages = VisibilityStages(param.vis, compute);
+        if (logTarget)
+            Log("[TARGET_ROOT_PARAM] draw=%u index=%u type=%u visibility=%u arg_kind=%u "
+                "arg_value=0x%llx ranges=%zu",
+                targetDraw, i, static_cast<unsigned int>(param.type),
+                static_cast<unsigned int>(param.vis), arg.kind,
+                static_cast<unsigned long long>(arg.value), param.ranges.size());
+        if (param.type == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE && arg.kind == 5) {
+            UINT baseIndex = 0;
+            DescriptorHeap* heap = FindHeapByGpu(arg.value, &baseIndex);
+            if (logTarget)
+                Log("[TARGET_ROOT_TABLE] draw=%u index=%u handle=0x%llx heap=%p base=%u "
+                    "heap_type=%u heap_flags=0x%x heap_size=%u gpu_base=0x%llx",
+                    targetDraw, i, static_cast<unsigned long long>(arg.value), heap, baseIndex,
+                    heap ? static_cast<unsigned int>(heap->hd.Type) : UINT_MAX,
+                    heap ? static_cast<UINT>(heap->hd.Flags) : 0u,
+                    heap ? static_cast<UINT>(heap->items.size()) : 0u,

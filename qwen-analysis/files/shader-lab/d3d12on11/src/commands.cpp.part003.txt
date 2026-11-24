@@ -1,0 +1,150 @@
+        std::array<uint32_t, 4> words{};
+        std::array<float, 4> values{};
+        memcpy(words.data(), mapped.pData, sizeof(words));
+        memcpy(values.data(), mapped.pData, sizeof(values));
+        state.c->Unmap(staging.Get(), 0);
+        Log("[TARGET_CBV] hit=%u stage=%s slot=0 buffer=%p width=%u status=ok "
+            "words=%08x,%08x,%08x,%08x floats=%.9g,%.9g,%.9g,%.9g",
+            hit, stage, buffer.Get(), sourceDesc.ByteWidth,
+            words[0], words[1], words[2], words[3],
+            values[0], values[1], values[2], values[3]);
+    };
+    logBoundCb("VS");
+    logBoundCb("PS");
+
+    ID3D11Buffer* rawIndexBuffer = nullptr;
+    DXGI_FORMAT indexFormat = DXGI_FORMAT_UNKNOWN;
+    UINT indexOffset = 0;
+    state.c->IAGetIndexBuffer(&rawIndexBuffer, &indexFormat, &indexOffset);
+    Ptr<ID3D11Buffer> indexBuffer = Ptr<ID3D11Buffer>::Attach(rawIndexBuffer);
+    LogTargetIndexData(state, hit, indexBuffer.Get(), indexFormat,
+        indexOffset, state.indexBufferViewSize, startIndex, baseVertex, indexCount);
+
+    std::array<ID3D11ShaderResourceView*, 16> rawPsSrvs{};
+    state.c->PSGetShaderResources(0, static_cast<UINT>(rawPsSrvs.size()), rawPsSrvs.data());
+    UINT psSrvMask = 0;
+    for (UINT i = 0; i < rawPsSrvs.size(); ++i) {
+        if (!rawPsSrvs[i]) continue;
+        if (i < 16) psSrvMask |= 1u << i;
+        if (i == 0) continue;
+        rawPsSrvs[i]->Release();
+        rawPsSrvs[i] = nullptr;
+    }
+    Ptr<ID3D11ShaderResourceView> psSrv =
+        Ptr<ID3D11ShaderResourceView>::Attach(rawPsSrvs[0]);
+    D3D11_SHADER_RESOURCE_VIEW_DESC psSrvDesc{};
+    if (psSrv) psSrv->GetDesc(&psSrvDesc);
+    ID3D11Resource* rawPsResource = nullptr;
+    if (psSrv) psSrv->GetResource(&rawPsResource);
+    Ptr<ID3D11Resource> psResource = Ptr<ID3D11Resource>::Attach(rawPsResource);
+    D3D11_RESOURCE_DIMENSION psResourceDimension = D3D11_RESOURCE_DIMENSION_UNKNOWN;
+    if (psResource) psResource->GetType(&psResourceDimension);
+    UINT psTextureWidth = 0;
+    UINT psTextureHeight = 0;
+    DXGI_FORMAT psTextureFormat = DXGI_FORMAT_UNKNOWN;
+    HRESULT psTextureQueryResult = E_NOINTERFACE;
+    Ptr<ID3D11Texture2D> psTexture;
+    D3D11_TEXTURE2D_DESC psTextureDesc{};
+    if (psResourceDimension == D3D11_RESOURCE_DIMENSION_TEXTURE2D) {
+        psTextureQueryResult = psResource->QueryInterface(__uuidof(ID3D11Texture2D),
+            reinterpret_cast<void**>(psTexture.Put()));
+        if (SUCCEEDED(psTextureQueryResult)) {
+            psTexture->GetDesc(&psTextureDesc);
+            psTextureWidth = psTextureDesc.Width;
+            psTextureHeight = psTextureDesc.Height;
+            psTextureFormat = psTextureDesc.Format;
+        }
+    }
+    ID3D11SamplerState* rawPsSampler = nullptr;
+    state.c->PSGetSamplers(0, 1, &rawPsSampler);
+    Ptr<ID3D11SamplerState> psSampler = Ptr<ID3D11SamplerState>::Attach(rawPsSampler);
+    D3D11_SAMPLER_DESC psSamplerDesc{};
+    if (psSampler) psSampler->GetDesc(&psSamplerDesc);
+    Log("[TARGET_PS_BINDINGS] hit=%u srv_mask=0x%04x srv0=%p resource0=%p "
+        "srv_dimension=%u srv_format=%u "
+        "resource_dimension=%u texture_size=%ux%u texture_format=%u sampler0=%p "
+        "sampler_filter=%u address=%u/%u/%u",
+        hit, psSrvMask, psSrv.Get(), psResource.Get(),
+        static_cast<unsigned int>(psSrvDesc.ViewDimension),
+        static_cast<unsigned int>(psSrvDesc.Format),
+        static_cast<unsigned int>(psResourceDimension), psTextureWidth, psTextureHeight,
+        static_cast<unsigned int>(psTextureFormat), psSampler.Get(),
+        static_cast<unsigned int>(psSamplerDesc.Filter),
+        static_cast<unsigned int>(psSamplerDesc.AddressU),
+        static_cast<unsigned int>(psSamplerDesc.AddressV),
+        static_cast<unsigned int>(psSamplerDesc.AddressW));
+
+    if (hit == 1) {
+        if (!psTexture) {
+            Log("[TARGET_TEXEL] hit=%u status=not_texture2d query_hr=0x%08lx dimension=%u",
+                hit, psTextureQueryResult, static_cast<unsigned int>(psResourceDimension));
+        } else if (!state.dev || !state.dev->d11) {
+            Log("[TARGET_TEXEL] hit=%u status=no_device resource=%p", hit, psResource.Get());
+        } else if (psTextureDesc.Width != 1 || psTextureDesc.Height != 1 ||
+            psTextureDesc.ArraySize != 1 || psTextureDesc.MipLevels != 1 ||
+            psTextureDesc.SampleDesc.Count != 1 ||
+            (psTextureDesc.Format != DXGI_FORMAT_R8G8B8A8_TYPELESS &&
+             psTextureDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM &&
+             psTextureDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB)) {
+            Log("[TARGET_TEXEL] hit=%u status=unsupported size=%ux%u array=%u mips=%u "
+                "samples=%u format=%u",
+                hit, psTextureDesc.Width, psTextureDesc.Height, psTextureDesc.ArraySize,
+                psTextureDesc.MipLevels, psTextureDesc.SampleDesc.Count,
+                static_cast<unsigned int>(psTextureDesc.Format));
+        } else {
+            D3D11_TEXTURE2D_DESC stagingDesc = psTextureDesc;
+            stagingDesc.Usage = D3D11_USAGE_STAGING;
+            stagingDesc.BindFlags = 0;
+            stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+            stagingDesc.MiscFlags = 0;
+            Ptr<ID3D11Texture2D> staging;
+            const HRESULT createResult =
+                state.dev->d11->CreateTexture2D(&stagingDesc, nullptr, staging.Put());
+            if (FAILED(createResult)) {
+                Log("[TARGET_TEXEL] hit=%u status=staging-create-failed hr=0x%08lx "
+                    "resource=%p format=%u",
+                    hit, createResult, psResource.Get(),
+                    static_cast<unsigned int>(psTextureDesc.Format));
+            } else {
+                state.c->CopyResource(staging.Get(), psTexture.Get());
+                D3D11_MAPPED_SUBRESOURCE mapped{};
+                const HRESULT mapResult =
+                    state.c->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+                if (FAILED(mapResult)) {
+                    Log("[TARGET_TEXEL] hit=%u status=staging-map-failed hr=0x%08lx "
+                        "resource=%p",
+                        hit, mapResult, psResource.Get());
+                } else if (!mapped.pData || mapped.RowPitch < 4) {
+                    state.c->Unmap(staging.Get(), 0);
+                    Log("[TARGET_TEXEL] hit=%u status=invalid-mapped-data row_pitch=%u",
+                        hit, mapped.RowPitch);
+                } else {
+                    const auto* rgba = static_cast<const uint8_t*>(mapped.pData);
+                    Log("[TARGET_TEXEL] hit=%u status=ok srv=%p resource=%p "
+                        "srv_format=%u resource_format=%u rgba=(%u,%u,%u,%u)",
+                        hit, psSrv.Get(), psResource.Get(),
+                        static_cast<unsigned int>(psSrvDesc.Format),
+                        static_cast<unsigned int>(psTextureDesc.Format),
+                        static_cast<unsigned int>(rgba[0]),
+                        static_cast<unsigned int>(rgba[1]),
+                        static_cast<unsigned int>(rgba[2]),
+                        static_cast<unsigned int>(rgba[3]));
+                    state.c->Unmap(staging.Get(), 0);
+                }
+            }
+        }
+    }
+
+    std::array<ID3D11Buffer*, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> rawVertexBuffers{};
+    std::array<UINT, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> vertexStrides{};
+    std::array<UINT, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> vertexOffsets{};
+    state.c->IAGetVertexBuffers(0, static_cast<UINT>(rawVertexBuffers.size()),
+        rawVertexBuffers.data(), vertexStrides.data(), vertexOffsets.data());
+    UINT vertexBufferMask = 0;
+    UINT vertexBufferCount = 0;
+    for (UINT slot = 0; slot < rawVertexBuffers.size(); ++slot) {
+        if (!rawVertexBuffers[slot]) continue;
+        vertexBufferMask |= 1u << slot;
+        ++vertexBufferCount;
+        if (hit == 1 && slot == 0)
+            LogTargetVertexData(state, hit, rawVertexBuffers[slot],

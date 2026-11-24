@@ -1,0 +1,173 @@
+    if (vertexShaderCode.empty()) return S_FALSE;
+    std::vector<D3D11_INPUT_ELEMENT_DESC> elements(source.NumElements);
+    for (UINT i = 0; i < source.NumElements; ++i) {
+        const auto& input = source.pInputElementDescs[i];
+        if (!input.SemanticName || input.InputSlot >= D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT)
+            return E_INVALIDARG;
+        elements[i] = {};
+        elements[i].SemanticName = input.SemanticName;
+        elements[i].SemanticIndex = input.SemanticIndex;
+        elements[i].Format = input.Format;
+        elements[i].InputSlot = input.InputSlot;
+        elements[i].AlignedByteOffset = input.AlignedByteOffset;
+        elements[i].InputSlotClass = static_cast<D3D11_INPUT_CLASSIFICATION>(input.InputSlotClass);
+        elements[i].InstanceDataStepRate = input.InstanceDataStepRate;
+    }
+    const HRESULT createResult = device->d11->CreateInputLayout(elements.data(), static_cast<UINT>(elements.size()),
+                                                                  vertexShaderCode.data(), vertexShaderCode.size(), layout.Put());
+    if (FAILED(createResult))
+        Log("INPUT_LAYOUT_FAILED elements=%u result=0x%08lx", source.NumElements, createResult);
+    return createResult;
+}
+
+HRESULT CreateRasterizer(Device* device, const D3D12_RASTERIZER_DESC& source,
+                         Ptr<ID3D11RasterizerState>& state) {
+    if (source.ForcedSampleCount != 0 ||
+        source.ConservativeRaster != D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF) {
+        Unimpl("D3D12 rasterizer forced sample count/conservative rasterization");
+    }
+    D3D11_RASTERIZER_DESC desc{};
+    desc.FillMode = source.FillMode ? static_cast<D3D11_FILL_MODE>(source.FillMode) : D3D11_FILL_SOLID;
+    desc.CullMode = source.CullMode ? static_cast<D3D11_CULL_MODE>(source.CullMode) : D3D11_CULL_NONE;
+    desc.FrontCounterClockwise = source.FrontCounterClockwise;
+    desc.DepthBias = source.DepthBias;
+    desc.DepthBiasClamp = source.DepthBiasClamp;
+    desc.SlopeScaledDepthBias = source.SlopeScaledDepthBias;
+    desc.DepthClipEnable = source.DepthClipEnable;
+    desc.ScissorEnable = TRUE;
+    desc.MultisampleEnable = source.MultisampleEnable;
+    desc.AntialiasedLineEnable = source.AntialiasedLineEnable;
+    return device->d11->CreateRasterizerState(&desc, state.Put());
+}
+
+HRESULT CreateBlend(Device* device, const D3D12_BLEND_DESC& source, Ptr<ID3D11BlendState>& state) {
+    D3D11_BLEND_DESC desc{};
+    desc.AlphaToCoverageEnable = source.AlphaToCoverageEnable;
+    desc.IndependentBlendEnable = source.IndependentBlendEnable;
+    for (UINT i = 0; i < 8; ++i) {
+        const auto& input = source.RenderTarget[i];
+        auto& output = desc.RenderTarget[i];
+        if (input.LogicOpEnable) {
+            Unimpl("D3D12 blend logic operations");
+        }
+        output.BlendEnable = input.BlendEnable;
+        output.SrcBlend = input.SrcBlend ? static_cast<D3D11_BLEND>(input.SrcBlend) : D3D11_BLEND_ONE;
+        output.DestBlend = input.DestBlend ? static_cast<D3D11_BLEND>(input.DestBlend) : D3D11_BLEND_ZERO;
+        output.BlendOp = input.BlendOp ? static_cast<D3D11_BLEND_OP>(input.BlendOp) : D3D11_BLEND_OP_ADD;
+        output.SrcBlendAlpha = input.SrcBlendAlpha ? static_cast<D3D11_BLEND>(input.SrcBlendAlpha) : D3D11_BLEND_ONE;
+        output.DestBlendAlpha = input.DestBlendAlpha ? static_cast<D3D11_BLEND>(input.DestBlendAlpha) : D3D11_BLEND_ZERO;
+        output.BlendOpAlpha = input.BlendOpAlpha ? static_cast<D3D11_BLEND_OP>(input.BlendOpAlpha) : D3D11_BLEND_OP_ADD;
+        output.RenderTargetWriteMask = input.RenderTargetWriteMask;
+    }
+    return device->d11->CreateBlendState(&desc, state.Put());
+}
+
+HRESULT CreateDepthStencil(Device* device, const D3D12_DEPTH_STENCIL_DESC& source,
+                           Ptr<ID3D11DepthStencilState>& state) {
+    D3D11_DEPTH_STENCIL_DESC desc{};
+    desc.DepthEnable = source.DepthEnable;
+    desc.DepthWriteMask = static_cast<D3D11_DEPTH_WRITE_MASK>(source.DepthWriteMask);
+    desc.DepthFunc = source.DepthFunc ? static_cast<D3D11_COMPARISON_FUNC>(source.DepthFunc) : D3D11_COMPARISON_LESS;
+    desc.StencilEnable = source.StencilEnable;
+    desc.StencilReadMask = source.StencilReadMask;
+    desc.StencilWriteMask = source.StencilWriteMask;
+    auto convertFace = [](const D3D12_DEPTH_STENCILOP_DESC& in, D3D11_DEPTH_STENCILOP_DESC& out) {
+        out.StencilFailOp = in.StencilFailOp ? static_cast<D3D11_STENCIL_OP>(in.StencilFailOp) : D3D11_STENCIL_OP_KEEP;
+        out.StencilDepthFailOp = in.StencilDepthFailOp ? static_cast<D3D11_STENCIL_OP>(in.StencilDepthFailOp) : D3D11_STENCIL_OP_KEEP;
+        out.StencilPassOp = in.StencilPassOp ? static_cast<D3D11_STENCIL_OP>(in.StencilPassOp) : D3D11_STENCIL_OP_KEEP;
+        out.StencilFunc = in.StencilFunc ? static_cast<D3D11_COMPARISON_FUNC>(in.StencilFunc) : D3D11_COMPARISON_ALWAYS;
+    };
+    convertFace(source.FrontFace, desc.FrontFace);
+    convertFace(source.BackFace, desc.BackFace);
+    return device->d11->CreateDepthStencilState(&desc, state.Put());
+}
+
+HRESULT CheckRootSignature(ID3D12RootSignature* source, Ptr<IUnknown>& root) {
+    if (!source) return S_OK;
+    auto* wrapped = dynamic_cast<RootSignature*>(source);
+    if (!wrapped) return E_INVALIDARG;
+    root = Ptr<IUnknown>(source);
+    return S_OK;
+}
+
+D3D12_BLEND_DESC DefaultBlendDesc() {
+    D3D12_BLEND_DESC desc{};
+    for (UINT i = 0; i < 8; ++i) {
+        auto& rt = desc.RenderTarget[i];
+        rt.SrcBlend = D3D12_BLEND_ONE;
+        rt.DestBlend = D3D12_BLEND_ZERO;
+        rt.BlendOp = D3D12_BLEND_OP_ADD;
+        rt.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rt.DestBlendAlpha = D3D12_BLEND_ZERO;
+        rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+        rt.LogicOp = D3D12_LOGIC_OP_NOOP;
+        rt.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    }
+    return desc;
+}
+
+D3D12_RASTERIZER_DESC DefaultRasterizerDesc() {
+    D3D12_RASTERIZER_DESC desc{};
+    desc.FillMode = D3D12_FILL_MODE_SOLID;
+    desc.CullMode = D3D12_CULL_MODE_BACK;
+    desc.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
+    desc.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+    desc.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+    desc.DepthClipEnable = TRUE;
+    return desc;
+}
+
+D3D12_DEPTH_STENCIL_DESC DefaultDepthStencilDesc() {
+    D3D12_DEPTH_STENCIL_DESC desc{};
+    desc.DepthEnable = TRUE;
+    desc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    desc.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+    desc.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+    desc.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+    const D3D12_DEPTH_STENCILOP_DESC defaultFace{
+        D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP,
+        D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS
+    };
+    desc.FrontFace = defaultFace;
+    desc.BackFace = defaultFace;
+    return desc;
+}
+
+template <typename Inner>
+struct alignas(void*) StreamSubobject {
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type;
+    Inner inner;
+};
+
+struct CompatDepthStencilOpDesc1 {
+    D3D12_STENCIL_OP StencilFailOp;
+    D3D12_STENCIL_OP StencilDepthFailOp;
+    D3D12_STENCIL_OP StencilPassOp;
+    D3D12_COMPARISON_FUNC StencilFunc;
+    UINT8 StencilReadMask;
+    UINT8 StencilWriteMask;
+};
+
+struct CompatDepthStencilDesc2 {
+    BOOL DepthEnable;
+    D3D12_DEPTH_WRITE_MASK DepthWriteMask;
+    D3D12_COMPARISON_FUNC DepthFunc;
+    BOOL StencilEnable;
+    CompatDepthStencilOpDesc1 FrontFace;
+    CompatDepthStencilOpDesc1 BackFace;
+    BOOL DepthBoundsTestEnable;
+};
+
+} // namespace
+
+HRESULT PipelineState::CreateGraphics(Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc,
+                                      PipelineState** out) {
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    if (!device || !desc || !HasBytecode(desc->VS) ||
+        (desc->NumRenderTargets > 8) ||
+        desc->NodeMask > 1)
+        return E_INVALIDARG;
+    const uint32_t psoIndex = ++g_graphicsPsoCount;
+    const bool logMilestone = ShouldLogPsoMilestone(psoIndex);
+    if (logMilestone) {

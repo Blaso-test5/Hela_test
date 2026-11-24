@@ -1,0 +1,15 @@
+{
+  "schema": "qwen.evidence.dataset-index",
+  "dataset": "rejection-counters",
+  "recordCount": 9,
+  "byteCount": 744,
+  "sha256": "e64fe9d4b3c2df190b8436a3ba62349cd001d6eb0d3e966806a86019df8faaae",
+  "indexParts": [
+    {
+      "path": "evidence/rejection-counters/index-part001.json",
+      "itemCount": 1,
+      "byteCount": 271,
+      "sha256": "55b2c905848e264b7fce815eb829894a5d422425b4fba1ec5730c604ece85aee"
+    }
+  ]
+}

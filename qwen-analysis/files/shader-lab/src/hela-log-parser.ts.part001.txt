@@ -1,0 +1,269 @@
+import * as fs from "node:fs";
+
+export type ShaderStage = "VS" | "PS" | "GS" | "HS" | "DS" | "CS";
+
+/** Hash diagnostico hardcoded in `pipeline.cpp:178` per `[TARGET_INPUT_LAYOUT]`. */
+export const TARGET_INPUT_LAYOUT_DIAGNOSTIC_VS = "20e0826b236597a1";
+
+/** Coppie diagnostiche hardcoded in `commands.cpp:45-47` per `[TARGET_DRAW_COPY]`. */
+export const TARGET_DRAW_COPY_DIAGNOSTIC_PAIRS: ReadonlyArray<{ vs: string; ps: string }> = [
+  { vs: "20e0826b236597a1", ps: "44b0a992c2304254" },
+  { vs: "20e0826b236597a1", ps: "d77600bde0076c33" },
+];
+
+export interface LaunchAttestationSummary {
+  modules: Record<string, string>;
+  maskedNvidiaAdapter: boolean;
+  exposedVendor?: string;
+  adapterSource?: string;
+  tiledResourcesTier?: number;
+  callerTrace?: boolean;
+}
+
+export interface ShaderObservation {
+  hash: string;
+  stage: ShaderStage;
+  bytes?: number;
+  isDxbc?: boolean;
+  hasDxil?: boolean;
+  hasLegacy?: boolean;
+  shaderModel?: string;
+  hasRts0?: boolean;
+  status: "native-sm5" | "override-ready" | "placeholder" | "blocked" | "create-failed" | "seen";
+  overridePath?: string;
+  overrideSha256?: string;
+  dumpPath?: string;
+  dumpSkipped?: boolean;
+  reason?: string;
+  createFailedHr?: string;
+  firstLine: number;
+}
+
+export interface GraphicsPsoRecord {
+  index: number;
+  status: "ready" | "placeholder-missing-sm5-override" | string;
+  psoPtr: string;
+  missingMask: number;
+  vs?: { hash: string; bytes: number };
+  ps?: { hash: string; bytes: number };
+  gs?: { hash: string; bytes: number };
+  hs?: { hash: string; bytes: number };
+  ds?: { hash: string; bytes: number };
+  d11Vs: boolean;
+  d11Ps: boolean;
+  d11Il: boolean;
+  line: number;
+}
+
+export interface ComputePsoRecord {
+  index: number;
+  status: "ready" | "placeholder-missing-sm5-override" | string;
+  psoPtr: string;
+  missingMask: number;
+  cs: { hash: string; bytes: number };
+  d11Cs: boolean;
+  line: number;
+}
+
+export interface TargetInputLayoutElement {
+  element: number;
+  semantic: string;
+  semanticIndex: number;
+  slot: number;
+  format: number;
+  offset: number;
+  classification: number;
+  stepRate: number;
+}
+
+export interface InputLayoutFailure {
+  elements: number;
+  hresult: string;
+  line: number;
+}
+
+/** Record reale emesso da `util.cpp` (`[DRAW_SHADER_USE]` / `[COMPUTE_SHADER_USE]`). */
+export interface DrawShaderUseRecord {
+  outcome: "executed" | "skipped" | string;
+  vsHash?: string;
+  psHash?: string;
+  gsHash?: string;
+  hsHash?: string;
+  dsHash?: string;
+  missingMask: number;
+  graphicsPsoBound: boolean;
+  rtvIsBackbuffer: boolean;
+  drawCommands: number;
+  firstObservedPresentCountProcessWide: number;
+  lastObservedPresentCountProcessWide: number;
+  line: number;
+}
+
+export interface ComputeShaderUseRecord {
+  outcome: "executed" | "skipped" | string;
+  csHash?: string;
+  missingMask: number;
+  dispatchCommands: number;
+  firstObservedPresentCountProcessWide: number;
+  lastObservedPresentCountProcessWide: number;
+  line: number;
+}
+
+export interface ShaderUseEventRecord {
+  ordinal: number;
+  observedPresentCallsReturned: number;
+  kind: "draw" | "dispatch";
+  outcome: "executed" | "skipped" | string;
+  executionCount: number;
+  vsHash?: string;
+  psHash?: string;
+  gsHash?: string;
+  hsHash?: string;
+  dsHash?: string;
+  csHash?: string;
+  missingMask: number;
+  graphicsPsoBound?: boolean;
+  rtvIsBackbuffer?: boolean;
+  line: number;
+}
+
+/** Record reale emesso da `dxgi_proxy.cpp:342` (`[READBACK_IDENTITY]`). */
+export interface ReadbackIdentityRecord {
+  readbackPresentCount: number;
+  bufferIndex: number;
+  nativeBackbuffer: string;
+  width: number;
+  height: number;
+  format: number;
+  copySequence: number;
+  copySource: string;
+  line: number;
+}
+
+/** Record reale emesso da `dxgi_proxy.cpp:240-260` (`[READBACK_SRC]` / `[READBACK]`). */
+export interface SampledReadbackRecord {
+  kind: "source" | "backbuffer";
+  presentCount: number;
+  nonBlackSamples: number;
+  totalSamples: number;
+  line: number;
+}
+
+/** Record reale emesso da `commands.cpp:821` (`[TARGET_DRAW_COPY]`). */
+export interface TargetDrawCopyRecord {
+  drawIndex: number;
+  api: string;
+  rtvSlot: number;
+  trackedRtvResource: string;
+  vsHash?: string;
+  psHash?: string;
+  latestCopySequenceAtDraw: number;
+  latestCopySourceAtDraw: string;
+  line: number;
+}
+
+/** Record reale emesso da `commands.cpp:2202` (`[COPY_TO_BB]`). */
+export interface CopyToBackbufferRecord {
+  sourceResource?: string;
+  sourceTexture?: string;
+  dimension?: number;
+  width?: number;
+  height?: number;
+  format?: number;
+  sequence: number;
+  line: number;
+}
+
+/** Snapshot reale emesso da `commands.cpp:913-938` (`[BB_SOURCE_HISTORY_SNAPSHOT]` / `[BB_SOURCE_HISTORY]`). */
+export interface BackbufferSourceHistorySnapshot {
+  present: number;
+  declaredResources: number;
+  resources: Array<{
+    resource: string;
+    operations: number;
+    draws: number;
+    skipped: number;
+    clears: number;
+    entries: string[];
+  }>;
+  line: number;
+}
+
+export interface ReadbackDrawCorrelationAssessment {
+  readbackPresentCount: number;
+  copySequence: number;
+  copySource: string;
+  /**
+   * Stato esplicito della correlazione con i dati oggi emessi dal proxy:
+   * - `no-copy-to-backbuffer`: `copy_sequence == 0` o `copy_source` nullo.
+   * - `candidate-only-not-proven`: esistono `[TARGET_DRAW_COPY]` con `tracked_rtv_resource == copy_source`
+   *   e `latest_copy_sequence_at_draw < copy_sequence` (o `[BB_SOURCE_HISTORY]` sulla stessa risorsa),
+   *   ma i puntatori `ID3D11Resource*` non hanno ID di generazione monotonico e `[TARGET_DRAW_COPY]`
+   *   copre solo 2 coppie diagnostiche hardcoded; quindi NON è prova causale generale.
+   * - `uncorrelated`: nessuna voce `[TARGET_DRAW_COPY]` o `[BB_SOURCE_HISTORY]` trovata per `copy_source`.
+   */
+  status: "no-copy-to-backbuffer" | "candidate-only-not-proven" | "uncorrelated";
+  causalProofEstablished: false;
+  candidateDrawIndices: number[];
+  candidatePairs: Array<{ vs?: string; ps?: string }>;
+  matchedCopyToBbSequence: boolean;
+  limitations: string[];
+}
+
+export interface ExecutedGraphicsPair {
+  vsHash: string;
+  psHash?: string;
+  drawCommands: number;
+  rtvIsBackbufferObserved: boolean;
+  firstObservedPresent: number;
+  lastObservedPresent: number;
+}
+
+export interface RankedPlaceholderShader {
+  hash: string;
+  stage: ShaderStage;
+  dumpPath?: string;
+  dumpSkipped: boolean;
+  psoCount: number;
+  skippedOrObservedCommands: number;
+  rtvIsBackbufferObserved: boolean;
+  pairedVsHashes: string[];
+  pairedPsHashes: string[];
+  priorityScore: number;
+}
+
+export interface HelaProxyLogReport {
+  totalLines: number;
+  attestation: LaunchAttestationSummary;
+  presentProgress: {
+    swapChainsCreated: number;
+    maxHeartbeatPresent: number;
+    maxSummaryPresent: number;
+    maxReadbackPresent: number;
+    maxObservedPresent: number;
+  };
+  shaders: Record<string, ShaderObservation>;
+  graphicsPsos: GraphicsPsoRecord[];
+  computePsos: ComputePsoRecord[];
+  /**
+   * Nota esplicita di copertura: `pipeline.cpp:178` emette `[TARGET_INPUT_LAYOUT]` solo
+   * per il VS diagnostico `20e0826b236597a1`. Non rappresenta copertura generale degli InputLayout.
+   */
+  targetInputLayoutCoverage: {
+    scope: "diagnostic-vs-20e0826b236597a1-only";
+    diagnosticVsHash: string;
+    elements: TargetInputLayoutElement[];
+  };
+  inputLayoutFailures: InputLayoutFailure[];
+  drawShaderUse: DrawShaderUseRecord[];
+  computeShaderUse: ComputeShaderUseRecord[];
+  shaderUseEvents: ShaderUseEventRecord[];
+  executedGraphicsPairs: ExecutedGraphicsPair[];
+  readbackIdentities: ReadbackIdentityRecord[];
+  sampledReadbacks: SampledReadbackRecord[];
+  targetDrawCopies: TargetDrawCopyRecord[];
+  copyToBackbufferRecords: CopyToBackbufferRecord[];
+  bbSourceHistorySnapshots: BackbufferSourceHistorySnapshot[];
+  readbackCorrelations: ReadbackDrawCorrelationAssessment[];
+  /** Mappa PS hash -> lista univoca di VS hash abbinati nelle PSO GRAPHICS o nei draw osservati. */
+  psToVsMap: Record<string, string[]>;

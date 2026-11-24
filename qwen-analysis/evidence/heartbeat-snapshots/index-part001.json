@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "path": "evidence/heartbeat-snapshots/part0001.ndjson",
+      "recordStart": 1,
+      "recordEnd": 20,
+      "recordCount": 20,
+      "byteCount": 7944,
+      "sha256": "24817dcd74bb370716cecfe14c2115547698338fb23a82518e06dd82c8b020dd"
+    },
+    {
+      "path": "evidence/heartbeat-snapshots/part0002.ndjson",
+      "recordStart": 21,
+      "recordEnd": 39,
+      "recordCount": 19,
+      "byteCount": 7858,
+      "sha256": "70fed041013ad4064db2138c40e0afbaf3f51d7d6c7c8d15f4ba41b812a5f795"
+    },
+    {
+      "path": "evidence/heartbeat-snapshots/part0003.ndjson",
+      "recordStart": 40,
+      "recordEnd": 41,
+      "recordCount": 2,
+      "byteCount": 841,
+      "sha256": "2657b3fe4fdcdec49ab3b718506c6c2fe9980432922bc0d85f7a3c4d2f20240e"
+    }
+  ]
+}

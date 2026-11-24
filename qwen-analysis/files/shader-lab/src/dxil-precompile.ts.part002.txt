@@ -1,0 +1,151 @@
+  const snapshot: Array<{ file: string; sha256: string; hasDxil: boolean; malformed: boolean }> = [];
+  for (let index = 0; index < files.length; index++) {
+    if (shouldCancel?.()) throw new PrecompileCancelledError("Annullato durante la snapshot dei file; nessuno shader è stato convertito.");
+    const file = files[index];
+    const bytes = await fs.promises.readFile(file);
+    let hasDxil = false;
+    let malformed = false;
+    try {
+      hasDxil = dxilAnalyzer.parseContainer(bytes)?.hasDxil === true;
+    } catch (error) {
+      if (!(error instanceof RangeError)) throw error;
+      malformed = true;
+    }
+    snapshot.push({ file, sha256: createHash("sha256").update(bytes).digest("hex"), hasDxil, malformed });
+    onProgress?.("hashing", index + 1, files.length);
+  }
+  return snapshot;
+}
+
+function emitProgress(
+  options: PrecompileOptions,
+  total: number,
+  results: PrecompileFileResult[],
+  counts: Omit<PrecompileReport, "inputDir" | "outputDir" | "total" | "results">,
+  currentFile?: string,
+  currentStatus?: PrecompileProgress["currentStatus"],
+): void {
+  options.onProgress?.({
+    total,
+    settled: results.length,
+    currentFile,
+    currentStatus,
+    latestResult: results[results.length - 1],
+    counts: { ...counts },
+  });
+}
+
+export async function precompileDxilDirectory(
+  options: PrecompileOptions,
+  dependencies: PrecompileDependencies = {},
+): Promise<PrecompileReport> {
+  const inputDir = path.resolve(options.inputDir);
+  const outputDir = path.resolve(options.outputDir);
+  if (!fs.statSync(inputDir).isDirectory()) throw new Error(`La cartella di input non è valida: ${inputDir}`);
+  if (isWithin(inputDir, outputDir) || isWithin(outputDir, inputDir))
+    throw new Error("La cartella staging deve essere separata dalla cartella degli shader di input.");
+  if (fs.existsSync(outputDir)) throw new Error(`La cartella staging esiste già: ${outputDir}`);
+  fs.mkdirSync(outputDir);
+
+  const snapshot = await enumerateInputs(inputDir, options.shouldCancel, options.onSnapshotProgress);
+  const results: PrecompileFileResult[] = [];
+  const compiledInputs = new Map<string, string>();
+  const outputHashes = new Map<string, string>();
+  const converter = dependencies.converter ?? convertDxilToHlsl;
+  const runner = dependencies.runner ?? run;
+  const fxcPath = dependencies.fxcPath ?? findFxc;
+  const counts = { compiled: 0, blocked: 0, failed: 0, skipped: 0, cancelled: 0 };
+  const settle = (result: PrecompileFileResult, currentStatus: PrecompileProgress["currentStatus"] = result.status) => {
+    results.push(result);
+    counts[result.status]++;
+    emitProgress(options, snapshot.length, results, counts, result.file, currentStatus);
+  };
+  emitProgress(options, snapshot.length, results, counts);
+
+  for (const entry of snapshot) {
+    const relativeFile = path.relative(inputDir, entry.file);
+    if (options.shouldCancel?.()) {
+      settle({ file: relativeFile, status: "cancelled", message: "Annullato prima dell'avvio." });
+      continue;
+    }
+    if (!entry.hasDxil) {
+      const status = entry.malformed || path.extname(entry.file).toLowerCase() === ".dxil" ? "failed" : "skipped";
+      const message = status === "failed" ? "Container DXIL non valido o privo di payload DXIL."
+        : "Container privo di payload DXIL.";
+      settle({ file: relativeFile, status, message });
+      continue;
+    }
+
+    emitProgress(options, snapshot.length, results, counts, relativeFile, "converting");
+    try {
+      const currentBytes = await fs.promises.readFile(entry.file);
+      if (createHash("sha256").update(currentBytes).digest("hex") !== entry.sha256)
+        throw new Error("Il file è cambiato dopo lo snapshot iniziale; non convertito.");
+
+      const disasmPath = disassemblyPathFor(entry.file);
+      if (!disasmPath)
+        throw new BlockedPrecompileError("Disassemblato DXC assente; stage e feature non sono verificabili.");
+      const report = analyzeFiles(entry.file, disasmPath);
+      if (report.container?.program && report.stage && report.container.program.type !== report.stage)
+        throw new BlockedPrecompileError(`Stage del disassemblato (${report.stage}) diverso da quello del container (${report.container.program.type}).`);
+      const blockers = report.findings.filter((finding) => finding.sev === "blocker");
+      if (blockers.length)
+        throw new BlockedPrecompileError(`Feature non supportate per SM5:\n${formatReport(report, path.basename(entry.file))}`);
+      const profile = PROFILE_BY_STAGE[report.stage ?? ""];
+      if (!profile)
+        throw new BlockedPrecompileError(`Stage DXIL non disponibile o non supportato: ${report.stage ?? "sconosciuto"}.`);
+      const outputHash = fnv1a64(currentBytes);
+      const priorOutput = compiledInputs.get(entry.sha256);
+      if (priorOutput) {
+        settle({
+          file: relativeFile,
+          status: "compiled",
+          message: "Bytecode identico a uno shader già compilato in questo job; output riutilizzato.",
+          outputPath: priorOutput,
+        });
+        continue;
+      }
+      if (outputHashes.has(outputHash) && outputHashes.get(outputHash) !== entry.sha256)
+        throw new Error(`Collisione FNV-1a64 per il nome output ${outputHash}; file non scritto.`);
+
+      const converted = await converter({
+        inputPath: entry.file,
+        disasmPath,
+        bindingMapPath: options.bindingMapPath,
+        bufferMode: "raw",
+        shouldCancel: options.shouldCancel,
+      });
+      if (options.shouldCancel?.()) throw new PrecompileCancelledError("Annullato dopo la conversione HLSL.");
+      const localBindings = converted.post.warnings.filter((warning) => warning.includes("assegnato localmente"));
+      if (localBindings.length)
+        throw new BlockedPrecompileError(`Mappa binding necessaria per i register space:\n${localBindings.join("\n")}`);
+      if (!converted.post.entryPoint)
+        throw new BlockedPrecompileError("Entry point HLSL generato non riconosciuto; compilazione non tentata.");
+
+      const hlslPath = path.join(os.tmpdir(), `shader-lab-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.hlsl`);
+      const temporaryCso = path.join(outputDir, `.${path.basename(entry.file)}.${process.pid}.${Math.random().toString(16).slice(2)}.tmp.cso`);
+      const finalCso = path.join(outputDir, `${outputHash}.cso`);
+      try {
+        await fs.promises.writeFile(hlslPath, converted.hlsl, "utf8");
+        const args = ["/nologo", "/T", profile, "/E", converted.post.entryPoint, "/Fo", temporaryCso, hlslPath];
+        const compile: RunResult = await runner(fxcPath(), args);
+        if (compile.missing) throw new Error(`${compile.stderr}\nInstallare il Windows SDK o impostare FXC_PATH.`);
+        if (compile.code !== 0) throw new Error(`FXC (${profile}) fallito:\n${compile.stderr || compile.stdout}`);
+        if (options.shouldCancel?.()) throw new PrecompileCancelledError("Annullato al termine della compilazione FXC.");
+        if (!fs.existsSync(temporaryCso)) throw new Error("FXC ha restituito successo ma non ha prodotto il file .cso.");
+        const compiledBytes = await fs.promises.readFile(temporaryCso);
+        const compiledContainer = dxilAnalyzer.parseContainer(compiledBytes);
+        if (!compiledContainer?.hasLegacy || compiledContainer.hasDxil)
+          throw new Error("FXC non ha prodotto un container DXBC legacy utilizzabile come candidato SM5.");
+        fs.linkSync(temporaryCso, finalCso);
+        fs.unlinkSync(temporaryCso);
+      } finally {
+        if (fs.existsSync(hlslPath)) fs.unlinkSync(hlslPath);
+        if (fs.existsSync(temporaryCso)) fs.unlinkSync(temporaryCso);
+      }
+
+      const warnings = converted.post.warnings.filter((warning) => !warning.includes("assegnato localmente"));
+      if (report.stage === "ps")
+        warnings.push("Compatibilità della firma con il VS abbinato non verificata.");
+      compiledInputs.set(entry.sha256, finalCso);
+      outputHashes.set(outputHash, entry.sha256);

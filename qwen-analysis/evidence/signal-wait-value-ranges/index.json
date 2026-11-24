@@ -1,0 +1,57 @@
+{
+  "schema": "qwen.evidence.dataset-index",
+  "dataset": "signal-wait-value-ranges",
+  "recordCount": 5681,
+  "byteCount": 1616454,
+  "sha256": "2d059ea6f539e743cc706f9bb9f82ccf02ecc0677608581d9ae8784d383a2db5",
+  "indexParts": [
+    {
+      "path": "evidence/signal-wait-value-ranges/index-part001.json",
+      "itemCount": 29,
+      "byteCount": 7639,
+      "sha256": "cc731e2d40c42a456e4b0900b2ab6fa715a637e6aed82ae801938f761ae82a4d"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/index-part002.json",
+      "itemCount": 29,
+      "byteCount": 7692,
+      "sha256": "82683ec0439b3ed839aad42faefe831f83708f251164b5d3e31b7d82dac01f7a"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/index-part003.json",
+      "itemCount": 29,
+      "byteCount": 7705,
+      "sha256": "ec5bcb150a3132a8d1e293369e2c57f6713eb2f3eedb6a08abc0f8ffb620f6f9"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/index-part004.json",
+      "itemCount": 29,
+      "byteCount": 7705,
+      "sha256": "14781442b1a51719a4bb3cad0e0c7674f36abf7a8beafbd8e0f62c2bd2098d46"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/index-part005.json",
+      "itemCount": 29,
+      "byteCount": 7705,
+      "sha256": "4b0a8f51d68b9622d42cfdf1fad9e65a054093aa60b0fe03dee7056fa317dbce"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/index-part006.json",
+      "itemCount": 29,
+      "byteCount": 7705,
+      "sha256": "9be233cd2269fd5dcce8356e4172d37732c287af9bd10533a111d63eca151c59"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/index-part007.json",
+      "itemCount": 29,
+      "byteCount": 7705,
+      "sha256": "10eaaab2aa6754e85f5835dd3eb7dc0310fac4b4042917129ce2237a196797fe"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/index-part008.json",
+      "itemCount": 1,
+      "byteCount": 284,
+      "sha256": "a68174c5b0431df2d07612188b0bbb1fcd9e70e16fb688081256199900770f36"
+    }
+  ]
+}

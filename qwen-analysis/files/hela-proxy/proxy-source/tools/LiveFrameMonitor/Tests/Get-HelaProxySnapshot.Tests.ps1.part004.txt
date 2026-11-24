@@ -1,0 +1,87 @@
+        'd3d12.dll' = [ordered]@{ present = $false; sha256 = $null }
+        'dxgi.dll'  = [ordered]@{ present = $false; sha256 = $null }
+    }) $false
+    $beforeRp = Get-Tree $rp; $beforeGame = Get-Tree $game
+    $r = Invoke-Snapshot @{ RestorePointPath = $rp; OverridesDirectoryName = $Ov }
+    Assert-Equal $r.ExitCode 0 'exit code'
+    Assert-Equal $r.Json.gameDirectory.source 'restore-manifest' 'game directory source'
+    Assert-Equal (Get-Tree $rp) $beforeRp 'restore point unchanged'
+    Assert-Equal (Get-Tree $game) $beforeGame 'game directory unchanged'
+}
+
+Test-Case 'inventory mode: hashes only, InventoryOnly verdict' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    New-Install $game @{ 'd3d12.dll' = 'A'; "$Ov\a.cso" = 'AAA' }
+    $r = Invoke-Snapshot @{ GameDirectory = $game; OverridesDirectoryName = $Ov }
+    Assert-Equal $r.ExitCode 0 'exit code'
+    Assert-Equal $r.Json.summary.verdict 'InventoryOnly' 'verdict'
+    Assert-Status $r 'runtime' 'd3d12.dll' 'Observed'
+    Assert-Equal (Find-Finding $r 'runtime' 'd3d12.dll').actual.sha256 (Get-TextSha 'A') 'hash'
+    Assert-Equal (Find-Finding $r 'runtime' 'dxgi.dll').actual.kind 'absent' 'dxgi absent'
+    Assert-Equal (Find-Finding $r 'override' 'a.cso').actual.sha256 (Get-TextSha 'AAA') 'cso hash'
+    $r2 = Invoke-Snapshot @{ GameDirectory = $game }
+    Assert-Status $r2 'overrides' '(set)' 'NotInspected'
+}
+
+Test-Case '-JsonOut: written outside the install, valid JSON, install untouched' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'; $out = Join-P $sb 'reports'
+    New-Install $game @{ 'd3d12.dll' = 'A'; 'dxgi.dll' = 'B' }
+    [void][System.IO.Directory]::CreateDirectory($out)
+    $m = Join-P $sb 'run.json'
+    New-RunManifest $m (Get-TextSha 'A') (Get-TextSha 'B')
+    $target = Join-P $out 'snap.json'
+    $before = Get-Tree $game
+    $r = Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $m; OverridesDirectoryName = $Ov; JsonOut = $target }
+    Assert-Equal $r.ExitCode 0 'exit code'
+    Assert-True ([System.IO.File]::Exists($target)) 'report file exists'
+    $disk = [System.IO.File]::ReadAllText($target) | ConvertFrom-Json
+    Assert-Equal $disk.schema 'hela-proxy-snapshot/v1' 'report schema'
+    Assert-Equal $disk.summary.verdict 'Match' 'report verdict'
+    Assert-Equal (Get-Tree $game) $before 'install tree unchanged'
+}
+
+Test-Case '-JsonOut: refused inside the install, inside the restore point, over existing files, or with missing parent' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'; $rp = Join-P $sb 'rp'; $out = Join-P $sb 'reports'
+    New-Install $game @{ 'd3d12.dll' = 'A'; 'dxgi.dll' = 'B' }
+    [void][System.IO.Directory]::CreateDirectory($out)
+    [void][System.IO.Directory]::CreateDirectory($rp)
+    New-ModernRestore (Join-P $rp 'restore-manifest.json') $game ([ordered]@{
+        'd3d12.dll' = [ordered]@{ present = $true; sha256 = (Get-TextSha 'A') }
+        'dxgi.dll'  = [ordered]@{ present = $true; sha256 = (Get-TextSha 'B') }
+    }) $false
+    $m = Join-P $sb 'run.json'
+    New-RunManifest $m (Get-TextSha 'A') (Get-TextSha 'B')
+    $beforeGame = Get-Tree $game; $beforeRp = Get-Tree $rp
+
+    $inGame = Join-P $game 'snap.json'
+    Assert-Rejected (Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $m; JsonOut = $inGame }) 'JsonOut inside game dir'
+    Assert-True (-not [System.IO.File]::Exists($inGame)) 'nothing created inside the game dir'
+
+    $inSub = Join-P (Join-P $game $Ov) 'snap.json'
+    Assert-Rejected (Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $m; JsonOut = $inSub }) 'JsonOut inside game subdir'
+
+    $inRp = Join-P $rp 'snap.json'
+    Assert-Rejected (Invoke-Snapshot @{ GameDirectory = $game; RestorePointPath = $rp; JsonOut = $inRp }) 'JsonOut inside restore point'
+    Assert-True (-not [System.IO.File]::Exists($inRp)) 'nothing created inside the restore point'
+
+    Assert-Rejected (Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $m; JsonOut = $m }) 'JsonOut equal to the manifest'
+    Assert-Rejected (Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $m; JsonOut = (Join-P (Join-P $sb 'nope') 'x.json') }) 'JsonOut with missing parent'
+    Assert-Rejected (Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $m; JsonOut = ($out + '\') }) 'JsonOut that is a directory path'
+
+    $existing = Join-P $out 'existing.json'
+    [System.IO.File]::WriteAllText($existing, 'keep me', $Utf8)
+    Assert-Rejected (Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $m; JsonOut = $existing }) 'JsonOut over existing file'
+    Assert-Equal ([System.IO.File]::ReadAllText($existing)) 'keep me' 'existing file untouched'
+
+    Assert-Equal (Get-Tree $game) $beforeGame 'game dir unchanged'
+    Assert-Equal (Get-Tree $rp) $beforeRp 'restore point unchanged'
+}
+
+} finally {
+    try { Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction SilentlyContinue } catch { }
+}
+
+Write-Host ''
+Write-Host ("Results: {0} passed, {1} failed, {2} assertions" -f $script:Passed, $script:Failures, $script:Asserts)
+if ($script:Failures -gt 0) { exit $script:Failures }
+exit 0

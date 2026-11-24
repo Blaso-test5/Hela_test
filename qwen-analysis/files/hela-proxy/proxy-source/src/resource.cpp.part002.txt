@@ -1,0 +1,196 @@
+        if (Cfg().traceCallers) Log("CreateTexture2D end result=0x%08lx", result);
+        if (SUCCEEDED(result)) {
+            ID3D11Resource* base = texture.Get();
+            base->AddRef();
+            resource->tex = Ptr<ID3D11Resource>::Attach(base);
+        }
+        return result;
+    }
+    case D3D12_RESOURCE_DIMENSION_TEXTURE3D: {
+        D3D11_TEXTURE3D_DESC d{};
+        d.Width = static_cast<UINT>(resource->desc.Width);
+        d.Height = resource->desc.Height;
+        d.Depth = resource->desc.DepthOrArraySize;
+        d.MipLevels = resource->desc.MipLevels;
+        d.Format = resource->desc.Format;
+        d.Usage = D3D11_USAGE_DEFAULT;
+        d.BindFlags = bindFlags;
+        Ptr<ID3D11Texture3D> texture;
+        const HRESULT result = resource->dev->d11->CreateTexture3D(&d, nullptr, texture.Put());
+        if (SUCCEEDED(result)) {
+            ID3D11Resource* base = texture.Get();
+            base->AddRef();
+            resource->tex = Ptr<ID3D11Resource>::Attach(base);
+        }
+        return result;
+    }
+    default:
+        return E_INVALIDARG;
+    }
+}
+
+} // namespace
+
+D3D12_HEAP_TYPE EffectiveHeapType(const D3D12_HEAP_PROPERTIES& properties) {
+    if (properties.Type != D3D12_HEAP_TYPE_CUSTOM) return properties.Type;
+    switch (properties.CPUPageProperty) {
+    case D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE:
+    case D3D12_CPU_PAGE_PROPERTY_WRITE_BACK:
+        return D3D12_HEAP_TYPE_UPLOAD;
+    case D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE:
+        return D3D12_HEAP_TYPE_DEFAULT;
+    default:
+        return D3D12_HEAP_TYPE_READBACK;
+    }
+}
+
+Resource::~Resource() {
+    if (backbuffer && dev) {
+        std::lock_guard<std::mutex> lock(dev->swapLock);
+        dev->backbuffers.erase(this);
+    }
+    if (placedHeap) {
+        auto* heap = dynamic_cast<HeapObj*>(placedHeap.Get());
+        if (heap) heap->ReleasePlacedRange(placedOffset, this);
+    }
+    if (va) FreeVA(va);
+}
+
+HRESULT Resource::Create(Device* device, const D3D12_HEAP_PROPERTIES* heapProperties,
+                         D3D12_HEAP_FLAGS heapFlags, const D3D12_RESOURCE_DESC* resourceDesc,
+                         Resource** out, bool tiled) {
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    if (!device || !device->d11 || !heapProperties || !resourceDesc) return E_INVALIDARG;
+    if (resourceDesc->Dimension == D3D12_RESOURCE_DIMENSION_UNKNOWN)
+        return E_INVALIDARG;
+    if (resourceDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER &&
+        (resourceDesc->Height != 1 || resourceDesc->DepthOrArraySize != 1 || resourceDesc->MipLevels != 1))
+        return E_INVALIDARG;
+
+    std::unique_ptr<Resource> resource(new (std::nothrow) Resource(device));
+    if (!resource) return E_OUTOFMEMORY;
+    resource->desc = *resourceDesc;
+    resource->hp = *heapProperties;
+    resource->heap = EffectiveHeapType(*heapProperties);
+    resource->hflags = heapFlags;
+    resource->tiled = tiled;
+    if (tiled) {
+        const bool validTiledTex2D =
+            resourceDesc->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D &&
+            resourceDesc->Layout == D3D12_TEXTURE_LAYOUT_64KB_UNDEFINED_SWIZZLE &&
+            resourceDesc->SampleDesc.Count == 1;
+        const bool validTiledBuf =
+            resourceDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER &&
+            resourceDesc->Layout == D3D12_TEXTURE_LAYOUT_ROW_MAJOR &&
+            resourceDesc->SampleDesc.Count == 1;
+        if (resource->heap != D3D12_HEAP_TYPE_DEFAULT || (!validTiledTex2D && !validTiledBuf))
+            return E_INVALIDARG;
+    }
+
+    HRESULT result = resourceDesc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER
+        ? CreateBuffer(resource.get())
+        : CreateTexture(resource.get());
+    if (FAILED(result)) return result;
+
+    if (resource->IsBuffer()) resource->va = AllocVA(resourceDesc->Width, resource.get());
+    *out = resource.release();
+    return S_OK;
+}
+
+HRESULT HeapObj::GetTilePool(ID3D11Buffer** out) {
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    if (hd.Properties.Type != D3D12_HEAP_TYPE_DEFAULT ||
+        hd.SizeInBytes == 0 ||
+        hd.SizeInBytes % D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT != 0 ||
+        hd.SizeInBytes > UINT_MAX)
+        return E_INVALIDARG;
+
+    std::lock_guard<std::mutex> lock(tilePoolMutex);
+    if (!tilePool) {
+        D3D11_BUFFER_DESC desc{};
+        desc.ByteWidth = static_cast<UINT>(hd.SizeInBytes);
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.MiscFlags = D3D11_RESOURCE_MISC_TILE_POOL;
+        const HRESULT result = dev->d11->CreateBuffer(&desc, nullptr, tilePool.Put());
+        if (FAILED(result)) return result;
+        Log("Created D3D11 tile pool size=%u bytes", desc.ByteWidth);
+    }
+    *out = tilePool.Get();
+    (*out)->AddRef();
+    return S_OK;
+}
+
+HRESULT HeapObj::ReservePlacedRange(UINT64 offset, UINT64 size, const D3D12_RESOURCE_DESC* desc,
+    Resource* resource, PlacedRangeInfo* outOverlap) {
+    if (outOverlap) *outOverlap = {};
+    if (!desc || !resource) return E_INVALIDARG;
+    if (!size || offset > UINT64_MAX - size) return E_INVALIDARG;
+
+    std::lock_guard<std::mutex> lock(placementMutex);
+    for (const auto& placed : placedRanges) {
+        if (offset < placed.offset + placed.size && placed.offset < offset + size) {
+            if (outOverlap) *outOverlap = placed;
+            break;
+        }
+    }
+
+    PlacedRangeInfo info{};
+    info.offset = offset;
+    info.size = size;
+    info.resource = resource;
+    info.dimension = desc->Dimension;
+    info.width = desc->Width;
+    info.height = desc->Height;
+    info.depthOrArray = desc->DepthOrArraySize;
+    info.mipLevels = desc->MipLevels;
+    info.format = desc->Format;
+    info.flags = desc->Flags;
+    info.creatorTid = GetCurrentThreadId();
+    try {
+        placedRanges.push_back(info);
+    } catch (const std::bad_alloc&) {
+        return E_OUTOFMEMORY;
+    }
+
+    if (outOverlap && outOverlap->size) {
+        if (Cfg().diagnosticRenderTrace) {
+            TraceStats().placedOverlap.fetch_add(1, std::memory_order_relaxed);
+            Log("[RENDER_TRACE] [tid=%lu] CreatePlacedResource ALIAS_ACCEPTED heap=%p "
+                "req=[%llu..%llu) res=%p existing=[%llu..%llu) existing-res=%p "
+                "backing=independent-d3d11 result=0x%08lx",
+                GetCurrentThreadId(), this,
+                static_cast<unsigned long long>(offset),
+                static_cast<unsigned long long>(offset + size), resource,
+                static_cast<unsigned long long>(outOverlap->offset),
+                static_cast<unsigned long long>(outOverlap->offset + outOverlap->size),
+                outOverlap->resource, S_OK);
+        } else {
+            Log("CreatePlacedResource overlapping placement accepted; D3D11 backing is independent");
+        }
+    }
+
+    if (Cfg().diagnosticRenderTrace) {
+        auto& stats = TraceStats();
+        stats.placedOk.fetch_add(1, std::memory_order_relaxed);
+        stats.placedLive.fetch_add(1, std::memory_order_relaxed);
+        Log("[RENDER_TRACE] [tid=%lu] CreatePlacedResource OK heap=%p res=%p range=[%llu..%llu) "
+            "dim=%u size=%llux%ux%u mips=%u format=%u flags=0x%x live=%zu",
+            GetCurrentThreadId(), this, resource,
+            static_cast<unsigned long long>(info.offset),
+            static_cast<unsigned long long>(info.offset + info.size),
+            info.dimension, static_cast<unsigned long long>(info.width),
+            info.height, info.depthOrArray, info.mipLevels,
+            info.format, static_cast<UINT>(info.flags), placedRanges.size());
+    }
+    return S_OK;
+}
+
+void HeapObj::ReleasePlacedRange(UINT64 offset, Resource* resource) {
+    std::lock_guard<std::mutex> lock(placementMutex);
+    const auto found = std::find_if(placedRanges.begin(), placedRanges.end(),
+        [offset, resource](const PlacedRangeInfo& placed) {
+            return placed.offset == offset && placed.resource == resource;
+        });
+    if (found == placedRanges.end()) {

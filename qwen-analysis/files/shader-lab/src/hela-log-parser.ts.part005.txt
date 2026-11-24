@@ -1,0 +1,194 @@
+  for (const pso of computePsos) {
+    psoCountByHash.set(pso.cs.hash, (psoCountByHash.get(pso.cs.hash) ?? 0) + 1);
+  }
+
+  const commandsByHash = new Map<string, number>();
+  const backbufferByHash = new Set<string>();
+  const executedPairAgg = new Map<string, ExecutedGraphicsPair>();
+
+  for (const d of drawShaderUse) {
+    linkPair(d.vsHash, d.psHash);
+    for (const h of [d.vsHash, d.psHash, d.gsHash, d.hsHash, d.dsHash]) {
+      if (!h) continue;
+      commandsByHash.set(h, (commandsByHash.get(h) ?? 0) + d.drawCommands);
+      if (d.rtvIsBackbuffer) backbufferByHash.add(h);
+    }
+    if (d.outcome === "executed" && d.vsHash) {
+      const key = `${d.vsHash}|${d.psHash ?? ""}`;
+      const existing = executedPairAgg.get(key);
+      if (!existing) {
+        executedPairAgg.set(key, {
+          vsHash: d.vsHash,
+          psHash: d.psHash,
+          drawCommands: d.drawCommands,
+          rtvIsBackbufferObserved: d.rtvIsBackbuffer,
+          firstObservedPresent: d.firstObservedPresentCountProcessWide,
+          lastObservedPresent: d.lastObservedPresentCountProcessWide,
+        });
+      } else {
+        existing.drawCommands += d.drawCommands;
+        existing.rtvIsBackbufferObserved = existing.rtvIsBackbufferObserved || d.rtvIsBackbuffer;
+        existing.firstObservedPresent = Math.min(existing.firstObservedPresent, d.firstObservedPresentCountProcessWide);
+        existing.lastObservedPresent = Math.max(existing.lastObservedPresent, d.lastObservedPresentCountProcessWide);
+      }
+    }
+  }
+
+  for (const c of computeShaderUse) {
+    if (c.csHash) {
+      commandsByHash.set(c.csHash, (commandsByHash.get(c.csHash) ?? 0) + c.dispatchCommands);
+    }
+  }
+
+  for (const ev of shaderUseEvents) {
+    if (ev.kind === "draw") linkPair(ev.vsHash, ev.psHash);
+  }
+
+  const psToVsMap: Record<string, string[]> = {};
+  for (const [ps, set] of psToVsSet) psToVsMap[ps] = [...set].sort();
+  const vsToPsMap: Record<string, string[]> = {};
+  for (const [vs, set] of vsToPsSet) vsToPsMap[vs] = [...set].sort();
+
+  const placeholdersRanked: RankedPlaceholderShader[] = Object.values(shaders)
+    .filter((s) => s.status === "placeholder" || s.status === "blocked" || s.status === "create-failed")
+    .map((s) => {
+      const psoCount = psoCountByHash.get(s.hash) ?? 0;
+      const skippedOrObservedCommands = commandsByHash.get(s.hash) ?? 0;
+      const rtvIsBackbufferObserved = backbufferByHash.has(s.hash);
+      const priorityScore =
+        (rtvIsBackbufferObserved ? 10_000 : 0) +
+        skippedOrObservedCommands * 10 +
+        psoCount * 5 +
+        (s.dumpPath ? 100 : 0);
+      return {
+        hash: s.hash,
+        stage: s.stage,
+        dumpPath: s.dumpPath,
+        dumpSkipped: s.dumpSkipped === true,
+        psoCount,
+        skippedOrObservedCommands,
+        rtvIsBackbufferObserved,
+        pairedVsHashes: psToVsMap[s.hash] ?? [],
+        pairedPsHashes: vsToPsMap[s.hash] ?? [],
+        priorityScore,
+      };
+    })
+    .sort((a, b) => b.priorityScore - a.priorityScore || a.hash.localeCompare(b.hash));
+
+  // Valutazione onesta della correlazione READBACK_IDENTITY <-> TARGET_DRAW_COPY / COPY_TO_BB
+  const copyToBbBySeq = new Map<number, CopyToBackbufferRecord>();
+  for (const rec of copyToBackbufferRecords) copyToBbBySeq.set(rec.sequence, rec);
+
+  const readbackCorrelations: ReadbackDrawCorrelationAssessment[] = readbackIdentities.map((rb) => {
+    const limitations: string[] = [
+      "[TARGET_DRAW_COPY] in commands.cpp è emesso solo per le 2 coppie diagnostiche hardcoded (20e0826b236597a1 / 44b0a992c2304254 e d77600bde0076c33).",
+      "latest_copy_sequence_at_draw registra la copy_sequence precedente al draw, non la copia successiva al backbuffer.",
+      "copy_source e tracked_rtv_resource sono puntatori ID3D11Resource* senza ID di generazione monotonico (possibile riuso di indirizzo).",
+    ];
+
+    if (rb.copySequence === 0 || rb.copySource === "0x0") {
+      return {
+        readbackPresentCount: rb.readbackPresentCount,
+        copySequence: rb.copySequence,
+        copySource: rb.copySource,
+        status: "no-copy-to-backbuffer",
+        causalProofEstablished: false,
+        candidateDrawIndices: [],
+        candidatePairs: [],
+        matchedCopyToBbSequence: false,
+        limitations,
+      };
+    }
+
+    const copyRecord = copyToBbBySeq.get(rb.copySequence);
+    const matchedCopyToBbSequence = Boolean(copyRecord && copyRecord.sourceTexture === rb.copySource);
+
+    // Un draw può aver scritto nella risorsa copiata alla sequenza S solo se ha disegnato PRIMA della copia S
+    // (latest_copy_sequence_at_draw < S) sulla stessa risorsa tracked_rtv_resource == copy_source.
+    const candidateDraws = targetDrawCopies.filter(
+      (tdc) =>
+        tdc.trackedRtvResource === rb.copySource &&
+        tdc.latestCopySequenceAtDraw < rb.copySequence &&
+        tdc.line < rb.line,
+    );
+
+    const drawIndices = [...new Set(candidateDraws.map((d) => d.drawIndex))].sort((a, b) => a - b);
+    const pairKeys = new Set<string>();
+    const candidatePairs: Array<{ vs?: string; ps?: string }> = [];
+    for (const d of candidateDraws) {
+      const k = `${d.vsHash ?? ""}|${d.psHash ?? ""}`;
+      if (!pairKeys.has(k)) {
+        pairKeys.add(k);
+        candidatePairs.push({ vs: d.vsHash, ps: d.psHash });
+      }
+    }
+
+    const bbSnapHasResource = bbSourceHistorySnapshots.some(
+      (snap) =>
+        snap.present === rb.readbackPresentCount &&
+        snap.resources.some((r) => r.resource === rb.copySource && r.draws > 0),
+    );
+
+    return {
+      readbackPresentCount: rb.readbackPresentCount,
+      copySequence: rb.copySequence,
+      copySource: rb.copySource,
+      status: drawIndices.length > 0 || bbSnapHasResource ? "candidate-only-not-proven" : "uncorrelated",
+      causalProofEstablished: false,
+      candidateDrawIndices: drawIndices,
+      candidatePairs,
+      matchedCopyToBbSequence,
+      limitations,
+    };
+  });
+
+  const executedGraphicsPairs = [...executedPairAgg.values()].sort(
+    (a, b) => b.drawCommands - a.drawCommands || a.vsHash.localeCompare(b.vsHash),
+  );
+  const allShaders = Object.values(shaders);
+
+  return {
+    totalLines: lines.length,
+    attestation,
+    presentProgress,
+    shaders,
+    graphicsPsos,
+    computePsos,
+    targetInputLayoutCoverage: {
+      scope: "diagnostic-vs-20e0826b236597a1-only",
+      diagnosticVsHash: TARGET_INPUT_LAYOUT_DIAGNOSTIC_VS,
+      elements: targetInputLayoutElements,
+    },
+    inputLayoutFailures,
+    drawShaderUse,
+    computeShaderUse,
+    shaderUseEvents,
+    executedGraphicsPairs,
+    readbackIdentities,
+    sampledReadbacks,
+    targetDrawCopies,
+    copyToBackbufferRecords,
+    bbSourceHistorySnapshots,
+    readbackCorrelations,
+    psToVsMap,
+    vsToPsMap,
+    placeholdersRanked,
+    summary: {
+      uniqueShaders: allShaders.length,
+      nativeSm5: allShaders.filter((s) => s.status === "native-sm5").length,
+      overrideReady: allShaders.filter((s) => s.status === "override-ready").length,
+      placeholders: allShaders.filter((s) => s.status === "placeholder").length,
+      blockedOrFailed: allShaders.filter((s) => s.status === "blocked" || s.status === "create-failed").length,
+      graphicsPsosTotal: graphicsPsos.length,
+      graphicsPsosPlaceholder: graphicsPsos.filter((p) => p.missingMask !== 0).length,
+      computePsosTotal: computePsos.length,
+      computePsosPlaceholder: computePsos.filter((p) => p.missingMask !== 0).length,
+      executedGraphicsPairsCount: executedGraphicsPairs.length,
+      inputLayoutFailures: inputLayoutFailures.length,
+    },
+  };
+}
+
+export function parseHelaProxyLogFile(logPath: string): HelaProxyLogReport {
+  return parseHelaProxyLog(fs.readFileSync(logPath, "utf8"));
+}

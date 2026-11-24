@@ -1,0 +1,123 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import * as path from "node:path";
+import { analyzePixCapture, formatPixReport, DEFAULT_LIMITS, HARD_LIMITS } from "./pix-capture.js";
+import { analyzePixDeep } from "./pix-analysis.js";
+import { exportPixDrawResource, listPixEvents } from "./pix-events.js";
+
+/**
+ * Registra il tool MCP `analyze_pix_capture`.
+ * Uso in src/index.ts (dopo gli altri registerTool, prima di server.connect):
+ *   import { registerPixTool } from "./pix-tool.js";
+ *   registerPixTool(server);
+ */
+export function registerPixTool(server: McpServer): void {
+  server.registerTool("analyze_pix_capture", {
+    title: "Analizza cattura PIX .wpix",
+    description:
+      "Unico ingresso per PIX: mode=scan fa un'ispezione statica read-only limitata del .wpix; mode=full usa pixtool per esportare " +
+      "il progetto C++, estrae i container shader DXIL dai resources.bin, disassembla con DXC, correla gli ID PSO con un event list " +
+      "facoltativo e salva report/manifest/shader nella cartella scelta. Il .wpix non viene modificato; mode=full può eseguire il replay " +
+      "PIX e scrive file di output. Non compila né esegue il C++ generato. L'event list esportata da pixtool è non filtrata; Queue ID " +
+      "identifica una riga/evento nella queue, non la queue stessa, e l'etichetta UI non è verificabile dal CSV.",
+    inputSchema: {
+      pixPath: z.string().describe("Percorso locale del file .wpix; scan legge a blocchi, full lo passa a pixtool"),
+      mode: z.enum(["scan", "full"]).default("scan")
+        .describe("scan = sola lettura statica; full = export PIX locale, estrazione PSO/shader e analisi DXC"),
+      outputDir: z.string().optional().describe("Cartella locale per report, manifest, event list e shader estratti (obbligatoria in mode=full)"),
+      eventListPath: z.string().optional().describe("Event list CSV/TSV locale; la sua queue e la corrispondenza con la cattura non sono verificabili dal tool"),
+      queueName: z.string().optional().describe("Etichetta queue vista nella UI PIX; è un'attestazione utente, non un campo verificabile dal CSV"),
+      pixExportDir: z.string().optional().describe("Cartella di un export C++ PIX già esistente; se omessa il tool prova export-to-cpp"),
+      pixToolPath: z.string().optional().describe("Override locale di pixtool.exe; altrimenti autodetect o PIXTOOL_PATH"),
+      dxcPath: z.string().optional().describe("Override locale di dxc.exe; altrimenti autodetect o DXC_PATH"),
+      powerShellPath: z.string().optional().describe("Override locale di powershell.exe; altrimenti autodetect o POWERSHELL_PATH"),
+      headerBytes: z.number().int().min(HARD_LIMITS.minHeaderBytes).max(HARD_LIMITS.maxHeaderBytes).optional()
+        .describe(`Byte di header da mostrare (default ${DEFAULT_LIMITS.headerBytes})`),
+      blockBytes: z.number().int().min(HARD_LIMITS.minBlockBytes).max(HARD_LIMITS.maxBlockBytes).optional()
+        .describe(`Dimensione blocco di lettura (default ${DEFAULT_LIMITS.blockBytes})`),
+      maxScanBytes: z.number().int().min(1).max(HARD_LIMITS.maxScanBytes).optional()
+        .describe(`Byte massimi scansionati dall'inizio (default ${DEFAULT_LIMITS.maxScanBytes}, massimo ${HARD_LIMITS.maxScanBytes})`),
+    },
+  }, async ({ pixPath, mode, outputDir, eventListPath, queueName, pixExportDir, pixToolPath, dxcPath, powerShellPath, headerBytes, blockBytes, maxScanBytes }) => {
+    try {
+      if (mode === "full") {
+        if (!outputDir?.trim()) return { isError: true, content: [{ type: "text" as const, text: "mode=full richiede outputDir." }] };
+        const report = await analyzePixDeep({
+          pixPath: path.resolve(pixPath),
+          outputDir: path.resolve(outputDir),
+          eventListPath: eventListPath ? path.resolve(eventListPath) : undefined,
+          queueName,
+          pixExportDir: pixExportDir ? path.resolve(pixExportDir) : undefined,
+          pixToolPath,
+          dxcPath,
+          powerShellPath,
+        });
+        const findings = Object.entries(report.findings)
+          .map(([code, value]) => `${code}: ${value.shaders} shader (${value.severity})`)
+          .join(", ") || "nessun finding statico";
+        const text =
+          `Analisi PIX completa terminata.\n` +
+          `PSO: ${report.psoCount} | payload shader: ${report.shaderPayloadCount} | container unici: ${report.uniqueShaderCount}\n` +
+          `Disassemblati DXC: ${report.disassembledCount}/${report.uniqueShaderCount}\n` +
+          `Eventi: ${report.eventList?.eventRows ?? "non disponibili"} ` +
+          `| PSO citati: ${report.eventList?.psoIds.length ?? "non disponibili"}\n` +
+          `Finding: ${findings}\n` +
+          `Report: ${report.artifacts.reportMarkdown}\nManifest: ${report.artifacts.shaderMapCsv}\nShader: ${report.artifacts.shadersDirectory}` +
+          (report.eventExportWarning ? `\nAvviso event list: ${report.eventExportWarning}` : "") +
+          (report.unmatchedEventPsoIds.length ? `\nPSO evento non estratti: ${report.unmatchedEventPsoIds.join(", ")}` : "");
+        return { content: [{ type: "text" as const, text }] };
+      }
+
+      const report = await analyzePixCapture(path.resolve(pixPath), { headerBytes, blockBytes, maxScanBytes });
+      return {
+        content: [
+          { type: "text" as const, text: formatPixReport(report) },
+          { type: "text" as const, text: "```json\n" + JSON.stringify(report, null, 2) + "\n```" },
+        ],
+      };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text" as const, text: "analyze_pix_capture: " + String(e) }] };
+    }
+  });
+
+  server.registerTool("list_pix_events", {
+    title: "Cerca eventi PIX",
+    description:
+      "Esporta la event list localmente con pixtool o legge un CSV/TSV fornito. Può filtrare per nome o per il Queue ID esatto di una riga; " +
+      "Queue ID non identifica la queue. L'etichetta Graphics Queue 1 è solo attestata dall'utente.",
+    inputSchema: {
+      pixPath: z.string().describe("Percorso locale della cattura .wpix"),
+      queueId: z.number().int().min(0).optional().describe("Filtro esatto facoltativo sul Queue ID della riga, non un identificatore di queue"),
+      queueLabel: z.string().optional().describe("Etichetta opzionale copiata dalla UI PIX, solo per provenienza"),
+      eventListPath: z.string().optional().describe("Event list CSV/TSV esportata da PIX; se omessa il tool prova l'export locale con pixtool"),
+      contains: z.string().optional().describe("Testo da cercare nel nome evento"),
+      offset: z.number().int().min(0).default(0),
+      limit: z.number().int().min(1).max(200).default(50),
+      pixToolPath: z.string().optional().describe("Override locale di pixtool.exe"),
+    },
+  }, async ({ pixPath, queueId, queueLabel, eventListPath, contains, offset, limit, pixToolPath }) => {
+    try {
+      const report = await listPixEvents({
+        pixPath: path.resolve(pixPath),
+        queueId,
+        queueLabel,
+        eventListPath: eventListPath ? path.resolve(eventListPath) : undefined,
+        contains,
+        offset,
+        limit,
+        pixToolPath,
+      });
+      return { content: [{ type: "text" as const, text: JSON.stringify(report, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text" as const, text: "list_pix_events: " + String(e) }] };
+    }
+  });
+
+  server.registerTool("export_pix_draw_resource", {
+    title: "Esporta render target di un draw PIX",
+    description:
+      "Prima verifica che il Global ID richiesto sia una draw event e che la stessa riga event list abbia il Queue ID atteso; " +
+      "solo dopo usa pixtool save-resource per esportare RTV in PNG. La queue label resta un'attestazione UI dell'utente.",
+    inputSchema: {
+      pixPath: z.string().describe("Percorso locale della cattura .wpix"),
+      globalId: z.number().int().min(0).describe("Global ID della draw event PIX"),

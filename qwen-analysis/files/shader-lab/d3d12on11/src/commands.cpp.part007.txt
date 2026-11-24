@@ -1,0 +1,179 @@
+        desc.MipLevels = 1;
+        desc.Format = footprint.Format;
+        desc.Usage = D3D11_USAGE_STAGING;
+        desc.CPUAccessFlags = cpuAccess;
+        Ptr<ID3D11Texture3D> texture;
+        const HRESULT result = device->d11->CreateTexture3D(&desc, nullptr, texture.Put());
+        if (FAILED(result)) return logFailure("CreateTexture3D", result);
+        if (SUCCEEDED(result)) {
+            ID3D11Resource* base = texture.Get();
+            base->AddRef();
+            out = Ptr<ID3D11Resource>::Attach(base);
+        }
+        return result;
+    }
+    return logFailure("validation-dimension", E_INVALIDARG);
+}
+
+bool NeedsBcMipStaging(const D3D12_SUBRESOURCE_FOOTPRINT& footprint) {
+    const FormatInfo format = GetFormatInfo(footprint.Format);
+    return format.blockW == 4 && format.blockH == 4 &&
+        (footprint.Width < format.blockW || footprint.Height < format.blockH);
+}
+
+HRESULT CreateBcMipStagingTexture(Device* device,
+    const D3D12_SUBRESOURCE_FOOTPRINT& footprint, UINT cpuAccess,
+    Ptr<ID3D11Resource>& out, UINT& stagingSubresource) {
+    UINT mip = 0;
+    while ((static_cast<UINT64>(footprint.Width) << mip) < 4 ||
+           (static_cast<UINT64>(footprint.Height) << mip) < 4)
+        ++mip;
+
+    const UINT64 width = static_cast<UINT64>(footprint.Width) << mip;
+    const UINT64 height = static_cast<UINT64>(footprint.Height) << mip;
+    if (width > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
+        height > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)
+        return E_INVALIDARG;
+
+    D3D11_TEXTURE2D_DESC desc{};
+    desc.Width = static_cast<UINT>(width);
+    desc.Height = static_cast<UINT>(height);
+    desc.MipLevels = mip + 1;
+    desc.ArraySize = 1;
+    desc.Format = footprint.Format;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_STAGING;
+    desc.CPUAccessFlags = cpuAccess;
+
+    Ptr<ID3D11Texture2D> texture;
+    const HRESULT result = device->d11->CreateTexture2D(&desc, nullptr, texture.Put());
+    if (FAILED(result)) return result;
+    ID3D11Resource* base = texture.Get();
+    base->AddRef();
+    out = Ptr<ID3D11Resource>::Attach(base);
+    stagingSubresource = mip;
+    return S_OK;
+}
+
+HRESULT MapBufferForRead(ExecState& state, Resource* resource, Ptr<ID3D11Buffer>& staging,
+                         D3D11_MAPPED_SUBRESOURCE& mapped, const uint8_t*& data) {
+    if (!resource || !resource->IsBuffer() || !resource->buf) return E_INVALIDARG;
+    if (resource->heap == D3D12_HEAP_TYPE_UPLOAD && !resource->shadow.empty()) {
+        data = resource->shadow.data();
+        return S_OK;
+    }
+    D3D11_BUFFER_DESC desc{};
+    resource->buf->GetDesc(&desc);
+    desc.Usage = D3D11_USAGE_STAGING;
+    desc.BindFlags = 0;
+    desc.MiscFlags = 0;
+    desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    HRESULT result = state.dev->d11->CreateBuffer(&desc, nullptr, staging.Put());
+    if (FAILED(result)) return result;
+    state.c->CopyResource(staging.Get(), resource->buf.Get());
+    result = state.c->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+    if (SUCCEEDED(result)) data = static_cast<const uint8_t*>(mapped.pData);
+    return result;
+}
+
+bool ValidCopyBox(const D3D12_BOX& box, const D3D12_SUBRESOURCE_FOOTPRINT& footprint) {
+    return box.left < box.right && box.top < box.bottom && box.front < box.back &&
+        box.right <= footprint.Width && box.bottom <= footprint.Height && box.back <= footprint.Depth;
+}
+
+UINT VisibilityStages(D3D12_SHADER_VISIBILITY visibility, bool compute) {
+    if (compute) return S_CS;
+    switch (visibility) {
+    case D3D12_SHADER_VISIBILITY_VERTEX: return S_VS;
+    case D3D12_SHADER_VISIBILITY_HULL: return S_HS;
+    case D3D12_SHADER_VISIBILITY_DOMAIN: return S_DS;
+    case D3D12_SHADER_VISIBILITY_GEOMETRY: return S_GS;
+    case D3D12_SHADER_VISIBILITY_PIXEL: return S_PS;
+    default: return S_VS | S_HS | S_DS | S_GS | S_PS;
+    }
+}
+
+void BindCb(ExecState& state, UINT stages, UINT slot, ID3D11Buffer* buffer) {
+    if (slot >= D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT) return;
+    ID3D11Buffer* buffers[] = {buffer};
+    if (stages & S_VS) state.c->VSSetConstantBuffers(slot, 1, buffers);
+    if (stages & S_HS) state.c->HSSetConstantBuffers(slot, 1, buffers);
+    if (stages & S_DS) state.c->DSSetConstantBuffers(slot, 1, buffers);
+    if (stages & S_GS) state.c->GSSetConstantBuffers(slot, 1, buffers);
+    if (stages & S_PS) state.c->PSSetConstantBuffers(slot, 1, buffers);
+    if (stages & S_CS) state.c->CSSetConstantBuffers(slot, 1, buffers);
+}
+
+void BindSrv(ExecState& state, UINT stages, UINT slot, ID3D11ShaderResourceView* view) {
+    if (slot >= D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT) return;
+    ID3D11ShaderResourceView* views[] = {view};
+    if (stages & S_VS) state.c->VSSetShaderResources(slot, 1, views);
+    if (stages & S_HS) state.c->HSSetShaderResources(slot, 1, views);
+    if (stages & S_DS) state.c->DSSetShaderResources(slot, 1, views);
+    if (stages & S_GS) state.c->GSSetShaderResources(slot, 1, views);
+    if (stages & S_PS) state.c->PSSetShaderResources(slot, 1, views);
+    if (stages & S_CS) state.c->CSSetShaderResources(slot, 1, views);
+}
+
+void BindSampler(ExecState& state, UINT stages, UINT slot, ID3D11SamplerState* sampler) {
+    if (slot >= D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT) return;
+    ID3D11SamplerState* samplers[] = {sampler};
+    if (stages & S_VS) state.c->VSSetSamplers(slot, 1, samplers);
+    if (stages & S_HS) state.c->HSSetSamplers(slot, 1, samplers);
+    if (stages & S_DS) state.c->DSSetSamplers(slot, 1, samplers);
+    if (stages & S_GS) state.c->GSSetSamplers(slot, 1, samplers);
+    if (stages & S_PS) state.c->PSSetSamplers(slot, 1, samplers);
+    if (stages & S_CS) state.c->CSSetSamplers(slot, 1, samplers);
+}
+
+void BindUav(ExecState& state, UINT stages, UINT slot, ID3D11UnorderedAccessView* view) {
+    if (!view) return;
+    if (stages & S_CS) {
+        if (slot < D3D11_1_UAV_SLOT_COUNT) state.c->CSSetUnorderedAccessViews(slot, 1, &view, nullptr);
+    }
+    if (stages & S_PS) {
+        if (slot < D3D11_1_UAV_SLOT_COUNT && slot >= state.numRtv)
+            state.c->OMSetRenderTargetsAndUnorderedAccessViews(
+                D3D11_KEEP_RENDER_TARGETS_AND_DEPTH_STENCIL, nullptr, nullptr,
+                slot, 1, &view, nullptr);
+        else
+            Log("Pixel UAV slot %u conflicts with %u active render targets", slot, state.numRtv);
+    }
+}
+
+void BindDescriptor(ExecState& state, const Descriptor& descriptor, UINT slot, UINT stages) {
+    switch (descriptor.kind) {
+    case DKind::CBV: {
+        auto* resource = dynamic_cast<Resource*>(descriptor.keep.Get());
+        ID3D11Buffer* buffer = resource ? resource->CbWindow(descriptor.bufOff, descriptor.bufSize) : nullptr;
+        BindCb(state, stages, slot, buffer);
+        break;
+    }
+    case DKind::SRV:
+        if (descriptor.structStride && descriptor.res) {
+            descriptor.res->SyncStruct(descriptor.structStride);
+        } else {
+            auto* uploadResource = dynamic_cast<Resource*>(descriptor.keep.Get());
+            if (uploadResource && uploadResource->heap == D3D12_HEAP_TYPE_UPLOAD)
+                uploadResource->SyncToGpu(descriptor.bufOff, descriptor.bufSize);
+        }
+        BindSrv(state, stages, slot, descriptor.srv.Get());
+        break;
+    case DKind::UAV:
+        if (descriptor.structStride && descriptor.res) descriptor.res->SyncStruct(descriptor.structStride);
+        BindUav(state, stages, slot, descriptor.uav.Get());
+        if (descriptor.structStride && descriptor.res)
+            state.structWrites.emplace_back(descriptor.keep, descriptor.structStride);
+        break;
+    case DKind::Sampler:
+        BindSampler(state, stages, slot, descriptor.smp.Get());
+        break;
+    default:
+        break;
+    }
+}
+
+void BindDirectDescriptor(ExecState& state, const RootParam& param, const RootArg& arg, UINT stages) {
+    UINT64 offset = 0;
+    auto* resource = ResolveVA(arg.value, &offset);
+    if (!resource || !resource->IsBuffer()) {

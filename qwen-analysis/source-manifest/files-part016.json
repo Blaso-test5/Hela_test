@@ -1,0 +1,182 @@
+[
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/src/resource.cpp",
+    "totalLineCount": 597,
+    "sourceByteCount": 26400,
+    "sha256": "2291a1b8dd6bc505769f8705a5197d62f232056b6b20630d1debe1635020cc81",
+    "publishedSha256": "2291a1b8dd6bc505769f8705a5197d62f232056b6b20630d1debe1635020cc81",
+    "publishedByteCount": 26400,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/d3d12on11/src/resource.cpp.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 171,
+        "byteCount": 7957,
+        "sha256": "c27a242fe3a6e5862fa81597dd16750716c54d59d1024517559ec4ee12fcbb12"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/src/resource.cpp.part002.txt",
+        "lineStart": 172,
+        "lineEnd": 366,
+        "byteCount": 7970,
+        "sha256": "9101bcc1dae16757f1bbbe411093fd0b857c46b7347f57dd9ccbb3ad310a6dbe"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/src/resource.cpp.part003.txt",
+        "lineStart": 367,
+        "lineEnd": 542,
+        "byteCount": 7978,
+        "sha256": "fcea1c75a166ea676d86a489db16fb32d6446b4855b46c1e3d9480134cb307c9"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/src/resource.cpp.part004.txt",
+        "lineStart": 543,
+        "lineEnd": 597,
+        "byteCount": 2495,
+        "sha256": "0b000fda4e2de55b89e32c1d56e03a2c9adf8ba02a1742d2fc4885f74a6033e6"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/src/rootsig.cpp",
+    "totalLineCount": 346,
+    "sourceByteCount": 15587,
+    "sha256": "2028c442b836ae13b1433d459c1e93a408a578a37ff68f3634e80cdf0a924195",
+    "publishedSha256": "2028c442b836ae13b1433d459c1e93a408a578a37ff68f3634e80cdf0a924195",
+    "publishedByteCount": 15587,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/src/rootsig.cpp.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 181,
+        "byteCount": 7984,
+        "sha256": "5235fe16f80c3a4cf69d853b4f62f0826794f89d0f1afaa28349bc9233dbc375"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/src/rootsig.cpp.part002.txt",
+        "lineStart": 182,
+        "lineEnd": 346,
+        "byteCount": 7603,
+        "sha256": "dbdf7d5e54c185f2ac3290e803da24b018b5bd6921e997f28d979b2f7eb17277"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/src/shader_use_ledger.h",
+    "totalLineCount": 141,
+    "sourceByteCount": 4698,
+    "sha256": "27f117f0b2f3de56d724909869ef09407d5199124d2fc4518112deed6e222164",
+    "publishedSha256": "27f117f0b2f3de56d724909869ef09407d5199124d2fc4518112deed6e222164",
+    "publishedByteCount": 4698,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/d3d12on11/src/shader_use_ledger.h.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 141,
+        "byteCount": 4698,
+        "sha256": "27f117f0b2f3de56d724909869ef09407d5199124d2fc4518112deed6e222164"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/src/types.h",
+    "totalLineCount": 469,
+    "sourceByteCount": 26779,
+    "sha256": "e6713c76b4e61e976d1578a54188c0703537d596720bcc2afdbc331223b64b00",
+    "publishedSha256": "e6713c76b4e61e976d1578a54188c0703537d596720bcc2afdbc331223b64b00",
+    "publishedByteCount": 26779,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/d3d12on11/src/types.h.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 178,
+        "byteCount": 7959,
+        "sha256": "79345bb0f313f223804d40416da97495f00e168eea308c4712ee7238e5d7c613"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/src/types.h.part002.txt",
+        "lineStart": 179,
+        "lineEnd": 328,
+        "byteCount": 7923,
+        "sha256": "7fe0f6ee9676d0ece7ba6e7cf0cf1251a0484b731b4316d9060539f11e597363"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/src/types.h.part003.txt",
+        "lineStart": 329,
+        "lineEnd": 441,
+        "byteCount": 7896,
+        "sha256": "815e8a72d588f149b77d0927b268cc013d040bd99f36e41322888c58541d8514"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/src/types.h.part004.txt",
+        "lineStart": 442,
+        "lineEnd": 469,
+        "byteCount": 3001,
+        "sha256": "47f45b81216cfb5e85f3a3d29ae8e815488d5775e41960a4e117c93729601a96"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/src/util.cpp",
+    "totalLineCount": 578,
+    "sourceByteCount": 29255,
+    "sha256": "313f16953c310b638b426f2245a936eea942dc9403dac9533bb33abaf3e674a5",
+    "publishedSha256": "313f16953c310b638b426f2245a936eea942dc9403dac9533bb33abaf3e674a5",
+    "publishedByteCount": 29255,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/d3d12on11/src/util.cpp.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 131,
+        "byteCount": 7995,
+        "sha256": "cb5d82a5e1455630287fe6af905f009f15d864006f020b5840e5f816e63f8416"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/src/util.cpp.part002.txt",
+        "lineStart": 132,
+        "lineEnd": 283,
+        "byteCount": 7999,
+        "sha256": "03dc80501564840a5b1693d6d43093b489e439240edd90ebd72cb4b37162edc1"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/src/util.cpp.part003.txt",
+        "lineStart": 284,
+        "lineEnd": 473,
+        "byteCount": 7990,
+        "sha256": "d9312fe9b38c9a33ece2a0c570791cc975eefbc6d692071a4fedf5136d6e7569"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/src/util.cpp.part004.txt",
+        "lineStart": 474,
+        "lineEnd": 578,
+        "byteCount": 5271,
+        "sha256": "bdf59628c23d3492d1671b1ab8f464b34ca7c37286d407e06a80ebbc06487936"
+      }
+    ]
+  }
+]

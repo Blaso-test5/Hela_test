@@ -1,0 +1,116 @@
+{
+  "schema": "qwen.analysis-bundle",
+  "purpose": "analysis-only; no patch",
+  "repositoryCommits": {
+    "Blaso-test5/Hela_test": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "Blaso89/Shader-Lab": "29d8ad893344ae477bf555f12ed41d74e048d625"
+  },
+  "sourceFiles": {
+    "index": "source-manifest/index.json",
+    "sha256": "52ae6e3401dc28deff3b36d47126cb84fe32a51b1ca4595e47c13b51da2e837c",
+    "fileCount": 112,
+    "uniquePublishedContents": 93
+  },
+  "inventories": {
+    "index": "inventory/index.json",
+    "sha256": "fb986df02c9155a4fdc3ceb63a8af00e7851237056f2bd5b820ebfe8563f0d0f",
+    "repositories": [
+      {
+        "repository": "Blaso-test5/Hela_test",
+        "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+        "trackedFileCount": 392,
+        "pathListSha256": "40dd8e7bc44a448219176419b2a7d7fe22891f51f89cdde3d6705f1b9fa20708",
+        "parts": [
+          {
+            "path": "inventory/hela-tracked-paths.part001.txt",
+            "lineStart": 1,
+            "lineEnd": 71,
+            "byteCount": 7998,
+            "sha256": "77276c09e0e9192e774b0dfe096ffa0b64354dcc845cd914da48adc544cbb31d"
+          },
+          {
+            "path": "inventory/hela-tracked-paths.part002.txt",
+            "lineStart": 72,
+            "lineEnd": 145,
+            "byteCount": 7991,
+            "sha256": "d6afcf8115da98112aa89c039f8358a7f83df8b4376f5859ec4d630de098cadd"
+          },
+          {
+            "path": "inventory/hela-tracked-paths.part003.txt",
+            "lineStart": 146,
+            "lineEnd": 211,
+            "byteCount": 7986,
+            "sha256": "e745ef6651f5434c317dd00b9e5a5d322d870a4f0121c9e3edbc2a89eee86634"
+          },
+          {
+            "path": "inventory/hela-tracked-paths.part004.txt",
+            "lineStart": 212,
+            "lineEnd": 272,
+            "byteCount": 7887,
+            "sha256": "4ac7804ed6278e60e4ee2ed198cae3c32e572cb7cc6a3f51069c15c747c83608"
+          },
+          {
+            "path": "inventory/hela-tracked-paths.part005.txt",
+            "lineStart": 273,
+            "lineEnd": 377,
+            "byteCount": 7988,
+            "sha256": "ca3d99ddf2e99527ea4cb84bd8b13f610c35bdcc301ce7f69437028b90867c08"
+          },
+          {
+            "path": "inventory/hela-tracked-paths.part006.txt",
+            "lineStart": 378,
+            "lineEnd": 392,
+            "byteCount": 899,
+            "sha256": "1e3de598499e58add0c21dc0ae5449fc2875250f052a4a426ae10d2af3c8ee4a"
+          }
+        ]
+      },
+      {
+        "repository": "Blaso89/Shader-Lab",
+        "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+        "trackedFileCount": 79,
+        "pathListSha256": "5481e86fbbfbf17b533ced1f6d0d7c487ed4ba733d9214b76aef9358805a96a0",
+        "parts": [
+          {
+            "path": "inventory/shader-lab-tracked-paths.part001.txt",
+            "lineStart": 1,
+            "lineEnd": 79,
+            "byteCount": 2259,
+            "sha256": "5481e86fbbfbf17b533ced1f6d0d7c487ed4ba733d9214b76aef9358805a96a0"
+          }
+        ]
+      }
+    ]
+  },
+  "runtimeRunId": "proxy-main-4450b7d-1050ti-profile14-20261124-104217038",
+  "runtimeEvidenceIndex": "evidence/index.json",
+  "runtimeEvidenceIndexSha256": "7704ca18037bd2238d3085a82ba675670fbf4c828a31e4b799b8adc04b35fe54",
+  "rawLogsOrBinariesIncluded": false,
+  "evidenceIndexSha256": "c2746ea123b6e173637982d8c21e5529137cae2bbd7894bb84755f5c01f2b696",
+  "evidenceRecordCounts": {
+    "shader-observations": 4880,
+    "monitor-placeholder-sample-256": 256,
+    "graphics-psos": 144,
+    "compute-psos": 232,
+    "draw-shader-use-groups": 30,
+    "compute-shader-use-groups": 0,
+    "shader-use-events": 1216,
+    "shader-use-summary": 18,
+    "cmdlist-summaries": 16202,
+    "target-marker-records": 2923,
+    "target-draw-copies": 2388,
+    "target-captured-hits": 6,
+    "target-input-layout": 204,
+    "readback-identities": 19,
+    "sampled-readbacks": 38,
+    "copy-to-backbuffer": 1993,
+    "readback-correlations": 19,
+    "source-history-1400-entries": 129,
+    "heartbeat-snapshots": 41,
+    "render-trace-create-placed": 126,
+    "signal-wait-value-ranges": 5681,
+    "rejection-counters": 9,
+    "resource-creation-matches": 0
+  },
+  "runtimeEvidenceRunId": "proxy-main-4450b7d-1050ti-profile14-20261124-104217038"
+}

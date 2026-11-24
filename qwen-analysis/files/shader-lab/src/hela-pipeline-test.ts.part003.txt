@@ -1,0 +1,172 @@
+    // Nel dump mettiamo vsA, vsB, vsBadOut, psSharedCompat, psSharedIncomplete, psSharedConflict, csWave — MA NON vsMissing!
+    fs.writeFileSync(path.join(dumpDir, `${vsAHash}.dxil`), vsA);
+    fs.writeFileSync(path.join(dumpDir, `${vsBHash}.dxil`), vsB);
+    fs.writeFileSync(path.join(dumpDir, `${vsBadOutHash}.dxil`), vsBadOut);
+    fs.writeFileSync(path.join(dumpDir, `${psCompatHash}.dxil`), psSharedCompat);
+    fs.writeFileSync(path.join(dumpDir, `${psIncompleteHash}.dxil`), psSharedIncomplete);
+    fs.writeFileSync(path.join(dumpDir, `${psConflictHash}.dxil`), psSharedConflict);
+    fs.writeFileSync(path.join(dumpDir, `${csWaveHash}.dxil`), csWave);
+
+    const logPath = path.join(tmp, "d3d12on11.log");
+    fs.writeFileSync(logPath, realisticLog, "utf8");
+
+    // Baseline manifest con 1 override esistente che DEVE essere preservato intatto
+    const baselineCsoBytes = makeFakeContainer("legacy", 1, 777);
+    const baselineCsoName = "20e0826b236597a1.cso";
+    const baselineCsoSha = sha256Buffer(baselineCsoBytes);
+    fs.writeFileSync(path.join(baselineOverridesDir, baselineCsoName), baselineCsoBytes);
+
+    const baselineManifest: HelaRunManifestV1 = {
+      schema: "hela-run-manifest/v1",
+      runtimeAttestation: "module-and-shader-sha256",
+      testVersion: "1050ti-pre-menu-v1.1.2-historical-env",
+      runtime: {
+        d3d12: "14dfba07e9a37b1c8adbc7fe11de6ba14ee0ab3968e953b85a097d32dbf69e98",
+        dxgi: "09d13c05bf198c74b4190a9cb1be1c96966a0ece7641d8621c08a00465e0f857",
+      },
+      overrides: { [baselineCsoName]: baselineCsoSha },
+      requiredOverrides: [baselineCsoName],
+      launchProfile: {
+        name: "1050ti-pre-menu-historical-20261117-v1",
+        sha256: "02dd14ff52bdd38b68589091c4eaa07908d22d488e6a43499ba1a95738499e1d",
+        environment: { ...v112Env },
+        arguments: ["-graphicsadapter=0", "-windowed", "-ResX=1280", "-ResY=720"],
+        attestation: { maskedNvidiaAdapter: true, tiledResourcesTier: 3, callerTrace: false },
+      },
+    };
+    const baselineManifestPath = path.join(baselineDir, "run-manifest.json");
+    fs.writeFileSync(
+      baselineManifestPath,
+      Buffer.concat([
+        Buffer.from([0xef, 0xbb, 0xbf]),
+        Buffer.from(JSON.stringify(baselineManifest, null, 2), "utf8"),
+      ]),
+    );
+    assert.equal(
+      readAndValidateManifest(baselineManifestPath).testVersion,
+      baselineManifest.testVersion,
+      "i manifest UTF-8 con BOM generati da PowerShell devono essere leggibili",
+    );
+    const invalidProfileManifestPath = path.join(tmp, "invalid-profile-manifest.json");
+    fs.writeFileSync(
+      invalidProfileManifestPath,
+      JSON.stringify({
+        ...baselineManifest,
+        launchProfile: { ...baselineManifest.launchProfile, sha256: "0".repeat(64) },
+      }),
+    );
+    assert.throws(
+      () => readAndValidateManifest(invalidProfileManifestPath),
+      /launchProfile fingerprint mismatch/,
+    );
+
+    await assert.rejects(
+      () =>
+        buildHelaOverrideStage(
+          {
+            dumpDir,
+            stagingDir: path.join(tmp, "missing-baseline-overrides-stage"),
+            baselineManifestPath,
+            autoDisassemble: false,
+          },
+          { fxcPath: () => "unused", dxcPath: () => "unused" },
+        ),
+      /baselineOverridesDir è obbligatoria/,
+    );
+
+    const vsCompatDisasm = [
+      "; Input signature:",
+      "; Name                 Index   Mask Register SysValue  Format   Used",
+      "; -------------------- ----- ------ -------- -------- ------- ------",
+      "; ATTRIBUTE                0   xyzw        0     NONE   float   xyzw",
+      "; Output signature:",
+      "; Name                 Index   Mask Register SysValue  Format   Used",
+      "; -------------------- ----- ------ -------- -------- ------- ------",
+      "; SV_Position              0   xyzw        0      POS   float   xyzw",
+      "; COLOR                    0   xyzw        1     NONE   float   xyzw",
+      "; EntryFunctionName: MainVS",
+      '!0 = !{!"vs", i32 6, i32 7}',
+    ].join("\n");
+
+    const psCompatDisasm = [
+      "; Input signature:",
+      "; Name                 Index   Mask Register SysValue  Format   Used",
+      "; -------------------- ----- ------ -------- -------- ------- ------",
+      "; SV_Position              0   xyzw        0      POS   float   xyzw",
+      "; COLOR                    0   xyzw        1     NONE   float   xyzw",
+      "; EntryFunctionName: MainPS",
+      '!0 = !{!"ps", i32 6, i32 7}',
+    ].join("\n");
+
+    const csWaveDisasm = [
+      "; Note: shader requires additional functionality:",
+      ";       Wave level operations",
+      "; NumThreads=(64,1,1)",
+      "; EntryFunctionName: MainCS",
+      '!0 = !{!"cs", i32 6, i32 7}',
+      "  %1 = call i32 @dx.op.waveActiveOp.i32(i32 119, i32 %x, i8 0, i8 0)",
+    ].join("\n");
+
+    const vsBadOutDisasm = [
+      "; Input signature:",
+      "; Name                 Index   Mask Register SysValue  Format   Used",
+      "; -------------------- ----- ------ -------- -------- ------- ------",
+      "; ATTRIBUTE                0   xyzw        0     NONE   float   xyzw",
+      "; Output signature:",
+      "; Name                 Index   Mask Register SysValue  Format   Used",
+      "; -------------------- ----- ------ -------- -------- ------- ------",
+      "; SV_Position              0   xyzw        0      POS   float   xyzw",
+      "; TEXCOORD                 0   xy          1     NONE   float   xy  ",
+      "; EntryFunctionName: MainVSBad",
+      '!0 = !{!"vs", i32 6, i32 7}',
+    ].join("\n");
+
+    const legacyVsA = makeFakeContainer("legacy", 1, 901);
+    const legacyVsB = makeFakeContainer("legacy", 1, 902);
+    const legacyVsBadOut = makeFakeContainer("legacy", 1, 905);
+    const legacyPsCompat = makeFakeContainer("legacy", 0, 903);
+    const legacyPsIncomplete = makeFakeContainer("legacy", 0, 904);
+    const legacyPsConflict = makeFakeContainer("legacy", 0, 906);
+    const dumpByFile = new Map<string, string>();
+
+    const stageRes = await buildHelaOverrideStage(
+      {
+        dumpDir,
+        stagingDir,
+        logPath,
+        baselineManifestPath,
+        baselineOverridesDir,
+        testVersion: "1050ti-menu-v1.2.0-candidate",
+        autoDisassemble: true,
+        requirePairValidationForPs: true,
+      },
+      {
+        dxcPath: () => "mock-dxc",
+        fxcPath: () => "mock-fxc",
+        converter: async () => ({
+          hlsl: "void main() {}\n",
+          post: { hlsl: "", changes: [], registerMap: [], warnings: [], entryPoint: "main" },
+          notes: [],
+        }),
+        runner: async (cmd, args) => {
+          if (cmd === "mock-dxc" && args[0] === "-dumpbin") {
+            const n = path.basename(args[1], ".dxil");
+            if (n === vsAHash || n === vsBHash) return { code: 0, stdout: vsCompatDisasm, stderr: "" };
+            if (n === vsBadOutHash) return { code: 0, stdout: vsBadOutDisasm, stderr: "" };
+            if (n === psCompatHash || n === psIncompleteHash || n === psConflictHash) return { code: 0, stdout: psCompatDisasm, stderr: "" };
+            if (n === csWaveHash) return { code: 0, stdout: csWaveDisasm, stderr: "" };
+            return { code: 1, stdout: "", stderr: "unknown dxil" };
+          }
+          if (cmd === "mock-fxc" && args[0] === "/dumpbin") {
+            const d = dumpByFile.get(args[1]) ?? dumpByFile.get(path.basename(args[1]));
+            return d ? { code: 0, stdout: d, stderr: "" } : { code: 1, stdout: "", stderr: "missing mock dump" };
+          }
+          if (cmd === "mock-fxc") {
+            const outCso = args[args.indexOf("/Fo") + 1];
+            const src = args[args.length - 1];
+            if (src.includes(vsAHash)) {
+              fs.writeFileSync(outCso, legacyVsA);
+              dumpByFile.set(outCso, vsCompatDisasm);
+              dumpByFile.set(`${vsAHash}.cso`, vsCompatDisasm);
+            } else if (src.includes(vsBHash)) {
+              fs.writeFileSync(outCso, legacyVsB);

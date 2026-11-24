@@ -1,0 +1,147 @@
+            mipLevels = source->TextureCubeArray.MipLevels;
+        }
+        Log("[RENDER_TRACE] [tid=%lu] CreateShaderResourceView failed resource=%p "
+            "resource-dim=%u size=%llux%ux%u resource-format=%u resource-flags=0x%x "
+            "view-dim=%u view-format=%u first-element=%llu num-elements=%llu "
+            "first-mip=%u mip-levels=%u stride=%u view-flags=0x%x hr=0x%08lx",
+            GetCurrentThreadId(), resource, resource->desc.Dimension,
+            static_cast<unsigned long long>(resource->desc.Width), resource->desc.Height,
+            resource->desc.DepthOrArraySize, resource->desc.Format,
+            static_cast<UINT>(resource->desc.Flags), source->ViewDimension, source->Format,
+            static_cast<unsigned long long>(firstElement),
+            static_cast<unsigned long long>(numElements), firstMip, mipLevels,
+            structureStride, viewFlags, result);
+    }
+    if (descriptor.kind != DKind::None) RememberResource(descriptor, resource);
+    Store(handle, std::move(descriptor));
+}
+
+void STDMETHODCALLTYPE Device::CreateUnorderedAccessView(ID3D12Resource* sourceResource, ID3D12Resource* counterResource,
+    const D3D12_UNORDERED_ACCESS_VIEW_DESC* source, D3D12_CPU_DESCRIPTOR_HANDLE handle) {
+    Descriptor descriptor{};
+    Resource* resource = AsResource(sourceResource);
+    if (!resource || counterResource) {
+        if (counterResource) Log("Counter UAVs are not supported");
+        Store(handle, std::move(descriptor));
+        return;
+    }
+    D3D12_UNORDERED_ACCESS_VIEW_DESC inferred{};
+    if (!source) {
+        if (resource->IsBuffer()) {
+            inferred.Format = DXGI_FORMAT_R32_TYPELESS;
+            inferred.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+            inferred.Buffer.NumElements = static_cast<UINT>(resource->desc.Width / 4);
+            inferred.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
+        } else {
+            inferred.Format = resource->desc.Format;
+            if (resource->desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D) {
+                inferred.ViewDimension = resource->desc.DepthOrArraySize > 1
+                    ? D3D12_UAV_DIMENSION_TEXTURE1DARRAY : D3D12_UAV_DIMENSION_TEXTURE1D;
+                inferred.Texture1D.MipSlice = 0;
+                inferred.Texture1DArray.ArraySize = resource->desc.DepthOrArraySize;
+            } else if (resource->desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
+                inferred.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
+                inferred.Texture3D.WSize = resource->desc.DepthOrArraySize;
+            } else {
+                inferred.ViewDimension = resource->desc.DepthOrArraySize > 1
+                    ? D3D12_UAV_DIMENSION_TEXTURE2DARRAY : D3D12_UAV_DIMENSION_TEXTURE2D;
+                inferred.Texture2D.MipSlice = 0;
+                inferred.Texture2DArray.ArraySize = resource->desc.DepthOrArraySize;
+            }
+        }
+        source = &inferred;
+    }
+
+    D3D11_UNORDERED_ACCESS_VIEW_DESC desc{};
+    desc.Format = source->Format;
+    ID3D11Resource* nativeResource = resource->Raw();
+    if (resource->IsBuffer()) {
+        if (source->ViewDimension != D3D12_UAV_DIMENSION_BUFFER) {
+            Log("Buffer UAV has a non-buffer view dimension");
+            Store(handle, std::move(descriptor));
+            return;
+        }
+        const auto& view = source->Buffer;
+        ID3D11Buffer* buffer = resource->GpuBuffer();
+        if (source->Format == DXGI_FORMAT_R32_TYPELESS && (view.Flags & D3D12_BUFFER_UAV_FLAG_RAW)) {
+            D3D11_BUFFER_DESC bufferDesc{};
+            if (buffer) buffer->GetDesc(&bufferDesc);
+            const bool allowRaw =
+                (bufferDesc.MiscFlags & D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS) != 0;
+            const UINT numElements = ClampBufferElements(
+                buffer, allowRaw ? DXGI_FORMAT_R32_TYPELESS : DXGI_FORMAT_R32_UINT,
+                4, view.FirstElement, view.NumElements);
+            if (!numElements) {
+                Store(handle, std::move(descriptor));
+                return;
+            }
+            desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+            desc.Buffer.FirstElement = static_cast<UINT>(view.FirstElement);
+            desc.Buffer.NumElements = numElements;
+            desc.Buffer.Flags = allowRaw ? D3D11_BUFFER_UAV_FLAG_RAW : 0;
+            desc.Format = allowRaw ? DXGI_FORMAT_R32_TYPELESS : DXGI_FORMAT_R32_UINT;
+        } else if (view.StructureByteStride) {
+            buffer = resource->StructCopy(view.StructureByteStride);
+            if (!buffer) {
+                Store(handle, std::move(descriptor));
+                return;
+            }
+            const UINT numElements = ClampBufferElements(
+                buffer, DXGI_FORMAT_UNKNOWN, view.StructureByteStride,
+                view.FirstElement, view.NumElements);
+            desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+            desc.Buffer.FirstElement = static_cast<UINT>(view.FirstElement);
+            desc.Buffer.NumElements = numElements;
+            desc.Buffer.Flags = 0;
+            desc.Format = DXGI_FORMAT_UNKNOWN;
+            descriptor.structStride = view.StructureByteStride;
+        } else {
+            const UINT numElements = ClampBufferElements(
+                buffer, source->Format, 0, view.FirstElement, view.NumElements);
+            desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+            desc.Buffer.FirstElement = static_cast<UINT>(view.FirstElement);
+            desc.Buffer.NumElements = numElements;
+        }
+        nativeResource = buffer;
+        descriptor.bufOff = view.FirstElement * (view.StructureByteStride ? view.StructureByteStride : 4);
+        descriptor.bufSize = static_cast<UINT64>(view.NumElements) *
+            (view.StructureByteStride ? view.StructureByteStride : 4);
+    } else if (source->ViewDimension == D3D12_UAV_DIMENSION_TEXTURE2D) {
+        if (source->Texture2D.PlaneSlice) {
+            Log("Plane-slice UAVs are not supported");
+            Store(handle, std::move(descriptor));
+            return;
+        }
+        desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+        desc.Texture2D.MipSlice = source->Texture2D.MipSlice;
+    } else if (source->ViewDimension == D3D12_UAV_DIMENSION_TEXTURE1D) {
+        desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE1D;
+        desc.Texture1D.MipSlice = source->Texture1D.MipSlice;
+    } else if (source->ViewDimension == D3D12_UAV_DIMENSION_TEXTURE1DARRAY) {
+        desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE1DARRAY;
+        desc.Texture1DArray.MipSlice = source->Texture1DArray.MipSlice;
+        desc.Texture1DArray.FirstArraySlice = source->Texture1DArray.FirstArraySlice;
+        desc.Texture1DArray.ArraySize = source->Texture1DArray.ArraySize;
+    } else if (source->ViewDimension == D3D12_UAV_DIMENSION_TEXTURE2DARRAY) {
+        if (source->Texture2DArray.PlaneSlice) {
+            Log("Plane-slice UAVs are not supported");
+            Store(handle, std::move(descriptor));
+            return;
+        }
+        desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2DARRAY;
+        desc.Texture2DArray.MipSlice = source->Texture2DArray.MipSlice;
+        desc.Texture2DArray.FirstArraySlice = source->Texture2DArray.FirstArraySlice;
+        desc.Texture2DArray.ArraySize = source->Texture2DArray.ArraySize;
+    } else if (source->ViewDimension == D3D12_UAV_DIMENSION_TEXTURE3D) {
+        desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE3D;
+        desc.Texture3D.MipSlice = source->Texture3D.MipSlice;
+        desc.Texture3D.FirstWSlice = source->Texture3D.FirstWSlice;
+        desc.Texture3D.WSize = source->Texture3D.WSize;
+    } else {
+        Log("Texture UAV dimension %u is not supported", source->ViewDimension);
+        Store(handle, std::move(descriptor));
+        return;
+    }
+
+    Log("CreateUnorderedAccessView resource=%p tiled=%u dimension=%u format=%u",
+        resource, resource->tiled ? 1u : 0u, source->ViewDimension, source->Format);

@@ -1,0 +1,190 @@
+            return;
+        }
+        if (g_cfg.diagnosticRenderTrace)
+            fprintf(g_logFile, "Log file: %s [tid=%lu]\n", g_logPath.c_str(), GetCurrentThreadId());
+        else
+            fprintf(g_logFile, "Log file: %s\n", g_logPath.c_str());
+    }
+    SYSTEMTIME t; GetLocalTime(&t);
+    fprintf(g_logFile, "[%02d:%02d:%02d.%03d] ", t.wHour, t.wMinute, t.wSecond, t.wMilliseconds);
+    if (g_cfg.diagnosticRenderTrace)
+        fprintf(g_logFile, "[tid=%lu] ", GetCurrentThreadId());
+    va_list ap; va_start(ap, fmt);
+    vfprintf(g_logFile, fmt, ap);
+    va_end(ap);
+    fputc('\n', g_logFile);
+    fflush(g_logFile);
+}
+
+void Unimpl(const char* name) {
+    static std::mutex m;
+    static std::set<std::string> seen;
+    std::lock_guard<std::mutex> l(m);
+    if (seen.insert(name).second) Log("UNIMPL %s", name);
+}
+
+// ------------------------------------------------------------------ utilita' varie
+UINT64 AlignUp(UINT64 v, UINT64 a) { return (v + a - 1) / a * a; }
+
+uint64_t Fnv1a64(const void* data, size_t len) {
+    const uint8_t* p = (const uint8_t*)data;
+    uint64_t h = 14695981039346656037ull;
+    for (size_t i = 0; i < len; ++i) { h ^= p[i]; h *= 1099511628211ull; }
+    return h;
+}
+std::string Hex64(uint64_t v) { char b[32]; snprintf(b, sizeof(b), "%016llx", (unsigned long long)v); return b; }
+
+bool Sha256Hex(const void* data, size_t size, std::string& result) {
+    result.clear();
+    if ((!data && size) || size > static_cast<size_t>(std::numeric_limits<ULONG>::max()))
+        return false;
+
+    BCRYPT_ALG_HANDLE algorithm = nullptr;
+    BCRYPT_HASH_HANDLE hash = nullptr;
+    DWORD objectSize = 0;
+    DWORD hashSize = 0;
+    DWORD bytesReturned = 0;
+    std::vector<uint8_t> hashObject;
+    std::array<uint8_t, 32> digest{};
+    NTSTATUS status = BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0);
+    if (!BCRYPT_SUCCESS(status)) return false;
+
+    status = BCryptGetProperty(algorithm, BCRYPT_OBJECT_LENGTH,
+        reinterpret_cast<PUCHAR>(&objectSize), sizeof(objectSize), &bytesReturned, 0);
+    if (BCRYPT_SUCCESS(status)) {
+        status = BCryptGetProperty(algorithm, BCRYPT_HASH_LENGTH,
+            reinterpret_cast<PUCHAR>(&hashSize), sizeof(hashSize), &bytesReturned, 0);
+    }
+    if (BCRYPT_SUCCESS(status) && hashSize == digest.size()) {
+        hashObject.resize(objectSize);
+        status = BCryptCreateHash(algorithm, &hash, hashObject.data(), objectSize, nullptr, 0, 0);
+    } else if (BCRYPT_SUCCESS(status)) {
+        status = STATUS_INVALID_PARAMETER;
+    }
+    if (BCRYPT_SUCCESS(status) && size) {
+        status = BCryptHashData(hash, const_cast<PUCHAR>(static_cast<const UCHAR*>(data)),
+            static_cast<ULONG>(size), 0);
+    }
+    if (BCRYPT_SUCCESS(status)) {
+        status = BCryptFinishHash(hash, digest.data(), static_cast<ULONG>(digest.size()), 0);
+    }
+    if (hash) BCryptDestroyHash(hash);
+    BCryptCloseAlgorithmProvider(algorithm, 0);
+    if (!BCRYPT_SUCCESS(status)) return false;
+
+    static constexpr char hex[] = "0123456789abcdef";
+    result.reserve(digest.size() * 2);
+    for (uint8_t byte : digest) {
+        result.push_back(hex[byte >> 4]);
+        result.push_back(hex[byte & 0x0f]);
+    }
+    return true;
+}
+
+void LogModuleFingerprint(const char* role, HMODULE module) {
+    if (!role || !module) {
+        Log("MODULE_FINGERPRINT_FAILED role=%s reason=invalid-module", role ? role : "(null)");
+        return;
+    }
+
+    char path[MAX_PATH] = {};
+    const DWORD pathLength = GetModuleFileNameA(module, path, ARRAYSIZE(path));
+    if (!pathLength || pathLength >= ARRAYSIZE(path)) {
+        Log("MODULE_FINGERPRINT_FAILED role=%s reason=module-path-error win32=%lu",
+            role, GetLastError());
+        return;
+    }
+
+    std::vector<uint8_t> image;
+    if (!ReadFileBytes(path, image)) {
+        Log("MODULE_FINGERPRINT_FAILED role=%s path=%s reason=read-failed win32=%lu",
+            role, path, GetLastError());
+        return;
+    }
+
+    std::string digest;
+    if (!Sha256Hex(image.data(), image.size(), digest)) {
+        Log("MODULE_FINGERPRINT_FAILED role=%s path=%s reason=sha256-failed bytes=%zu",
+            role, path, image.size());
+        return;
+    }
+    Log("MODULE_FINGERPRINT role=%s path=%s bytes=%zu sha256=%s",
+        role, path, image.size(), digest.c_str());
+}
+
+UINT MapRegister(char kind, UINT space, UINT reg) {
+    if (!space) return reg;
+    const std::string key = std::string(1, kind) + ":" + std::to_string(space) + ":" + std::to_string(reg);
+    auto it = Cfg().bindingMap.find(key);
+    if (it != Cfg().bindingMap.end()) return it->second;
+    Log("No binding-map entry for %s; using register %u (possible collision)", key.c_str(), reg);
+    return reg;
+}
+
+bool ReadFileBytes(const std::string& path, std::vector<uint8_t>& out) {
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) return false;
+    fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
+    if (n < 0) { fclose(f); return false; }
+    out.resize((size_t)n);
+    size_t rd = n ? fread(out.data(), 1, (size_t)n, f) : 0;
+    fclose(f);
+    return rd == (size_t)n;
+}
+void MakeDirs(const std::string& path) {
+    std::string cur;
+    for (size_t i = 0; i < path.size(); ++i) {
+        cur += path[i];
+        if ((path[i] == '\\' || path[i] == '/') && cur.size() > 3) _mkdir(cur.c_str());
+    }
+    _mkdir(path.c_str());
+}
+bool WriteFileBytes(const std::string& path, const void* data, size_t len) {
+    FILE* f = fopen(path.c_str(), "wb");
+    if (!f) return false;
+    fwrite(data, 1, len, f);
+    fclose(f);
+    return true;
+}
+
+// ------------------------------------------------------------------ container DXBC
+DxbcInfo InspectContainer(const void* data, size_t len) {
+    DxbcInfo r;
+    const uint8_t* b = (const uint8_t*)data;
+    if (len < 32 || memcmp(b, "DXBC", 4) != 0) return r;
+    r.isDxbc = true;
+    uint32_t chunks; memcpy(&chunks, b + 28, 4);
+    if (chunks > 64 || 32 + chunks * 4 > len) return r;
+    for (uint32_t i = 0; i < chunks; ++i) {
+        uint32_t off; memcpy(&off, b + 32 + i * 4, 4);
+        if (off + 8 > len) continue;
+        const char* cc = (const char*)b + off;
+        if (!memcmp(cc, "DXIL", 4) || !memcmp(cc, "ILDB", 4)) r.hasDxil = true;
+        if (!memcmp(cc, "SHDR", 4) || !memcmp(cc, "SHEX", 4)) {
+            r.hasLegacy = true;
+            if (off + 12 <= len) {
+                uint32_t ver; memcpy(&ver, b + off + 8, 4);
+                r.versionMajor = (ver >> 4) & 0xF; r.versionMinor = ver & 0xF;
+            }
+        }
+        if (!memcmp(cc, "RTS0", 4)) r.hasRts0 = true;
+    }
+    return r;
+}
+
+// ------------------------------------------------------------------ formati DXGI
+FormatInfo GetFormatInfo(DXGI_FORMAT f) {
+    switch (f) {
+    case DXGI_FORMAT_R32G32B32A32_TYPELESS: case DXGI_FORMAT_R32G32B32A32_FLOAT:
+    case DXGI_FORMAT_R32G32B32A32_UINT: case DXGI_FORMAT_R32G32B32A32_SINT: return {128, 1, 1};
+    case DXGI_FORMAT_R32G32B32_TYPELESS: case DXGI_FORMAT_R32G32B32_FLOAT:
+    case DXGI_FORMAT_R32G32B32_UINT: case DXGI_FORMAT_R32G32B32_SINT: return {96, 1, 1};
+    case DXGI_FORMAT_R16G16B16A16_TYPELESS: case DXGI_FORMAT_R16G16B16A16_FLOAT: case DXGI_FORMAT_R16G16B16A16_UNORM:
+    case DXGI_FORMAT_R16G16B16A16_UINT: case DXGI_FORMAT_R16G16B16A16_SNORM: case DXGI_FORMAT_R16G16B16A16_SINT:
+    case DXGI_FORMAT_R32G32_TYPELESS: case DXGI_FORMAT_R32G32_FLOAT: case DXGI_FORMAT_R32G32_UINT: case DXGI_FORMAT_R32G32_SINT:
+    case DXGI_FORMAT_R32G8X24_TYPELESS: case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+    case DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS: case DXGI_FORMAT_X32_TYPELESS_G8X24_UINT: return {64, 1, 1};
+    case DXGI_FORMAT_R10G10B10A2_TYPELESS: case DXGI_FORMAT_R10G10B10A2_UNORM: case DXGI_FORMAT_R10G10B10A2_UINT:
+    case DXGI_FORMAT_R11G11B10_FLOAT:
+    case DXGI_FORMAT_R8G8B8A8_TYPELESS: case DXGI_FORMAT_R8G8B8A8_UNORM: case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+    case DXGI_FORMAT_R8G8B8A8_UINT: case DXGI_FORMAT_R8G8B8A8_SNORM: case DXGI_FORMAT_R8G8B8A8_SINT:

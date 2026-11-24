@@ -1,0 +1,181 @@
+    if (!Cfg().diagnosticRenderTrace || !destination || !destination->backbuffer) return;
+    Log("[BACKBUFFER] Copy to backbuffer detected! api=%s dst=%p src=%p",
+        operation, destination, source);
+}
+
+void LogSkippedDraw(ExecState& state, const char* operation,
+    UINT arg0, UINT arg1, uint64_t skippedDrawCount = 1) {
+    if (!Cfg().diagnosticRenderTrace) return;
+    ++state.drawsSkipped;
+    RecordDrawShaderUse(state.graphicsShaderHash, state.graphicsPixelShaderHash,
+        state.graphicsGeometryShaderHash, state.graphicsHullShaderHash,
+        state.graphicsDomainShaderHash, state.graphicsMissingShaderStages,
+        state.hasGraphicsPipeline, true, state.rtvBackbuffer, skippedDrawCount);
+    for (UINT i = 0; i < state.numRtv && i < ARRAYSIZE(state.rtvs); ++i) {
+        ID3D11Resource* resource = state.rtvResources[i].Get();
+        if (!resource) continue;
+        char context[512]{};
+        snprintf(context, sizeof(context),
+            "Skipped %s rtv_slot=%u pso=%p vs_hash=%016llx ps_hash=%016llx "
+            "missing_vs=%u missing_shader=%u missing_stage_mask=0x%02x arg0=%u arg1=%u",
+            operation, i, reinterpret_cast<void*>(state.graphicsPipelineIdentity),
+            static_cast<unsigned long long>(state.graphicsShaderHash),
+            static_cast<unsigned long long>(state.graphicsPixelShaderHash),
+            state.graphicsPlaceholderVs ? 1u : 0u, state.skipDraws ? 1u : 0u,
+            state.graphicsMissingShaderStages,
+            arg0, arg1);
+        TrackTargetOperation(resource, context, TargetHistoryKind::SkippedDraw);
+    }
+    Log("[RENDER_TRACE] [DRAW_SKIPPED] api=%s pipeline=%p vs-hash=%016llx ps-hash=%016llx "
+        "missing-vs=%u missing-shader=%u missing-stage-mask=0x%02x "
+        "reason=missing-sm5-override arg0=%u arg1=%u rtvs=%u backbuffer=%u",
+        operation, reinterpret_cast<void*>(state.graphicsPipelineIdentity),
+        static_cast<unsigned long long>(state.graphicsShaderHash),
+        static_cast<unsigned long long>(state.graphicsPixelShaderHash),
+        state.graphicsPlaceholderVs ? 1u : 0u, state.skipDraws ? 1u : 0u,
+        state.graphicsMissingShaderStages,
+        arg0, arg1, state.numRtv, state.rtvBackbuffer ? 1u : 0u);
+}
+
+void DumpBackbufferSourceHistoryImpl(UINT64 readbackPresentCount) {
+    struct Snapshot {
+        ID3D11Resource* resource = nullptr;
+        uint64_t executedDraws = 0;
+        uint64_t skippedDraws = 0;
+        uint64_t clears = 0;
+        std::vector<std::string> entries;
+    };
+    std::vector<Snapshot> snapshots;
+    {
+        std::lock_guard<std::mutex> lock(g_resourceDrawMutex);
+        snapshots.reserve(g_backbufferSourceHistory.size());
+        for (const auto& pair : g_backbufferSourceHistory) {
+            Snapshot snapshot{};
+            snapshot.resource = pair.first;
+            snapshot.executedDraws = pair.second.executedDraws;
+            snapshot.skippedDraws = pair.second.skippedDraws;
+            snapshot.clears = pair.second.clears;
+            snapshot.entries = pair.second.entries;
+            snapshots.push_back(std::move(snapshot));
+        }
+    }
+
+    Log("[BB_SOURCE_HISTORY_SNAPSHOT] present=%llu resources=%llu",
+        static_cast<unsigned long long>(readbackPresentCount),
+        static_cast<unsigned long long>(snapshots.size()));
+    if (snapshots.empty()) {
+        Log("[BB_SOURCE_HISTORY] No CopyResource-to-backbuffer sources registered");
+        return;
+    }
+    for (const auto& snapshot : snapshots) {
+        const size_t total = static_cast<size_t>(snapshot.executedDraws +
+            snapshot.skippedDraws + snapshot.clears);
+        if (!total) {
+            Log("[BB_SOURCE_HISTORY] Resource %p has NO draw/clear history",
+                snapshot.resource);
+            continue;
+        }
+        Log("[BB_SOURCE_HISTORY] Resource %p operations=%llu draws=%llu skipped=%llu clears=%llu",
+            snapshot.resource, static_cast<unsigned long long>(total),
+            static_cast<unsigned long long>(snapshot.executedDraws),
+            static_cast<unsigned long long>(snapshot.skippedDraws),
+            static_cast<unsigned long long>(snapshot.clears));
+        for (const auto& entry : snapshot.entries)
+            Log("[BB_SOURCE_HISTORY]   %s", entry.c_str());
+        if (total > snapshot.entries.size())
+            Log("[BB_SOURCE_HISTORY]   ... and %llu more operations",
+                static_cast<unsigned long long>(total - snapshot.entries.size()));
+    }
+}
+
+void RecordDispatchExecution(ExecState& state, bool skipped,
+    uint64_t dispatchCount = 1) {
+    if (!Cfg().diagnosticRenderTrace) return;
+    if (!skipped)
+        TraceStats().dispatchExec.fetch_add(dispatchCount, std::memory_order_relaxed);
+    RecordComputeShaderUse(state.computeShaderHash,
+        state.computeMissingShaderStages, skipped, dispatchCount);
+}
+
+HRESULT WaitForQuery(Device* device, ID3D11Query* query, void* data, UINT dataSize) {
+    const ULONGLONG deadline = GetTickCount64() + 5000;
+    HRESULT result = S_FALSE;
+    while ((result = device->ctx->GetData(query, data, dataSize,
+            D3D11_ASYNC_GETDATA_DONOTFLUSH)) == S_FALSE) {
+        if (GetTickCount64() >= deadline)
+            return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+        SwitchToThread();
+    }
+    return result;
+}
+
+HRESULT GetDeviceTimestampFrequency(Device* device, UINT64* frequency) {
+    if (device->timestampFrequency) {
+        *frequency = device->timestampFrequency;
+        return S_OK;
+    }
+
+    D3D11_QUERY_DESC desc{D3D11_QUERY_TIMESTAMP_DISJOINT, 0};
+    Ptr<ID3D11Query> query;
+    HRESULT result = device->d11->CreateQuery(&desc, query.Put());
+    if (FAILED(result)) {
+        Log("GetTimestampFrequency could not create D3D11 disjoint query: hr=0x%08lx", result);
+        return result;
+    }
+
+    device->ctx->Begin(query.Get());
+    device->ctx->End(query.Get());
+    device->ctx->Flush();
+
+    D3D11_QUERY_DATA_TIMESTAMP_DISJOINT data{};
+    result = WaitForQuery(device, query.Get(), &data, sizeof(data));
+    if (FAILED(result)) {
+        Log("GetTimestampFrequency D3D11 disjoint query failed: hr=0x%08lx", result);
+        return result;
+    }
+    if (data.Disjoint || !data.Frequency) {
+        Log("GetTimestampFrequency received disjoint/zero-frequency timestamp data");
+        return E_FAIL;
+    }
+
+    device->timestampFrequency = data.Frequency;
+    *frequency = data.Frequency;
+    return S_OK;
+}
+
+Descriptor DescriptorAt(D3D12_CPU_DESCRIPTOR_HANDLE handle, DKind expected) {
+    UINT index = 0;
+    DescriptorHeap* heap = FindHeapByCpu(handle.ptr, &index);
+    if (!heap || heap->items[index].kind != expected) return {};
+    return heap->items[index];
+}
+
+Descriptor DescriptorAt(D3D12_GPU_DESCRIPTOR_HANDLE handle, DKind expected) {
+    UINT index = 0;
+    DescriptorHeap* heap = FindHeapByGpu(handle.ptr, &index);
+    if (!heap || heap->items[index].kind != expected) return {};
+    return heap->items[index];
+}
+
+struct FootprintCopyInfo {
+    UINT rows = 0;
+    UINT blocksPerRow = 0;
+    UINT64 rowBytes = 0;
+    UINT64 sliceBytes = 0;
+    UINT bytesPerBlock = 0;
+};
+
+bool ValidateFootprint(Resource* buffer, const D3D12_PLACED_SUBRESOURCE_FOOTPRINT& placed,
+                       FootprintCopyInfo& info) {
+    const auto& footprint = placed.Footprint;
+    const FormatInfo format = GetFormatInfo(footprint.Format);
+    if (!buffer || !buffer->IsBuffer() || !footprint.Width || !footprint.Height ||
+        !footprint.Depth || !format.bits || format.bits % 8 ||
+        !format.blockW || !format.blockH || !footprint.RowPitch ||
+        footprint.RowPitch % D3D12_TEXTURE_DATA_PITCH_ALIGNMENT ||
+        placed.Offset % D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT)
+        return false;
+    info.bytesPerBlock = format.bits / 8;
+    info.blocksPerRow = (footprint.Width + format.blockW - 1) / format.blockW;
+    info.rows = (footprint.Height + format.blockH - 1) / format.blockH;
+    info.rowBytes = static_cast<UINT64>(info.blocksPerRow) * info.bytesPerBlock;

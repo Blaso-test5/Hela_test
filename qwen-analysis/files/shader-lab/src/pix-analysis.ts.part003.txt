@@ -1,0 +1,132 @@
+  fs.writeFileSync(scanPath, `${JSON.stringify(staticScan, null, 2)}\n`, "utf8");
+
+  const shadersDirectory = path.join(outputDir, "shaders");
+  const ownWorkDirectory = options.pixExportDir ? null : fs.mkdtempSync(path.join(os.tmpdir(), "shaderlab-pix-cpp-"));
+  const exportDirectory = options.pixExportDir ? path.resolve(options.pixExportDir) : path.join(ownWorkDirectory!, "export");
+  let eventPath = options.eventListPath ? path.resolve(options.eventListPath) : null;
+  let eventExportWarning: string | null = null;
+  let keepWorkDirectory = false;
+
+  try {
+    if (options.pixExportDir) {
+      if (!fs.existsSync(exportDirectory) || !fs.statSync(exportDirectory).isDirectory()) {
+        throw new Error(`Cartella export C++ PIX non trovata: ${exportDirectory}`);
+      }
+    } else {
+      await exportCppProject(pixPath, exportDirectory, options.pixToolPath);
+    }
+
+    if (eventPath) {
+      if (!fs.existsSync(eventPath) || !fs.statSync(eventPath).isFile()) {
+        throw new Error(`Event list non trovato: ${eventPath}`);
+      }
+      const copiedEventPath = path.join(outputDir, path.basename(eventPath));
+      if (path.resolve(eventPath) !== path.resolve(copiedEventPath)) fs.copyFileSync(eventPath, copiedEventPath);
+      eventPath = copiedEventPath;
+    } else {
+      eventPath = path.join(outputDir, "events.csv");
+      const eventExport = await exportEventList(pixPath, eventPath, options.pixToolPath);
+      eventExportWarning = eventExport.warning;
+      if (!eventExport.succeeded) eventPath = null;
+    }
+
+    const rawEventList = eventPath ? readEventList(eventPath) : null;
+    const eventList = rawEventList ? {
+      path: rawEventList.path,
+      eventRows: rawEventList.eventRows,
+      psoIds: rawEventList.psoIds,
+      queueIds: rawEventList.queueIds,
+    } : null;
+    const extracted = await runShaderExtraction(exportDirectory, shadersDirectory, options.powerShellPath);
+    const psoRefsByHash = new Map<string, Set<number>>();
+    for (const shader of extracted) {
+      const refs = psoRefsByHash.get(shader.sha256) ?? new Set<number>();
+      refs.add(shader.psoId);
+      psoRefsByHash.set(shader.sha256, refs);
+    }
+
+    const disassemblyFailures: string[] = [];
+    const dxc = findDxc(options.dxcPath);
+    let disassembledCount = 0;
+    const uniqueShaders = [...new Map(extracted.map((shader) => [shader.sha256, shader])).values()];
+    if (dxc) {
+      let next = 0;
+      const worker = async () => {
+        while (next < uniqueShaders.length) {
+          const shader = uniqueShaders[next++];
+          const binaryPath = path.join(shadersDirectory, shader.fileName);
+          const disasmPath = path.join(shadersDirectory, `${shader.sha256}_dxil.txt`);
+          const result = await run(dxc, ["-dumpbin", binaryPath], 60_000);
+          if (result.code !== 0) {
+            disassemblyFailures.push(`${shader.sha256}: ${(result.stderr || result.stdout).slice(-1000)}`);
+            shader.report = analyzeFiles(binaryPath);
+          } else {
+            fs.writeFileSync(disasmPath, result.stdout, "utf8");
+            shader.report = analyzeFiles(binaryPath, disasmPath);
+            disassembledCount++;
+          }
+          shader.shaderModel = shader.report.shaderModel;
+          shader.psoRefs = [...(psoRefsByHash.get(shader.sha256) ?? [])].sort((a, b) => a - b);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(4, uniqueShaders.length) }, () => worker()));
+    } else {
+      for (const shader of uniqueShaders) {
+        shader.report = analyzeFiles(path.join(shadersDirectory, shader.fileName));
+        shader.shaderModel = shader.report.shaderModel;
+        shader.psoRefs = [...(psoRefsByHash.get(shader.sha256) ?? [])].sort((a, b) => a - b);
+      }
+      disassemblyFailures.push("DXC non trovato; salvati i container, senza disassemblati.");
+    }
+
+    const eventPsoIds = new Set(eventList?.psoIds ?? []);
+    const unmatchedEventPsoIds = [...eventPsoIds].filter((id) => !extracted.some((shader) => shader.psoId === id));
+    const stats = summarize(uniqueShaders);
+    const shaderMapCsv = path.join(outputDir, "shader-map.csv");
+    writeShaderMap(shaderMapCsv, extracted, eventPsoIds);
+
+    const report: PixDeepAnalysisReport = {
+      pixPath,
+      outputDir,
+      queueName: options.queueName ?? null,
+      queueNameVerifiedByFile: false,
+      staticScan,
+      eventList,
+      eventExportWarning,
+      psoCount: buildPixPsoReads(exportDirectory).length,
+      shaderPayloadCount: extracted.length,
+      uniqueShaderCount: uniqueShaders.length,
+      disassembledCount,
+      disassemblyFailures,
+      unmatchedEventPsoIds,
+      ...stats,
+      artifacts: {
+        reportJson: path.join(outputDir, "analysis.json"),
+        reportMarkdown: path.join(outputDir, "analysis.md"),
+        shaderMapCsv,
+        eventList: eventList ? eventPath : null,
+        shadersDirectory,
+      },
+    };
+
+    const shaderReports = uniqueShaders.map((shader) => ({
+      sha256: shader.sha256,
+      byteLength: shader.byteLength,
+      fileName: shader.fileName,
+      shaderModel: shader.shaderModel,
+      psoIds: shader.psoRefs,
+      report: shader.report,
+    }));
+    fs.writeFileSync(report.artifacts.reportJson, `${JSON.stringify({ ...report, shaderReports }, null, 2)}\n`, "utf8");
+    fs.writeFileSync(report.artifacts.reportMarkdown, markdownReport(report), "utf8");
+    keepWorkDirectory = false;
+    return report;
+  } catch (error) {
+    keepWorkDirectory = true;
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}${ownWorkDirectory ? `\nExport temporaneo conservato per diagnosi: ${ownWorkDirectory}` : ""}`,
+    );
+  } finally {
+    if (ownWorkDirectory && !keepWorkDirectory) fs.rmSync(ownWorkDirectory, { recursive: true, force: true });
+  }
+}

@@ -1,0 +1,147 @@
+                        hit, mapped.RowPitch);
+                } else {
+                    const auto* rgba = static_cast<const uint8_t*>(mapped.pData);
+                    Log("[TARGET_TEXEL] hit=%u status=ok srv=%p resource=%p "
+                        "srv_format=%u resource_format=%u rgba=(%u,%u,%u,%u)",
+                        hit, psSrv.Get(), psResource.Get(),
+                        static_cast<unsigned int>(psSrvDesc.Format),
+                        static_cast<unsigned int>(psTextureDesc.Format),
+                        static_cast<unsigned int>(rgba[0]),
+                        static_cast<unsigned int>(rgba[1]),
+                        static_cast<unsigned int>(rgba[2]),
+                        static_cast<unsigned int>(rgba[3]));
+                    state.c->Unmap(staging.Get(), 0);
+                }
+            }
+        }
+    }
+
+    std::array<ID3D11Buffer*, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> rawVertexBuffers{};
+    std::array<UINT, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> vertexStrides{};
+    std::array<UINT, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> vertexOffsets{};
+    state.c->IAGetVertexBuffers(0, static_cast<UINT>(rawVertexBuffers.size()),
+        rawVertexBuffers.data(), vertexStrides.data(), vertexOffsets.data());
+    UINT vertexBufferMask = 0;
+    UINT vertexBufferCount = 0;
+    for (UINT slot = 0; slot < rawVertexBuffers.size(); ++slot) {
+        if (!rawVertexBuffers[slot]) continue;
+        vertexBufferMask |= 1u << slot;
+        ++vertexBufferCount;
+        if ((hit == 1 || selectedCapture) && slot == 0)
+            LogTargetVertexData(state, hit, rawVertexBuffers[slot],
+                vertexStrides[slot], vertexOffsets[slot]);
+        rawVertexBuffers[slot]->Release();
+    }
+    D3D11_PRIMITIVE_TOPOLOGY topology = D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
+    state.c->IAGetPrimitiveTopology(&topology);
+
+    D3D11_RENDER_TARGET_VIEW_DESC rtvDesc{};
+    if (rtv) rtv->GetDesc(&rtvDesc);
+
+    Ptr<ID3D11Resource> copySource;
+    uint64_t copySequence = 0;
+    if (state.dev) {
+        std::lock_guard<std::mutex> lock(state.dev->backbufferCopyLock);
+        copySource = state.dev->lastBackbufferCopySource;
+        copySequence = state.dev->lastBackbufferCopySequence;
+    }
+
+    std::array<D3D11_VIEWPORT, D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE> viewports{};
+    UINT viewportCount = static_cast<UINT>(viewports.size());
+    state.c->RSGetViewports(&viewportCount, viewports.data());
+    std::array<D3D11_RECT, D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE> scissors{};
+    UINT scissorCount = static_cast<UINT>(scissors.size());
+    state.c->RSGetScissorRects(&scissorCount, scissors.data());
+
+    ID3D11RasterizerState* rawRasterizer = nullptr;
+    state.c->RSGetState(&rawRasterizer);
+    Ptr<ID3D11RasterizerState> rasterizer = Ptr<ID3D11RasterizerState>::Attach(rawRasterizer);
+    D3D11_RASTERIZER_DESC rasterizerDesc{};
+    if (rasterizer) rasterizer->GetDesc(&rasterizerDesc);
+
+    ID3D11DepthStencilState* rawDepthState = nullptr;
+    UINT stencilRef = 0;
+    state.c->OMGetDepthStencilState(&rawDepthState, &stencilRef);
+    Ptr<ID3D11DepthStencilState> depthState = Ptr<ID3D11DepthStencilState>::Attach(rawDepthState);
+    D3D11_DEPTH_STENCIL_DESC depthDesc{};
+    if (depthState) depthState->GetDesc(&depthDesc);
+
+    ID3D11BlendState* rawBlendState = nullptr;
+    FLOAT blendFactor[4]{};
+    UINT sampleMask = 0;
+    state.c->OMGetBlendState(&rawBlendState, blendFactor, &sampleMask);
+    Ptr<ID3D11BlendState> blendState = Ptr<ID3D11BlendState>::Attach(rawBlendState);
+    D3D11_BLEND_DESC blendDesc{};
+    if (blendState) blendState->GetDesc(&blendDesc);
+
+    const UINT depthEnable = depthState
+        ? static_cast<UINT>(depthDesc.DepthEnable) : TRUE;
+    const UINT depthFunc = depthState
+        ? static_cast<UINT>(depthDesc.DepthFunc)
+        : static_cast<UINT>(D3D11_COMPARISON_LESS);
+    const UINT depthWrite = depthState
+        ? static_cast<UINT>(depthDesc.DepthWriteMask)
+        : static_cast<UINT>(D3D11_DEPTH_WRITE_MASK_ALL);
+    const UINT stencilEnable =
+        depthState && depthDesc.StencilEnable ? 1u : 0u;
+
+    Log("[TARGET_DRAW_DIAG] hit=%u resource_hit=%u vs=%016llx ps=%016llx indices=%u instances=%u "
+        "start_index=%u base_vertex=%d start_instance=%u ib=%p ib_format=%u ib_offset=%u "
+        "vb_mask=0x%08x vb_count=%u vb0_stride=%u vb0_offset=%u topology=%u",
+        hit, resourceHit, static_cast<unsigned long long>(state.graphicsShaderHash),
+        static_cast<unsigned long long>(state.graphicsPixelShaderHash),
+        indexCount, instanceCount, startIndex, baseVertex, startInstance,
+        indexBuffer.Get(), static_cast<unsigned int>(indexFormat), indexOffset,
+        vertexBufferMask, vertexBufferCount, vertexStrides[0], vertexOffsets[0],
+        static_cast<unsigned int>(topology));
+    Log("[TARGET_DRAW_DIAG] hit=%u rtv=%p rtv_format=%u rtv_resource=%p tracked_resource=%p "
+        "previous_copy_source=%p previous_copy_sequence=%llu matches_previous_copy_source=%u dsv=%p",
+        hit, rtv.Get(), static_cast<unsigned int>(rtvDesc.Format), rtvResource.Get(),
+        state.numRtv ? state.rtvResources[0].Get() : nullptr, copySource.Get(),
+        static_cast<unsigned long long>(copySequence),
+        rtvResource && rtvResource.Get() == copySource.Get() ? 1u : 0u, dsv.Get());
+    Log("[TARGET_DRAW_DIAG] hit=%u viewports=%u first_viewport=(%.1f,%.1f,%.1f,%.1f) "
+        "scissors=%u first_scissor=(%ld,%ld,%ld,%ld) raster_bound=%u cull=%u scissor_enable=%u "
+        "depth_bound=%u depth_enable=%u depth_func=%u stencil_enable=%u depth_write=%u "
+        "blend_bound=%u blend_enable=%u blend_src=%u blend_dst=%u blend_op=%u "
+        "blend_src_alpha=%u blend_dst_alpha=%u blend_op_alpha=%u write_mask=0x%x "
+        "blend_factor=(%.6g,%.6g,%.6g,%.6g) sample_mask=0x%08x stencil_ref=%u",
+        hit, viewportCount,
+        viewportCount ? viewports[0].TopLeftX : 0.0f,
+        viewportCount ? viewports[0].TopLeftY : 0.0f,
+        viewportCount ? viewports[0].Width : 0.0f,
+        viewportCount ? viewports[0].Height : 0.0f,
+        scissorCount,
+        scissorCount ? scissors[0].left : 0,
+        scissorCount ? scissors[0].top : 0,
+        scissorCount ? scissors[0].right : 0,
+        scissorCount ? scissors[0].bottom : 0,
+        rasterizer ? 1u : 0u,
+        rasterizer ? static_cast<unsigned int>(rasterizerDesc.CullMode)
+                   : static_cast<unsigned int>(D3D11_CULL_BACK),
+        rasterizer ? static_cast<unsigned int>(rasterizerDesc.ScissorEnable) : 0u,
+        depthState ? 1u : 0u,
+        depthEnable, depthFunc, stencilEnable, depthWrite,
+        blendState ? 1u : 0u,
+        blendState ? static_cast<unsigned int>(blendDesc.RenderTarget[0].BlendEnable) : 0u,
+        static_cast<unsigned int>(blendDesc.RenderTarget[0].SrcBlend),
+        static_cast<unsigned int>(blendDesc.RenderTarget[0].DestBlend),
+        static_cast<unsigned int>(blendDesc.RenderTarget[0].BlendOp),
+        static_cast<unsigned int>(blendDesc.RenderTarget[0].SrcBlendAlpha),
+        static_cast<unsigned int>(blendDesc.RenderTarget[0].DestBlendAlpha),
+        static_cast<unsigned int>(blendDesc.RenderTarget[0].BlendOpAlpha),
+        blendState ? static_cast<unsigned int>(blendDesc.RenderTarget[0].RenderTargetWriteMask)
+                   : static_cast<unsigned int>(D3D11_COLOR_WRITE_ENABLE_ALL),
+        blendFactor[0], blendFactor[1], blendFactor[2], blendFactor[3], sampleMask, stencilRef);
+
+    D3D11_QUERY_DESC queryDesc{D3D11_QUERY_PIPELINE_STATISTICS, 0};
+    const HRESULT queryResult = state.dev && state.dev->d11
+        ? state.dev->d11->CreateQuery(&queryDesc, pipelineStats.query.Put())
+        : E_POINTER;
+    if (FAILED(queryResult)) {
+        Log("[TARGET_DRAW_STATS] hit=%u resource_hit=%u resource=%p create_query_failed hr=0x%08lx",
+            hit, resourceHit, rtvResource.Get(), queryResult);
+        pipelineStats.query.Reset();
+        return;
+    }
+    pipelineStats.hit = hit;

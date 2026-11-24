@@ -1,0 +1,15 @@
+{
+  "schema": "qwen.evidence.dataset-index",
+  "dataset": "heartbeat-snapshots",
+  "recordCount": 41,
+  "byteCount": 16643,
+  "sha256": "5ef409ebe994b097be54eeb1c0d32b972f9b60834b65e89fab8e955420a222d9",
+  "indexParts": [
+    {
+      "path": "evidence/heartbeat-snapshots/index-part001.json",
+      "itemCount": 3,
+      "byteCount": 785,
+      "sha256": "a04b0589bb8d74bb4c37313528fd9cbfceccb88dbd2a5b88354a52ba731eff28"
+    }
+  ]
+}

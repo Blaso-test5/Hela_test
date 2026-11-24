@@ -1,0 +1,120 @@
+Da applicare solo dopo aver ricevuto i contenuti reali; i nomi interni sono ipotesi da verificare.
+hela-pipeline.ts:
+import di runPackageGate da tools/hela-package/package-gate.mjs (percorso da adattare);
+dopo il successo di build_hela_override_stage, await runPackageGate(stagingDir, {mode:"build"});
+estendere lo stato pipeline con packageGate: {ok, reportPath, inventoryPath, issues} e un
+nuovo stato terminale packaged-staged;
+la pipeline fallisce se il gate fallisce; nessuna invocazione di ProxyManager, nessuna copia
+fuori staging, nessun processo figlio.
+pipeline.cpp:
+allineare l'hash override a SHA-256 hex lowercase (stesso del gate); se oggi usa altro
+algoritmo, aggiungere il campo sha256 senza rimuovere quello esistente (compatibilità);
+log strutturato JSONL per decisione di load:
+{runId, id, path, expectedSha256, actualSha256, result: loaded|skipped|failed} —
+è la fonte di loadedOverrides del bundle (configurazione richiesta ≠ override caricati);
+rifiuto atomico: se un override richiesto fallisce hash/presenza, marcare la run
+override-set-incomplete invece di caricare un sottoinsieme silenzioso (policy da
+confermare con ProxyManager).
+commands.cpp:
+StableResourceId { uint64 index; uint32 generation; } assegnato alla creazione risorsa;
+mappa void* → StableResourceId con invalidazione su release/destroy, per eliminare
+l'ambiguità da riuso dei puntatori;
+eventi JSONL taggati:
+{runId, frameIndex, clOrdinal, queue, fenceValue, op: draw|copy|readback, src, dst};
+catena draw→copy→readback valida solo se gli ID coincidono lungo la catena e l'ordine
+temporale (fence/timeline) è monotono; il BMP referenzia targetResourceId + copyChainRef;
+sola osservabilità: nessuna modifica al comportamento GPU.
+ProxyManager.ps1:
+prima di qualunque load, verificare che override-inventory.json corrisponda esattamente
+al manifest (stessa regola del gate: biiezione path/id, hash uguali, runtime DLLs presenti)
+e che package-report.json.ok == true; rifiuto atomico con messaggio azionabile;
+nessuna modifica che installi o avvii nulla ora: resta specifica.
+3.4 Test minimi (offline, verificabili)
+normalizeRelPath: normalizza backslash; rifiuta .., assoluti, drive letter, segmenti vuoti/./NUL.
+Happy path: inventario generato e ordinato, lifecycle staged-only, installed/networkUsed false, check-mode ok.
+Runtime DLL mancante → MISSING_RUNTIME, nessun inventario consumabile, report scritto con ok:false.
+Hash diverso dal manifest → HASH_MISMATCH.
+File extra in overrides/ → INVENTORY_EXTRA.
+Override dichiarato ma assente → MISSING_OVERRIDE.
+Path non sicuro / location invalida → UNSAFE_PATH, INVALID_OVERRIDE_LOCATION.
+Determinismo: due build → inventario identico byte-per-byte.
+Gate fallito dopo build ok → inventario stale rimosso (staleInventoryRemoved:true).
+Check-mode su inventario manomesso → INVENTORY_MISMATCH.
+Check-mode senza inventario → INVENTORY_MISSING, read-only (nessun file scritto).
+Runtime richiesto non dichiarato → RUNTIME_NOT_DECLARED.
+Id/path duplicati → DUPLICATE_ID, DUPLICATE_PATH.
+Manifest assente → MANIFEST_MISSING; package senza override → ok con warning EMPTY_OVERRIDES;
+smoke dello schema run-evidence (parse + guardrail sul verdetto menu).
+3.5 Criteri di accettazione
+node --test tools/hela-package/ verde, offline, senza GPU, senza processi figli, senza rete.
+Corrispondenza inventario/manifest verificata in entrambe le direzioni (build + check);
+fallimento atomico: nessun output parziale marcato ok, nessun inventario stale left behind.
+Nessun file scritto fuori dalla staging dir; nessun percorso di gioco/proxy toccato.
+package-report.json.lifecycle === "staged-only" sempre; nessun claim di install o di menu.
+Doc e schema dichiarano il menu non verificato di default.
+4. Tassonomia delle prove (distinzione netta)
+Classe
+
+Esempi
+
+Cosa dimostra
+
+Cosa NON dimostra
+
+
+Offline (questo slice)
+
+compile SM5, reflection, gate package G1, hash, corrispondenza inventario/manifest, schema bundle, scan statico import-table (P1-3)
+
+artefatti completi, coerenti, riproducibili
+
+qualunque comportamento runtime; il menu
+
+
+Native del proxy (richiede autorizzazione; non in questa patch)
+
+loader log con hash verify, resource-ID timeline draw→copy→readback, validation layer/barriere, catena fino a Present
+
+che il proxy carica gli override previsti ed esegue la catena senza errori
+
+correttezza visiva; menu funzionante
+
+
+GPU / visuale (richiede autorizzazione + harness; non in questa patch)
+
+BMP della catena verificata, scene note deterministiche, checklist menu, confronto baseline con tolleranze
+
+(solo con criteri espliciti) menu funzionante
+
+nulla oltre i criteri testati
+Regola di verdetto: compilazione, PSO ready, Present raggiunto o pixel non neri producono al
+più evidenza offline/native/readback. Il verdetto menu resta unverified finché una checklist
+esplicita (elementi attesi, ed eventualmente interazione) non passa su readback della catena verificata.
+5. Cosa resta in staging fino ad autorizzazione runtime
+L'intero package (runtime DLLs, overrides, inventario, report) resta nella staging dir.
+Nessuna copia verso directory di gioco/proxy, nessun caricamento, nessun avvio: il changeset
+non contiene codice di install né di promozione.
+La promozione avverrà solo tramite un passo authorize manuale futuro, con registrazione
+esplicita di scope e ambiente; fino ad allora ogni artefatto è staged-only.
+6. Limiti residui e rischi
+Menu non verificato: il pre-menu storico non ha BMP validi, quindi non esiste baseline visiva.
+Egress enforcement non provato: la proposta statica (import-table + scan sorgenti) non copre
+il caricamento dinamico (GetProcAddress); nessuna network capture è ammessa dai vincoli.
+Estratti dei file esistenti non forniti: le change-spec §3.3 sono ipotesi da validare sul
+codice reale; rischio di disallacciamento di nomi/strutture.
+Falso senso di sicurezza: package completo (G1) è necessario ma non sufficiente; shader
+semanticamente errati possono superare tutti i gate offline.
+Hash drift gate ↔ pipeline.cpp: algoritmo/normalizzazione del loader ignoti; allineare (P1-4)
+prima di fidarsi dei confronti.
+Determinismo GPU (driver, timing, stato di gioco): i test visuali richiederanno seed/scene
+note e tolleranze; non inclusi in questo slice.
+Path Windows/POSIX: normalizzazione esplicita nel gate, ma il wiring reale va verificato su
+entrambi gli ambienti.
+Promozione accidentale dello staging: mitigata dal marker staged-only, dall'assenza di
+codice di install e dalla rimozione dell'inventario stale; l'autorizzazione resta fuori banda.
+7. Esecuzione dei test e della CLI
+node --test tools/hela-package/
+node tools/hela-package/package-gate.mjs <stagingDir>          # build (scrive solo in staging)
+node tools/hela-package/package-gate.mjs <stagingDir> --check  # verifica read-only
+Node >= 18 (consigliato >= 20). Exit code CLI: 0 = ok, 1 = gate fallito, 2 = uso/IO.
+I test usano byte fittizi per le DLL: nessun file viene mai caricato come libreria.

@@ -1,0 +1,76 @@
+{
+  "items": [
+    {
+      "path": "evidence/readback-correlations/part0001.ndjson",
+      "recordStart": 1,
+      "recordEnd": 5,
+      "recordCount": 5,
+      "byteCount": 7517,
+      "sha256": "1c3916ff0732d0c6a859fb01a53ec64bcac59c2528ab8e61778997273ab5b5d6"
+    },
+    {
+      "path": "evidence/readback-correlations/part0002.ndjson",
+      "recordStart": 6,
+      "recordEnd": 8,
+      "recordCount": 3,
+      "byteCount": 6882,
+      "sha256": "dca496ae93c5dc0d0fb06137ef08d66128093aea73da3e7f72c302816ba67148"
+    },
+    {
+      "path": "evidence/readback-correlations/part0003.ndjson",
+      "recordStart": 9,
+      "recordEnd": 10,
+      "recordCount": 2,
+      "byteCount": 5424,
+      "sha256": "cdfcfa684f9fcb1ac46ed615219ffcfe9eb993e87154cc087760929dacb23b94"
+    },
+    {
+      "path": "evidence/readback-correlations/part0004.ndjson",
+      "recordStart": 11,
+      "recordEnd": 12,
+      "recordCount": 2,
+      "byteCount": 6091,
+      "sha256": "733608953905befc5815417afe752cc3b6c3b8fd918a9672ec77a44af26e0ac2"
+    },
+    {
+      "path": "evidence/readback-correlations/part0005.ndjson",
+      "recordStart": 13,
+      "recordEnd": 14,
+      "recordCount": 2,
+      "byteCount": 6759,
+      "sha256": "b9873dba8523d1e4416a9fb30d1685b619833a24711976ed0b79462776e1d75b"
+    },
+    {
+      "path": "evidence/readback-correlations/part0006.ndjson",
+      "recordStart": 15,
+      "recordEnd": 16,
+      "recordCount": 2,
+      "byteCount": 7426,
+      "sha256": "073ec03624efdfbfc2fba08255fda1e5065d9b81a42a90a20bb2d416f0d40c8f"
+    },
+    {
+      "path": "evidence/readback-correlations/part0007.ndjson",
+      "recordStart": 17,
+      "recordEnd": 17,
+      "recordCount": 1,
+      "byteCount": 3962,
+      "sha256": "ca98142307895b86f280132bfcd98e66345d5a07c96531fc4a333d635d5cec0b"
+    },
+    {
+      "path": "evidence/readback-correlations/part0008.ndjson",
+      "recordStart": 18,
+      "recordEnd": 18,
+      "recordCount": 1,
+      "byteCount": 4129,
+      "sha256": "267b69ed3a7fecc7e50f6312be2e3a451f810884ffd37017f87c925ecd1333ee"
+    },
+    {
+      "path": "evidence/readback-correlations/part0009.ndjson",
+      "recordStart": 19,
+      "recordEnd": 19,
+      "recordCount": 1,
+      "byteCount": 4297,
+      "sha256": "3680e9ded6c7c695f03bb3142d3fbac793d785c620ad2a8f61789e88bca8bac5"
+    }
+  ]
+}

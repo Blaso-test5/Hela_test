@@ -1,0 +1,86 @@
+    descriptor.kind = DKind::Sampler;
+    Store(handle, std::move(descriptor));
+}
+
+void STDMETHODCALLTYPE Device::CopyDescriptors(UINT destCount, const D3D12_CPU_DESCRIPTOR_HANDLE* destStarts,
+    const UINT* destSizes, UINT sourceCount, const D3D12_CPU_DESCRIPTOR_HANDLE* sourceStarts,
+    const UINT* sourceSizes, D3D12_DESCRIPTOR_HEAP_TYPE type) {
+    if ((destCount && !destStarts) || (sourceCount && !sourceStarts)) {
+        Log("CopyDescriptors received a null range-start array dest_count=%u source_count=%u "
+            "dest_starts=%p source_starts=%p type=%u",
+            destCount, sourceCount, destStarts, sourceStarts, static_cast<unsigned int>(type));
+        return;
+    }
+    const auto rangeSize = [](const UINT* sizes, UINT index) {
+        return sizes ? sizes[index] : 1u;
+    };
+    UINT64 destTotal = 0, sourceTotal = 0;
+    for (UINT i = 0; i < destCount; ++i) destTotal += rangeSize(destSizes, i);
+    for (UINT i = 0; i < sourceCount; ++i) sourceTotal += rangeSize(sourceSizes, i);
+    if (destTotal != sourceTotal || destTotal > SIZE_MAX / sizeof(Descriptor)) {
+        Log("CopyDescriptors range counts do not match");
+        return;
+    }
+
+    std::vector<Descriptor> copies;
+    copies.reserve(static_cast<size_t>(sourceTotal));
+    for (UINT i = 0; i < sourceCount; ++i) {
+        UINT startIndex = 0;
+        DescriptorHeap* heap = GetHeap(sourceStarts[i].ptr, &startIndex);
+        const UINT size = rangeSize(sourceSizes, i);
+        if (!heap || heap->hd.Type != type || startIndex > heap->items.size() ||
+            size > heap->items.size() - startIndex) {
+            Log("CopyDescriptors source range is invalid index=%u size=%u type=%u",
+                startIndex, size, static_cast<unsigned int>(type));
+            return;
+        }
+        for (UINT n = 0; n < size; ++n) copies.push_back(heap->items[startIndex + n]);
+    }
+
+    std::vector<std::pair<DescriptorHeap*, UINT>> destinations;
+    destinations.reserve(destCount);
+    for (UINT i = 0; i < destCount; ++i) {
+        UINT startIndex = 0;
+        DescriptorHeap* heap = GetHeap(destStarts[i].ptr, &startIndex);
+        const UINT size = rangeSize(destSizes, i);
+        if (!heap || heap->hd.Type != type || startIndex > heap->items.size() ||
+            size > heap->items.size() - startIndex) {
+            Log("CopyDescriptors destination range is invalid index=%u size=%u type=%u",
+                startIndex, size, static_cast<unsigned int>(type));
+            return;
+        }
+        destinations.emplace_back(heap, startIndex);
+    }
+
+    size_t cursor = 0;
+    for (UINT i = 0; i < destCount; ++i) {
+        auto* heap = destinations[i].first;
+        const UINT startIndex = destinations[i].second;
+        const UINT size = rangeSize(destSizes, i);
+        for (UINT n = 0; n < size; ++n) {
+            TraceTargetDescriptorWrite("copy", heap, startIndex + n, copies[cursor]);
+            heap->items[startIndex + n] = copies[cursor++];
+        }
+    }
+}
+
+void STDMETHODCALLTYPE Device::CopyDescriptorsSimple(UINT count, D3D12_CPU_DESCRIPTOR_HANDLE dest,
+    D3D12_CPU_DESCRIPTOR_HANDLE source, D3D12_DESCRIPTOR_HEAP_TYPE type) {
+    if (!count) return;
+    UINT destIndex = 0, sourceIndex = 0;
+    DescriptorHeap* destHeap = GetHeap(dest.ptr, &destIndex);
+    DescriptorHeap* sourceHeap = GetHeap(source.ptr, &sourceIndex);
+    if (!destHeap || !sourceHeap || destHeap->hd.Type != type || sourceHeap->hd.Type != type ||
+        count > destHeap->items.size() - destIndex || count > sourceHeap->items.size() - sourceIndex) {
+        Log("CopyDescriptorsSimple received an invalid descriptor range");
+        return;
+    }
+    std::vector<Descriptor> copies;
+    copies.reserve(count);
+    for (UINT i = 0; i < count; ++i) copies.push_back(sourceHeap->items[sourceIndex + i]);
+    for (UINT i = 0; i < count; ++i) {
+        TraceTargetDescriptorWrite("copy-simple", destHeap, destIndex + i, copies[i],
+                                   sourceHeap, sourceIndex + i);
+        destHeap->items[destIndex + i] = copies[i];
+    }
+}

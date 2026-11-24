@@ -1,0 +1,12 @@
+{
+  "signalEventCount": 33681,
+  "waitEventCount": 5669,
+  "orderPreserved": false,
+  "representation": "exact per-fence value ranges, HR/completion state, duplicate counts, and line bounds; event order is not retained",
+  "createPlacedResourceRecords": 126,
+  "requestedButNotObserved": {
+    "ReleasePlacedRange": 0,
+    "ALIAS_ACCEPTED": 0,
+    "STRUCT_COPY_TRUNCATE": 0
+  }
+}

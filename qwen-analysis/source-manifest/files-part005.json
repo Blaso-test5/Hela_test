@@ -1,0 +1,182 @@
+[
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/src/resource.cpp",
+    "totalLineCount": 604,
+    "sourceByteCount": 26804,
+    "sha256": "38dae7579464df5e31d82f2f9680bd5a0a9030f1b65ebef1b520f0d162bd7054",
+    "publishedSha256": "38dae7579464df5e31d82f2f9680bd5a0a9030f1b65ebef1b520f0d162bd7054",
+    "publishedByteCount": 26804,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/src/resource.cpp.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 171,
+        "byteCount": 7957,
+        "sha256": "c27a242fe3a6e5862fa81597dd16750716c54d59d1024517559ec4ee12fcbb12"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/src/resource.cpp.part002.txt",
+        "lineStart": 172,
+        "lineEnd": 367,
+        "byteCount": 7939,
+        "sha256": "ca58fe2846ca27b936f70ca6230d4f7e336b19bd155a9f740200910ee48fdcc0"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/src/resource.cpp.part003.txt",
+        "lineStart": 368,
+        "lineEnd": 538,
+        "byteCount": 7996,
+        "sha256": "2e21654c0695e8b850e35e50f20f97b4a24652b7481891cd16ef8ce0749e4ab7"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/src/resource.cpp.part004.txt",
+        "lineStart": 539,
+        "lineEnd": 604,
+        "byteCount": 2912,
+        "sha256": "f4138dfb65135d94ca25728b46ee013d9fe2f70e5050a808dee666a7cbf3de0f"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/src/rootsig.cpp",
+    "totalLineCount": 346,
+    "sourceByteCount": 15587,
+    "sha256": "2028c442b836ae13b1433d459c1e93a408a578a37ff68f3634e80cdf0a924195",
+    "publishedSha256": "2028c442b836ae13b1433d459c1e93a408a578a37ff68f3634e80cdf0a924195",
+    "publishedByteCount": 15587,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/src/rootsig.cpp.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 181,
+        "byteCount": 7984,
+        "sha256": "5235fe16f80c3a4cf69d853b4f62f0826794f89d0f1afaa28349bc9233dbc375"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/src/rootsig.cpp.part002.txt",
+        "lineStart": 182,
+        "lineEnd": 346,
+        "byteCount": 7603,
+        "sha256": "dbdf7d5e54c185f2ac3290e803da24b018b5bd6921e997f28d979b2f7eb17277"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/src/shader_use_ledger.h",
+    "totalLineCount": 192,
+    "sourceByteCount": 6215,
+    "sha256": "645dd6a6bd21a50e4dad8d268915afd8ae9dadb3dbf21e5bba464f98b18781c1",
+    "publishedSha256": "645dd6a6bd21a50e4dad8d268915afd8ae9dadb3dbf21e5bba464f98b18781c1",
+    "publishedByteCount": 6215,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/src/shader_use_ledger.h.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 192,
+        "byteCount": 6215,
+        "sha256": "645dd6a6bd21a50e4dad8d268915afd8ae9dadb3dbf21e5bba464f98b18781c1"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/src/types.h",
+    "totalLineCount": 468,
+    "sourceByteCount": 26746,
+    "sha256": "a037c332d314e583e5985b0e27936eba2bdf4d34edfb67a038d8b77913495d06",
+    "publishedSha256": "a037c332d314e583e5985b0e27936eba2bdf4d34edfb67a038d8b77913495d06",
+    "publishedByteCount": 26746,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/src/types.h.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 178,
+        "byteCount": 7949,
+        "sha256": "147ed28f9a36c3dfdcdef296b3e5d3438ec461ae16ff09811c5e790da25e5aab"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/src/types.h.part002.txt",
+        "lineStart": 179,
+        "lineEnd": 328,
+        "byteCount": 7980,
+        "sha256": "c4201b7407fbcd2f51ebc23960a0d018030fb62d849913f735b820f8a0a0ccc1"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/src/types.h.part003.txt",
+        "lineStart": 329,
+        "lineEnd": 441,
+        "byteCount": 7966,
+        "sha256": "f0edaa84e0a2036e2dd35f267c192e3567f01e1041f90a9dec13d4ccd1b44110"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/src/types.h.part004.txt",
+        "lineStart": 442,
+        "lineEnd": 468,
+        "byteCount": 2851,
+        "sha256": "5ec7c84939d8eb4cabc06e1aa901ba07cc9b45dbb7ad63391f079507e4d61966"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/src/util.cpp",
+    "totalLineCount": 628,
+    "sourceByteCount": 31876,
+    "sha256": "5ff99147d6d010e16951b9052a343cef0e763c15cd52a9ea0484d844925102c5",
+    "publishedSha256": "5ff99147d6d010e16951b9052a343cef0e763c15cd52a9ea0484d844925102c5",
+    "publishedByteCount": 31876,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/src/util.cpp.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 131,
+        "byteCount": 7995,
+        "sha256": "cb5d82a5e1455630287fe6af905f009f15d864006f020b5840e5f816e63f8416"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/src/util.cpp.part002.txt",
+        "lineStart": 132,
+        "lineEnd": 280,
+        "byteCount": 7974,
+        "sha256": "33598aa60527d8d9019cc69003ffb1cbded2e5496a594eede5a3696c56463b61"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/src/util.cpp.part003.txt",
+        "lineStart": 281,
+        "lineEnd": 472,
+        "byteCount": 7985,
+        "sha256": "d5917540f28b3fb70c7af94fa07060ac30bc203b67cfe0b468756c4ebbdf63de"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/src/util.cpp.part004.txt",
+        "lineStart": 473,
+        "lineEnd": 628,
+        "byteCount": 7922,
+        "sha256": "4f4356877d984505aad1db131f6515b6a50337fe2e5598a373e65ffdd1a4ba62"
+      }
+    ]
+  }
+]

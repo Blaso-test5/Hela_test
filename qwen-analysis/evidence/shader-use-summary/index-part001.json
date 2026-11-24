@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "path": "evidence/shader-use-summary/part0001.ndjson",
+      "recordStart": 1,
+      "recordEnd": 18,
+      "recordCount": 18,
+      "byteCount": 5180,
+      "sha256": "a5d1d99869ebf98fe1719806f6938ce970cb11a534c78a1d879e80cf24e92819"
+    }
+  ]
+}

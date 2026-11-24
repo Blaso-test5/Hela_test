@@ -1,0 +1,45 @@
+test("id e path duplicati nel manifest: DUPLICATE_ID / DUPLICATE_PATH", async (t) => {
+const { dir } = await makeStage(t, {
+overrideFiles: { "overrides/a.dxil": Buffer.from("a") },
+manifest: {
+schemaVersion: 1,
+packageId: "p",
+runtime: [
+{ path: "runtime/d3d12.dll" },
+{ path: "runtime/d3d12.dll" },
+{ path: "runtime/dxgi.dll" },
+],
+overrides: [
+{ id: "dup", path: "overrides/a.dxil" },
+{ id: "dup", path: "overrides/a.dxil" },
+],
+},
+});
+const r = await runPackageGate(dir);
+assert.equal(r.ok, false);
+assert.ok(codes(r).includes("DUPLICATE_PATH"));
+assert.ok(codes(r).includes("DUPLICATE_ID"));
+});
+test("manifest assente: MANIFEST_MISSING", async (t) => {
+const dir = await mkdtemp(path.join(tmpdir(), "hela-gate-"));
+t.after(() => rm(dir, { recursive: true, force: true }));
+const r = await runPackageGate(dir);
+assert.equal(r.ok, false);
+assert.ok(codes(r).includes("MANIFEST_MISSING"));
+});
+test("package senza override: ok con warning EMPTY_OVERRIDES (baseline runtime-only)", async (t) => {
+const { dir } = await makeStage(t);
+const r = await runPackageGate(dir);
+assert.equal(r.ok, true, JSON.stringify(r.issues));
+assert.ok(r.warnings.some((w) => w.code === "EMPTY_OVERRIDES"));
+const inv = JSON.parse(await readFile(path.join(dir, INVENTORY_FILE), "utf8"));
+assert.deepEqual(inv.overrides, []);
+});
+test("schema run-evidence: parse e guardrail sul verdetto menu", async () => {
+const schema = JSON.parse(await readFile(new URL("./run-evidence.schema.json", import.meta.url), "utf8"));
+assert.equal(schema.$id, "hela://schemas/run-evidence/1");
+const menuEnum = schema.properties.verdict.properties.menu.enum;
+assert.ok(menuEnum.includes("unverified"));
+assert.ok(!menuEnum.includes("present-reached"));
+assert.ok(Array.isArray(schema.allOf) && schema.allOf.length > 0);
+});

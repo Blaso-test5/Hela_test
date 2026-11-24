@@ -1,0 +1,177 @@
+#include <windows.h>
+#include <d3d12.h>
+#include <d3dcompiler.h>
+#include <cstdio>
+#include <cstring>
+#include <string>
+
+static int RunComputeSmoke(ID3D12Device* device) {
+    wchar_t systemDir[MAX_PATH]{};
+    const UINT systemChars = GetSystemDirectoryW(systemDir, ARRAYSIZE(systemDir));
+    if (!systemChars || systemChars >= ARRAYSIZE(systemDir)) return 11;
+    std::wstring systemD3d12Path(systemDir, systemChars);
+    systemD3d12Path += L"\\d3d12.dll";
+    HMODULE systemD3d12 = LoadLibraryExW(systemD3d12Path.c_str(), nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!systemD3d12) return 11;
+    using SerializeRoot = HRESULT(WINAPI*)(const D3D12_ROOT_SIGNATURE_DESC*, D3D_ROOT_SIGNATURE_VERSION,
+                                           ID3DBlob**, ID3DBlob**);
+    auto serializeRoot = reinterpret_cast<SerializeRoot>(GetProcAddress(systemD3d12, "D3D12SerializeRootSignature"));
+    if (!serializeRoot) {
+        FreeLibrary(systemD3d12);
+        return 11;
+    }
+
+    const char shaderSource[] =
+        "cbuffer Input : register(b0) { uint Bias; }"
+        "cbuffer Immediate : register(b1) { uint Mode; uint RootBias; }"
+        "ByteAddressBuffer Input : register(t0);"
+        "Texture2D<uint> TextureInput : register(t1);"
+        "RWByteAddressBuffer Output : register(u0);"
+        "RWTexture2D<uint> TextureOutput : register(u1);"
+        "[numthreads(1,1,1)]"
+        "void main(uint3 id : SV_DispatchThreadID) {"
+        "if (Mode == 0) { Output.Store(0, Input.Load(0) + Bias + RootBias); TextureOutput[uint2(0,0)] = 0xAABBCCDD; }"
+        "else { Output.Store(4, TextureInput.Load(int3(0,0,0))); }}";
+    ID3DBlob* shader = nullptr;
+    ID3DBlob* diagnostics = nullptr;
+    HRESULT result = D3DCompile(shaderSource, sizeof(shaderSource) - 1, "smoke.hlsl", nullptr, nullptr,
+                                "main", "cs_5_0", 0, 0, &shader, &diagnostics);
+    if (FAILED(result)) {
+        if (diagnostics) std::fprintf(stderr, "%s\n", static_cast<const char*>(diagnostics->GetBufferPointer()));
+        if (diagnostics) diagnostics->Release();
+        return 10;
+    }
+    if (diagnostics) diagnostics->Release();
+
+    D3D12_DESCRIPTOR_RANGE ranges[3]{};
+    ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+    ranges[0].NumDescriptors = 1;
+    ranges[0].BaseShaderRegister = 0;
+    ranges[0].OffsetInDescriptorsFromTableStart = 0;
+    ranges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    ranges[1].NumDescriptors = 2;
+    ranges[1].BaseShaderRegister = 0;
+    ranges[1].OffsetInDescriptorsFromTableStart = 0;
+    ranges[2].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+    ranges[2].NumDescriptors = 2;
+    ranges[2].BaseShaderRegister = 0;
+    ranges[2].OffsetInDescriptorsFromTableStart = 0;
+    D3D12_ROOT_PARAMETER parameters[4]{};
+    for (UINT i = 0; i < ARRAYSIZE(ranges); ++i) {
+        parameters[i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        parameters[i].DescriptorTable.NumDescriptorRanges = 1;
+        parameters[i].DescriptorTable.pDescriptorRanges = &ranges[i];
+        parameters[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    }
+    parameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    parameters[3].Constants.ShaderRegister = 1;
+    parameters[3].Constants.Num32BitValues = 2;
+    parameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    D3D12_ROOT_SIGNATURE_DESC rootDesc{};
+    rootDesc.NumParameters = ARRAYSIZE(parameters);
+    rootDesc.pParameters = parameters;
+    ID3DBlob* serializedRoot = nullptr;
+    result = serializeRoot(&rootDesc, D3D_ROOT_SIGNATURE_VERSION_1, &serializedRoot, &diagnostics);
+    if (FAILED(result)) {
+        if (diagnostics) std::fprintf(stderr, "%s\n", static_cast<const char*>(diagnostics->GetBufferPointer()));
+        if (diagnostics) diagnostics->Release();
+        FreeLibrary(systemD3d12);
+        shader->Release();
+        return 11;
+    }
+    if (diagnostics) diagnostics->Release();
+
+    ID3D12RootSignature* rootSignature = nullptr;
+    result = device->CreateRootSignature(0, serializedRoot->GetBufferPointer(), serializedRoot->GetBufferSize(),
+                                          __uuidof(ID3D12RootSignature),
+                                          reinterpret_cast<void**>(&rootSignature));
+    serializedRoot->Release();
+    FreeLibrary(systemD3d12);
+    if (FAILED(result)) {
+        std::fprintf(stderr, "CreateRootSignature failed: 0x%08lx\n", result);
+        shader->Release();
+        return 12;
+    }
+
+    D3D12_COMPUTE_PIPELINE_STATE_DESC pipelineDesc{};
+    pipelineDesc.pRootSignature = rootSignature;
+    pipelineDesc.CS = {shader->GetBufferPointer(), shader->GetBufferSize()};
+    ID3D12PipelineState* pipeline = nullptr;
+    result = device->CreateComputePipelineState(&pipelineDesc, __uuidof(ID3D12PipelineState),
+                                                 reinterpret_cast<void**>(&pipeline));
+    shader->Release();
+    if (FAILED(result)) {
+        std::fprintf(stderr, "CreateComputePipelineState failed: 0x%08lx\n", result);
+        rootSignature->Release();
+        return 13;
+    }
+
+    D3D12_HEAP_PROPERTIES defaultHeap{};
+    defaultHeap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    defaultHeap.CreationNodeMask = defaultHeap.VisibleNodeMask = 1;
+    D3D12_RESOURCE_DESC bufferDesc{};
+    bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    bufferDesc.Width = 256;
+    bufferDesc.Height = 1;
+    bufferDesc.DepthOrArraySize = 1;
+    bufferDesc.MipLevels = 1;
+    bufferDesc.SampleDesc.Count = 1;
+    bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    bufferDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    ID3D12Resource* output = nullptr;
+    result = device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, __uuidof(ID3D12Resource),
+        reinterpret_cast<void**>(&output));
+    if (FAILED(result)) {
+        pipeline->Release();
+        rootSignature->Release();
+        return 14;
+    }
+
+    D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc{};
+    descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    descriptorHeapDesc.NumDescriptors = 5;
+    descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    ID3D12DescriptorHeap* descriptorHeap = nullptr;
+    result = device->CreateDescriptorHeap(&descriptorHeapDesc, __uuidof(ID3D12DescriptorHeap),
+                                           reinterpret_cast<void**>(&descriptorHeap));
+    if (FAILED(result)) {
+        output->Release();
+        pipeline->Release();
+        rootSignature->Release();
+        return 15;
+    }
+    D3D12_HEAP_PROPERTIES uploadHeap{};
+    uploadHeap.Type = D3D12_HEAP_TYPE_UPLOAD;
+    uploadHeap.CreationNodeMask = uploadHeap.VisibleNodeMask = 1;
+    D3D12_RESOURCE_DESC constantBufferDesc = bufferDesc;
+    constantBufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+    ID3D12Resource* input = nullptr;
+    result = device->CreateCommittedResource(&uploadHeap, D3D12_HEAP_FLAG_NONE,
+        &constantBufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+        __uuidof(ID3D12Resource), reinterpret_cast<void**>(&input));
+    if (FAILED(result)) {
+        descriptorHeap->Release();
+        output->Release();
+        pipeline->Release();
+        rootSignature->Release();
+        return 15;
+    }
+    void* inputData = nullptr;
+    D3D12_RANGE noRead{0, 0};
+    result = input->Map(0, &noRead, &inputData);
+    if (FAILED(result) || !inputData) {
+        input->Release();
+        descriptorHeap->Release();
+        output->Release();
+        pipeline->Release();
+        rootSignature->Release();
+        return 15;
+    }
+    *static_cast<UINT*>(inputData) = 0x1234AB00;
+    D3D12_RANGE written{0, sizeof(UINT)};
+    input->Unmap(0, &written);
+
+    ID3D12Resource* constantInput = nullptr;
+    result = device->CreateCommittedResource(&uploadHeap, D3D12_HEAP_FLAG_NONE,
+        &constantBufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,

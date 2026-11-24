@@ -1,0 +1,236 @@
+{
+  "items": [
+    {
+      "path": "evidence/signal-wait-value-ranges/part0030.ndjson",
+      "recordStart": 813,
+      "recordEnd": 840,
+      "recordCount": 28,
+      "byteCount": 7947,
+      "sha256": "32ee9f3b4560dbc780431536b79a3cdafe034133fd46c32cd06112f91977d5c9"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0031.ndjson",
+      "recordStart": 841,
+      "recordEnd": 868,
+      "recordCount": 28,
+      "byteCount": 7934,
+      "sha256": "b6c85317aabcb5b84303f9d43a29b8bf5cfaacaf5a4a2e56692c9dd71a0b4471"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0032.ndjson",
+      "recordStart": 869,
+      "recordEnd": 896,
+      "recordCount": 28,
+      "byteCount": 7942,
+      "sha256": "52b2fb84265d7aefd4c372358b2a15121aa289d38a546960716bc2c0b962ced0"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0033.ndjson",
+      "recordStart": 897,
+      "recordEnd": 924,
+      "recordCount": 28,
+      "byteCount": 7927,
+      "sha256": "ffe8991dbb10f92dae3b80e0f37ec9ab985e1e09592705816a84d5a59c9d71fb"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0034.ndjson",
+      "recordStart": 925,
+      "recordEnd": 952,
+      "recordCount": 28,
+      "byteCount": 7942,
+      "sha256": "a3596fd947cde26eda47c76db9de9773bb15aa8cf023eb91c94185346669e111"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0035.ndjson",
+      "recordStart": 953,
+      "recordEnd": 980,
+      "recordCount": 28,
+      "byteCount": 7942,
+      "sha256": "be76372d02e6c8e149f072df8d4bdcf4aef446e6975af19a243328e03cced392"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0036.ndjson",
+      "recordStart": 981,
+      "recordEnd": 1008,
+      "recordCount": 28,
+      "byteCount": 7934,
+      "sha256": "e2ff602e0f0bccec4d798cb08a7de8609979751300843a5f0d524d4e99f49031"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0037.ndjson",
+      "recordStart": 1009,
+      "recordEnd": 1036,
+      "recordCount": 28,
+      "byteCount": 7937,
+      "sha256": "6a3479fb0587e62e9d2e63ab53748c28c9f96595d780db05c62d40b2d4cd9a04"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0038.ndjson",
+      "recordStart": 1037,
+      "recordEnd": 1064,
+      "recordCount": 28,
+      "byteCount": 7947,
+      "sha256": "46dea51879f0169a5655ab81f056f929cec3327f78aaa18835e413da8d954554"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0039.ndjson",
+      "recordStart": 1065,
+      "recordEnd": 1092,
+      "recordCount": 28,
+      "byteCount": 7942,
+      "sha256": "097133962ce4d17852c9f52dd4a76ab8288348cbe3840adccc7f7e83527a5d97"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0040.ndjson",
+      "recordStart": 1093,
+      "recordEnd": 1120,
+      "recordCount": 28,
+      "byteCount": 7947,
+      "sha256": "fa75ad9e3c5d8e8a7430ae5a119d4469ddeb62f175e0d8b8fac094f4306e704a"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0041.ndjson",
+      "recordStart": 1121,
+      "recordEnd": 1148,
+      "recordCount": 28,
+      "byteCount": 7932,
+      "sha256": "8b2c1dd581d1594ce9bee2717465c5e47f3859e5846bf819cf53bc1bdc92eb18"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0042.ndjson",
+      "recordStart": 1149,
+      "recordEnd": 1176,
+      "recordCount": 28,
+      "byteCount": 7937,
+      "sha256": "338633c2ac0c2e6437420ef0424881a49f1b1108e723c5f9653427134c72aa4d"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0043.ndjson",
+      "recordStart": 1177,
+      "recordEnd": 1204,
+      "recordCount": 28,
+      "byteCount": 7924,
+      "sha256": "ecedd2e995e46af075077b89caf46a9cb41fcadebee34a390f33a75097248f40"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0044.ndjson",
+      "recordStart": 1205,
+      "recordEnd": 1232,
+      "recordCount": 28,
+      "byteCount": 7937,
+      "sha256": "d478eafabce96431196bcf629fb8853421d9e38b5fa22b009ed08528d10cac07"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0045.ndjson",
+      "recordStart": 1233,
+      "recordEnd": 1260,
+      "recordCount": 28,
+      "byteCount": 7942,
+      "sha256": "0c9a50a21fa64845b0467a973e0a5d1bcad74b77a5adb50306a9082a13078021"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0046.ndjson",
+      "recordStart": 1261,
+      "recordEnd": 1288,
+      "recordCount": 28,
+      "byteCount": 7932,
+      "sha256": "3618456ee6db4303f72aac6b6e38c2d9db25009778b175cf393e2a47c987fc59"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0047.ndjson",
+      "recordStart": 1289,
+      "recordEnd": 1316,
+      "recordCount": 28,
+      "byteCount": 7924,
+      "sha256": "29fa7707728bfe0611d50050ac8aea3c0a16444c113e38d322f57afc53fc5fee"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0048.ndjson",
+      "recordStart": 1317,
+      "recordEnd": 1344,
+      "recordCount": 28,
+      "byteCount": 7937,
+      "sha256": "78e2211816aaa69f4c1c4246ed5fcf65f1da8e535090a4e17dd12ed04eb8bd71"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0049.ndjson",
+      "recordStart": 1345,
+      "recordEnd": 1372,
+      "recordCount": 28,
+      "byteCount": 7947,
+      "sha256": "77d0dd64da2f7762cd72bee2e2552e513622ea5a2dec301348458a9d2f36ef47"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0050.ndjson",
+      "recordStart": 1373,
+      "recordEnd": 1400,
+      "recordCount": 28,
+      "byteCount": 7929,
+      "sha256": "39da00012d53630d800c646040a3c7a114c8fcde70d60ac8c2a5246376202b78"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0051.ndjson",
+      "recordStart": 1401,
+      "recordEnd": 1428,
+      "recordCount": 28,
+      "byteCount": 7932,
+      "sha256": "be844700e77e95ea57a1547fad37deffd89d8a66444ebe765c066725047722d5"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0052.ndjson",
+      "recordStart": 1429,
+      "recordEnd": 1456,
+      "recordCount": 28,
+      "byteCount": 7932,
+      "sha256": "2438b6db9dceffb0f842ce4093c0644d2e294605178dc62ab11037c91e91b65f"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0053.ndjson",
+      "recordStart": 1457,
+      "recordEnd": 1484,
+      "recordCount": 28,
+      "byteCount": 7934,
+      "sha256": "0c44b7a14579cc06b5b67960d09e9fb5757a8555c45f076b1e6fdaf8c11ce1df"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0054.ndjson",
+      "recordStart": 1485,
+      "recordEnd": 1512,
+      "recordCount": 28,
+      "byteCount": 7942,
+      "sha256": "dce93995915a36f371d294e2eb000d652825065e7a81e73cb46da956e14a4b09"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0055.ndjson",
+      "recordStart": 1513,
+      "recordEnd": 1540,
+      "recordCount": 28,
+      "byteCount": 7924,
+      "sha256": "f517491cc1d5aa991c250e4b6909da59113f9575ebead0fde26b8e723d55a2c4"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0056.ndjson",
+      "recordStart": 1541,
+      "recordEnd": 1568,
+      "recordCount": 28,
+      "byteCount": 7937,
+      "sha256": "33448ba40be11c0c784e211a8681152e3c8eaa4ad337270f1f3bc9d675cad3cb"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0057.ndjson",
+      "recordStart": 1569,
+      "recordEnd": 1596,
+      "recordCount": 28,
+      "byteCount": 7942,
+      "sha256": "70ece4161934f205b770c839825b676e6c4838be654803f0394cd7a9dbdf4911"
+    },
+    {
+      "path": "evidence/signal-wait-value-ranges/part0058.ndjson",
+      "recordStart": 1597,
+      "recordEnd": 1624,
+      "recordCount": 28,
+      "byteCount": 7934,
+      "sha256": "f51b410474864ce0376bee778ad7cf945b7f6cf31d00bab58020281e1d1774da"
+    }
+  ]
+}

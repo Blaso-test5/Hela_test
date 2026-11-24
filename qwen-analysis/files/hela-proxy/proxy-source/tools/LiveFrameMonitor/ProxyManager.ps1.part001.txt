@@ -1,0 +1,210 @@
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "High")]
+param(
+    [ValidateSet("Inventory", "Prepare", "Run", "Restore")]
+    [string]$Action = "Inventory",
+    [string]$GameExePath = "<HELA_INSTALL_ROOT>\Binaries\Win64\Hela-Win64-Shipping.exe",
+    [string]$VersionPath = "",
+    [string]$ManifestPath = "",
+    [string]$RunRoot = "",
+    [string]$RunDirectory = "",
+    [UInt32]$Present = 400,
+    [UInt32]$MonitorTimeoutSeconds = 180,
+    [switch]$EnableCrashDiagnostics
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$LiveMonitorLauncher = Join-Path $ScriptDir "Start-HelaLiveMonitor.ps1"
+$PackageGateScript = Join-Path $ScriptDir "Assert-HelaPackageGate.ps1"
+$GameDir = [IO.Path]::GetFullPath((Split-Path -Parent $GameExePath))
+$PatchRoot = Join-Path $GameDir "D3D12On11Patch"
+$RuntimeDir = Join-Path $PatchRoot "versions"
+$InstalledOverridesDir = Join-Path $PatchRoot "overrides"
+$LogPath = Join-Path $GameDir "d3d12on11.log"
+$ProjectRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $ScriptDir))
+if ($Action -in @("Prepare", "Run") -and [string]::IsNullOrWhiteSpace($RunRoot)) {
+    throw "-RunRoot is required for Prepare and Run. Specify the correct GPU evidence path."
+}
+if (-not [string]::IsNullOrWhiteSpace($RunRoot)) {
+    if (-not [IO.Path]::IsPathRooted($RunRoot)) {
+        $RunRoot = Join-Path $ProjectRoot $RunRoot
+    }
+    $RunRoot = [IO.Path]::GetFullPath($RunRoot)
+}
+
+if ($Action -in @("Prepare", "Run") -and $Present -lt 100 -or
+    $Action -in @("Prepare", "Run") -and $Present % 100 -ne 0) {
+    throw "-Present must be a positive multiple of 100."
+}
+
+function Get-Sha256 {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Required file not found: $Path"
+    }
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Get-DirectoryInventory {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $items = @()
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        return $items
+    }
+    foreach ($file in Get-ChildItem -LiteralPath $Path -File -Recurse -Force) {
+        $relativePath = $file.FullName.Substring($Path.TrimEnd('\').Length).TrimStart('\')
+        $items += [ordered]@{
+            path = $relativePath
+            bytes = $file.Length
+            sha256 = Get-Sha256 -Path $file.FullName
+        }
+    }
+    return $items
+}
+
+function Get-InstalledInventory {
+    $runtime = [ordered]@{}
+    foreach ($name in @("d3d12.dll", "dxgi.dll")) {
+        $path = Join-Path $GameDir $name
+        $runtime[$name] = if (Test-Path -LiteralPath $path -PathType Leaf) {
+            Get-Sha256 -Path $path
+        } else {
+            $null
+        }
+    }
+    return [ordered]@{
+        game_directory = $GameDir
+        runtime = $runtime
+        overrides = Get-DirectoryInventory -Path $InstalledOverridesDir
+    }
+}
+
+function Get-AvailablePackageInventory {
+    $packages = @()
+    if (-not (Test-Path -LiteralPath $RuntimeDir -PathType Container)) {
+        return $packages
+    }
+    foreach ($directory in Get-ChildItem -LiteralPath $RuntimeDir -Directory -Force) {
+        $runtimePath = Join-Path $directory.FullName "runtime"
+        if (-not (Test-Path -LiteralPath $runtimePath -PathType Container)) {
+            $runtimePath = $directory.FullName
+        }
+        $runtime = [ordered]@{}
+        foreach ($name in @("d3d12.dll", "dxgi.dll")) {
+            $path = Join-Path $runtimePath $name
+            $runtime[$name] = if (Test-Path -LiteralPath $path -PathType Leaf) {
+                Get-Sha256 -Path $path
+            } else {
+                $null
+            }
+        }
+        $overridesPath = Join-Path $directory.FullName "overrides"
+        $packages += [ordered]@{
+            name = $directory.Name
+            package_path = $directory.FullName
+            runtime = $runtime
+            override_count = @(Get-DirectoryInventory -Path $overridesPath).Count
+            manifest_required_for_run = $true
+        }
+    }
+    return $packages
+}
+
+function Get-LaunchEnvironmentSha256 {
+    param([Parameter(Mandatory = $true)]$Environment)
+
+    $lines = foreach ($property in @($Environment.PSObject.Properties | Sort-Object Name)) {
+        "$($property.Name)=$([string]$property.Value)"
+    }
+    $canonical = (($lines -join "`n") + "`n")
+    $bytes = [Text.Encoding]::UTF8.GetBytes($canonical)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace("-", "").ToLowerInvariant()
+    } finally {
+        $sha.Dispose()
+    }
+}
+
+function Assert-LaunchProfile {
+    param([Parameter(Mandatory = $true)]$Manifest)
+
+    $profileProperty = $Manifest.PSObject.Properties["launchProfile"]
+    if ($null -eq $profileProperty) {
+        return $null
+    }
+
+    $profile = $profileProperty.Value
+    if ([string]::IsNullOrWhiteSpace([string]$profile.name) -or
+        $null -eq $profile.environment -or
+        [string]$profile.sha256 -notmatch '^[0-9a-f]{64}$' -or
+        $null -eq $profile.arguments -or
+        $null -eq $profile.attestation) {
+        throw "Invalid launchProfile in run manifest."
+    }
+
+    foreach ($property in $profile.environment.PSObject.Properties) {
+        if ($property.Name -notmatch '^D3D12ON11_[A-Z0-9_]+$' -or
+            $property.Value -isnot [string] -or
+            [string]$property.Value -match '[\r\n]') {
+            throw "Invalid launchProfile environment entry: $($property.Name)"
+        }
+    }
+    foreach ($argument in @($profile.arguments)) {
+        if ($argument -isnot [string] -or $argument -match '[\r\n]') {
+            throw "Invalid launchProfile argument."
+        }
+    }
+
+    foreach ($name in @("D3D12ON11_OVERRIDES", "D3D12ON11_DUMP")) {
+        $property = $profile.environment.PSObject.Properties[$name]
+        $expectedToken = if ($name -eq "D3D12ON11_OVERRIDES") {
+            "@RUN_OVERRIDES@"
+        } else {
+            "@RUN_DUMP@"
+        }
+        if ($null -eq $property -or $property.Value -cne $expectedToken) {
+            throw "Launch profile must use a run-local token for $name."
+        }
+    }
+
+    $actualHash = Get-LaunchEnvironmentSha256 -Environment $profile.environment
+    if ($actualHash -ne [string]$profile.sha256) {
+        throw "Launch environment fingerprint mismatch: expected $($profile.sha256), got $actualHash"
+    }
+    if ($null -ne $profile.attestation.maskedNvidiaAdapter -and
+        $profile.attestation.maskedNvidiaAdapter -isnot [bool]) {
+        throw "Invalid launch profile maskedNvidiaAdapter attestation."
+    }
+    if ($null -ne $profile.attestation.tiledResourcesTier -and
+        [string]$profile.attestation.tiledResourcesTier -notmatch '^[0-3]$') {
+        throw "Invalid launch profile tiledResourcesTier attestation."
+    }
+    if ($null -ne $profile.attestation.callerTrace -and
+        $profile.attestation.callerTrace -isnot [bool]) {
+        throw "Invalid launch profile callerTrace attestation."
+    }
+
+    return $profile
+}
+
+function Read-RunManifest {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Run manifest not found: $Path"
+    }
+    try {
+        $manifest = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    } catch {
+        throw "Unable to parse run manifest '$Path': $($_.Exception.Message)"
+    }
+    if ($manifest.schema -ne "hela-run-manifest/v1" -or
+        $manifest.runtimeAttestation -ne "module-and-shader-sha256" -or
+        [string]::IsNullOrWhiteSpace([string]$manifest.testVersion) -or
+        $null -eq $manifest.runtime -or $null -eq $manifest.overrides -or
+        $null -eq $manifest.requiredOverrides) {
+        throw "Invalid run manifest: $Path"
+    }
+    foreach ($role in @("d3d12", "dxgi")) {

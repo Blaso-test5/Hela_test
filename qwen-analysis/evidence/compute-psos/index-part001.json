@@ -1,0 +1,52 @@
+{
+  "items": [
+    {
+      "path": "evidence/compute-psos/part0001.ndjson",
+      "recordStart": 1,
+      "recordEnd": 46,
+      "recordCount": 46,
+      "byteCount": 7845,
+      "sha256": "137e6124e66639c2d9083a7c6c072c6e5c9335eaaf07fc007b9787d2acf40eeb"
+    },
+    {
+      "path": "evidence/compute-psos/part0002.ndjson",
+      "recordStart": 47,
+      "recordEnd": 91,
+      "recordCount": 45,
+      "byteCount": 7830,
+      "sha256": "5252164e725b6db8e434d8fa75fabff64508fe3fbb8136bdeae5be2724167672"
+    },
+    {
+      "path": "evidence/compute-psos/part0003.ndjson",
+      "recordStart": 92,
+      "recordEnd": 136,
+      "recordCount": 45,
+      "byteCount": 7868,
+      "sha256": "dd9abc5ec48689a9f3831f0e31976bdb457d6fa0285d890c88be0d205d96cc45"
+    },
+    {
+      "path": "evidence/compute-psos/part0004.ndjson",
+      "recordStart": 137,
+      "recordEnd": 181,
+      "recordCount": 45,
+      "byteCount": 7884,
+      "sha256": "a6e3ea2abff8c3685b379f94665d50d65b7ec18ac6aedf63a289054e4291f92b"
+    },
+    {
+      "path": "evidence/compute-psos/part0005.ndjson",
+      "recordStart": 182,
+      "recordEnd": 226,
+      "recordCount": 45,
+      "byteCount": 7919,
+      "sha256": "232fae57475ff741575aab93887669c50a752b7474171d6e4a3ff2fefc73f248"
+    },
+    {
+      "path": "evidence/compute-psos/part0006.ndjson",
+      "recordStart": 227,
+      "recordEnd": 232,
+      "recordCount": 6,
+      "byteCount": 1061,
+      "sha256": "5a3479960065254cdb24538de47ce6d962b1b441d15f23d8ec8da9ad93c83842"
+    }
+  ]
+}

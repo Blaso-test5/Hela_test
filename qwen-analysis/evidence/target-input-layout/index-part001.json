@@ -1,0 +1,36 @@
+{
+  "items": [
+    {
+      "path": "evidence/target-input-layout/part0001.ndjson",
+      "recordStart": 1,
+      "recordEnd": 66,
+      "recordCount": 66,
+      "byteCount": 7898,
+      "sha256": "9b99c755978c850116517beab37271f4ce26d5e8052316e164782688e405d2ae"
+    },
+    {
+      "path": "evidence/target-input-layout/part0002.ndjson",
+      "recordStart": 67,
+      "recordEnd": 132,
+      "recordCount": 66,
+      "byteCount": 7898,
+      "sha256": "9b99c755978c850116517beab37271f4ce26d5e8052316e164782688e405d2ae"
+    },
+    {
+      "path": "evidence/target-input-layout/part0003.ndjson",
+      "recordStart": 133,
+      "recordEnd": 198,
+      "recordCount": 66,
+      "byteCount": 7898,
+      "sha256": "9b99c755978c850116517beab37271f4ce26d5e8052316e164782688e405d2ae"
+    },
+    {
+      "path": "evidence/target-input-layout/part0004.ndjson",
+      "recordStart": 199,
+      "recordEnd": 204,
+      "recordCount": 6,
+      "byteCount": 718,
+      "sha256": "77e691db3c5fd280246caeb96b82755f94a7170c88f0e85901bdb5c573d4f79e"
+    }
+  ]
+}

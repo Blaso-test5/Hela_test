@@ -1,0 +1,166 @@
+        __uuidof(ID3D12Resource), reinterpret_cast<void**>(&constantInput));
+    if (FAILED(result)) {
+        input->Release();
+        descriptorHeap->Release();
+        output->Release();
+        pipeline->Release();
+        rootSignature->Release();
+        return 15;
+    }
+    void* constantData = nullptr;
+    result = constantInput->Map(0, &noRead, &constantData);
+    if (FAILED(result) || !constantData) {
+        constantInput->Release();
+        input->Release();
+        descriptorHeap->Release();
+        output->Release();
+        pipeline->Release();
+        rootSignature->Release();
+        return 15;
+    }
+    *static_cast<UINT*>(constantData) = 0;
+    constantInput->Unmap(0, &written);
+
+    D3D12_CONSTANT_BUFFER_VIEW_DESC cbv{};
+    cbv.BufferLocation = constantInput->GetGPUVirtualAddress();
+    cbv.SizeInBytes = static_cast<UINT>(constantBufferDesc.Width);
+    const D3D12_CPU_DESCRIPTOR_HANDLE cpuStart = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    const UINT descriptorStride = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    device->CreateConstantBufferView(&cbv, cpuStart);
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
+    srv.Format = DXGI_FORMAT_R32_TYPELESS;
+    srv.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srv.Buffer.NumElements = 64;
+    srv.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+    D3D12_CPU_DESCRIPTOR_HANDLE srvHandle{cpuStart.ptr + descriptorStride};
+    D3D12_DESCRIPTOR_HEAP_DESC stagingHeapDesc{};
+    stagingHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    stagingHeapDesc.NumDescriptors = 1;
+    ID3D12DescriptorHeap* stagingHeap = nullptr;
+    result = device->CreateDescriptorHeap(&stagingHeapDesc, __uuidof(ID3D12DescriptorHeap),
+        reinterpret_cast<void**>(&stagingHeap));
+    if (FAILED(result)) {
+        constantInput->Release();
+        input->Release();
+        descriptorHeap->Release();
+        output->Release();
+        pipeline->Release();
+        rootSignature->Release();
+        return 15;
+    }
+    const D3D12_CPU_DESCRIPTOR_HANDLE stagingHandle =
+        stagingHeap->GetCPUDescriptorHandleForHeapStart();
+    device->CreateShaderResourceView(input, &srv, stagingHandle);
+    device->CopyDescriptors(1, &srvHandle, nullptr, 1, &stagingHandle, nullptr,
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    stagingHeap->Release();
+
+    D3D12_RESOURCE_DESC textureDesc{};
+    textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    textureDesc.Width = 4;
+    textureDesc.Height = 4;
+    textureDesc.DepthOrArraySize = 1;
+    textureDesc.MipLevels = 1;
+    textureDesc.Format = DXGI_FORMAT_R32_UINT;
+    textureDesc.SampleDesc.Count = 1;
+    textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    textureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    ID3D12Resource* textureSource = nullptr;
+    ID3D12Resource* textureCopy = nullptr;
+    result = device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE, &textureDesc,
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, __uuidof(ID3D12Resource),
+        reinterpret_cast<void**>(&textureSource));
+    if (SUCCEEDED(result))
+        result = device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE, &textureDesc,
+            D3D12_RESOURCE_STATE_COPY_DEST, nullptr, __uuidof(ID3D12Resource),
+            reinterpret_cast<void**>(&textureCopy));
+    if (FAILED(result)) {
+        if (textureSource) textureSource->Release();
+        if (textureCopy) textureCopy->Release();
+        constantInput->Release();
+        input->Release();
+        descriptorHeap->Release();
+        output->Release();
+        pipeline->Release();
+        rootSignature->Release();
+        return 15;
+    }
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC textureSrv{};
+    textureSrv.Format = textureDesc.Format;
+    textureSrv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    textureSrv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    textureSrv.Texture2D.MipLevels = 1;
+    D3D12_CPU_DESCRIPTOR_HANDLE textureSrvHandle{cpuStart.ptr + 2 * descriptorStride};
+    device->CreateShaderResourceView(textureCopy, &textureSrv, textureSrvHandle);
+
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};
+    uav.Format = DXGI_FORMAT_R32_TYPELESS;
+    uav.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+    uav.Buffer.NumElements = 64;
+    uav.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
+    D3D12_CPU_DESCRIPTOR_HANDLE uavHandle{cpuStart.ptr + 3 * descriptorStride};
+    device->CreateUnorderedAccessView(output, nullptr, &uav, uavHandle);
+    D3D12_UNORDERED_ACCESS_VIEW_DESC textureUav{};
+    textureUav.Format = textureDesc.Format;
+    textureUav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+    D3D12_CPU_DESCRIPTOR_HANDLE textureUavHandle{cpuStart.ptr + 4 * descriptorStride};
+    device->CreateUnorderedAccessView(textureSource, nullptr, &textureUav, textureUavHandle);
+
+    D3D12_HEAP_PROPERTIES readbackHeap{};
+    readbackHeap.Type = D3D12_HEAP_TYPE_READBACK;
+    readbackHeap.CreationNodeMask = readbackHeap.VisibleNodeMask = 1;
+    ID3D12Resource* readback = nullptr;
+    result = device->CreateCommittedResource(&readbackHeap, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+        D3D12_RESOURCE_STATE_COPY_DEST, nullptr, __uuidof(ID3D12Resource),
+        reinterpret_cast<void**>(&readback));
+    ID3D12CommandAllocator* allocator = nullptr;
+    ID3D12CommandQueue* queue = nullptr;
+    ID3D12GraphicsCommandList* list = nullptr;
+    ID3D12Fence* fence = nullptr;
+    if (SUCCEEDED(result))
+        result = device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE,
+            __uuidof(ID3D12CommandAllocator), reinterpret_cast<void**>(&allocator));
+    D3D12_COMMAND_QUEUE_DESC queueDesc{};
+    queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
+    if (SUCCEEDED(result))
+        result = device->CreateCommandQueue(&queueDesc, __uuidof(ID3D12CommandQueue),
+                                             reinterpret_cast<void**>(&queue));
+    if (SUCCEEDED(result))
+        result = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, allocator,
+            nullptr, __uuidof(ID3D12GraphicsCommandList), reinterpret_cast<void**>(&list));
+    if (SUCCEEDED(result)) {
+        list->SetPipelineState(pipeline);
+        list->SetComputeRootSignature(rootSignature);
+        ID3D12DescriptorHeap* heaps[] = {descriptorHeap};
+        list->SetDescriptorHeaps(1, heaps);
+        D3D12_GPU_DESCRIPTOR_HANDLE cbvGpu = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+        D3D12_GPU_DESCRIPTOR_HANDLE srvGpu{cbvGpu.ptr + descriptorStride};
+        D3D12_GPU_DESCRIPTOR_HANDLE uavGpu{cbvGpu.ptr + 3 * descriptorStride};
+        list->SetComputeRootDescriptorTable(0, cbvGpu);
+        list->SetComputeRootDescriptorTable(1, srvGpu);
+        list->SetComputeRootDescriptorTable(2, uavGpu);
+        const UINT firstConstants[] = {0, 0xCD};
+        list->SetComputeRoot32BitConstants(3, ARRAYSIZE(firstConstants), firstConstants, 0);
+        list->Dispatch(1, 1, 1);
+        list->CopyResource(textureCopy, textureSource);
+        const UINT readTextureConstants[] = {1, 0};
+        list->SetComputeRoot32BitConstants(3, ARRAYSIZE(readTextureConstants), readTextureConstants, 0);
+        list->Dispatch(1, 1, 1);
+        list->CopyBufferRegion(readback, 0, output, 0, bufferDesc.Width);
+        result = list->Close();
+    }
+    if (SUCCEEDED(result))
+        result = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence),
+                                     reinterpret_cast<void**>(&fence));
+    if (SUCCEEDED(result)) {
+        ID3D12CommandList* lists[] = {list};
+        queue->ExecuteCommandLists(1, lists);
+        result = queue->Signal(fence, 1);
+    }
+    void* data = nullptr;
+    D3D12_RANGE readRange{0, 2 * sizeof(UINT)};
+    if (SUCCEEDED(result)) result = readback->Map(0, &readRange, &data);
+    if (SUCCEEDED(result) && data) {

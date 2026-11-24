@@ -1,0 +1,111 @@
+            GetCurrentThreadId(), fence, static_cast<unsigned long long>(value), signalResult);
+    return signalResult;
+}
+
+HRESULT STDMETHODCALLTYPE CommandQueue::Wait(ID3D12Fence* sourceFence, UINT64 value) {
+    TraceApi("CommandQueue::Wait");
+    const bool trace = Cfg().diagnosticRenderTrace;
+    if (trace) TraceStats().waitCount.fetch_add(1, std::memory_order_relaxed);
+    auto* fence = AsFence(sourceFence);
+    if (!fence) {
+        if (trace)
+            Log("[RENDER_TRACE] [tid=%lu] Queue Wait invalid fence=%p expected=%llu hr=0x%08lx",
+                GetCurrentThreadId(), sourceFence, static_cast<unsigned long long>(value), E_INVALIDARG);
+        return E_INVALIDARG;
+    }
+    if (trace)
+        Log("[RENDER_TRACE] [tid=%lu] Queue Wait begin fence=%p expected=%llu completed=%llu",
+            GetCurrentThreadId(), fence, static_cast<unsigned long long>(value),
+            static_cast<unsigned long long>(fence->GetCompletedValue()));
+    if (fence->GetCompletedValue() >= value) return S_OK;
+    HANDLE eventHandle = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    if (!eventHandle) return HRESULT_FROM_WIN32(GetLastError());
+    const HRESULT result = fence->SetEventOnCompletion(value, eventHandle);
+    HRESULT waitResultHr = result;
+    if (SUCCEEDED(result)) {
+        TraceApi("CommandQueue::Wait");
+        if (trace) {
+            for (;;) {
+                const DWORD waitResult = WaitForSingleObject(eventHandle, 2000);
+                if (waitResult == WAIT_OBJECT_0) break;
+                if (waitResult == WAIT_TIMEOUT) {
+                    Log("[RENDER_TRACE] [tid=%lu] Fence wait STILL WAITING fence=%p expected=%llu completed=%llu",
+                        GetCurrentThreadId(), fence, static_cast<unsigned long long>(value),
+                        static_cast<unsigned long long>(fence->GetCompletedValue()));
+                    continue;
+                }
+                const DWORD error = GetLastError();
+                waitResultHr = waitResult == WAIT_FAILED
+                    ? HRESULT_FROM_WIN32(error) : E_UNEXPECTED;
+                break;
+            }
+        } else {
+            const DWORD waitResult = WaitForSingleObject(eventHandle, INFINITE);
+            if (waitResult != WAIT_OBJECT_0) {
+                const DWORD error = GetLastError();
+                waitResultHr = waitResult == WAIT_FAILED
+                    ? HRESULT_FROM_WIN32(error) : E_UNEXPECTED;
+            }
+        }
+    }
+    CloseHandle(eventHandle);
+    if (trace)
+        Log("[RENDER_TRACE] [tid=%lu] Queue Wait fence=%p expected=%llu completed=%llu hr=0x%08lx",
+            GetCurrentThreadId(), fence, static_cast<unsigned long long>(value),
+            static_cast<unsigned long long>(fence->GetCompletedValue()), waitResultHr);
+    return waitResultHr;
+}
+
+HRESULT STDMETHODCALLTYPE CommandQueue::GetClockCalibration(UINT64* gpuTimestamp,
+    UINT64* cpuTimestamp) {
+    D3D12ON11_TRACE_CALLER("CommandQueue::GetClockCalibration");
+    if (!gpuTimestamp || !cpuTimestamp) {
+        Log("GetClockCalibration rejected null output pointer");
+        return E_INVALIDARG;
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(dev->ctxLock);
+    D3D11_QUERY_DESC desc{D3D11_QUERY_TIMESTAMP, 0};
+    Ptr<ID3D11Query> query;
+    HRESULT result = dev->d11->CreateQuery(&desc, query.Put());
+    if (FAILED(result)) {
+        Log("GetClockCalibration could not create D3D11 timestamp query: hr=0x%08lx", result);
+        return result;
+    }
+
+    dev->ctx->End(query.Get());
+    LARGE_INTEGER cpuSample{};
+    if (!QueryPerformanceCounter(&cpuSample)) {
+        Log("GetClockCalibration QueryPerformanceCounter failed");
+        return E_FAIL;
+    }
+    dev->ctx->Flush();
+
+    UINT64 gpuSample = 0;
+    result = WaitForQuery(dev, query.Get(), &gpuSample, sizeof(gpuSample));
+    if (FAILED(result)) {
+        Log("GetClockCalibration D3D11 timestamp query failed: hr=0x%08lx", result);
+        return result;
+    }
+
+    *gpuTimestamp = gpuSample;
+    *cpuTimestamp = static_cast<UINT64>(cpuSample.QuadPart);
+    Log("GetClockCalibration result=S_OK gpu=%llu cpu-qpc=%llu",
+        static_cast<unsigned long long>(*gpuTimestamp),
+        static_cast<unsigned long long>(*cpuTimestamp));
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE CommandQueue::GetTimestampFrequency(UINT64* frequency) {
+    D3D12ON11_TRACE_CALLER("CommandQueue::GetTimestampFrequency");
+    if (!frequency) {
+        Log("GetTimestampFrequency rejected null output pointer");
+        return E_INVALIDARG;
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(dev->ctxLock);
+    const HRESULT result = GetDeviceTimestampFrequency(dev, frequency);
+    Log("GetTimestampFrequency result=0x%08lx frequency=%llu", result,
+        static_cast<unsigned long long>(SUCCEEDED(result) ? *frequency : 0));
+    return result;
+}

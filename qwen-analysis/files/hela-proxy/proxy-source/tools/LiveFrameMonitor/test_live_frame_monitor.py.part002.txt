@@ -1,0 +1,163 @@
+          (with NO `Non-black pixels:` line)
+        - Followed by analogous split/interleaved `[READBACK] Present #100` lines.
+        """
+        events = []
+        state = lfm.LiveMonitorState(event_callback=lambda s, e: events.append((s, e)))
+
+        v001_lines = [
+            "Resource 0000024096331C38 operations=66 draws=66 skipped=0 clears=0",
+            "  DrawIndexedInstanced VS=20e0826b236597a1 PS=44b0a992c2304254 elements=6 instances=1 RTV slot=0 viewport=1280x720",
+            "  DrawIndexedInstanced VS=20e0826b236597a1 PS=d77600bde0076c33 elements=6 instances=1 RTV slot=0 viewport=1280x720",
+            "[READBACK_SRC] Present #100 CopyResource source=0000024096331C38 dimension=3 width=1280 height=720 format=24 sequence=100",
+            "[SHADER PLACEHOLDER] stage=CS hash=d17286aa32897a75 reason=no-usable-SM5-bytecode",
+            "[OTHER_THREAD] asynchronous pipeline cache diagnostic line",
+            "[READBACK_SRC] Present #100 size=1280x720 format=24",
+            "  Top-left (0, 0): RGBA=(0, 0, 0, 0)",
+            "  Top-right (1279, 0): RGBA=(0, 0, 0, 0)",
+            "[SHADER READY] stage=VS hash=20e0826b236597a1 source=override model=sm_5_0",
+            "  Center (640, 360): RGBA=(0, 0, 0, 0)",
+            "  Bottom-left (0, 719): RGBA=(0, 0, 0, 0)",
+            "  Bottom-right (1279, 719): RGBA=(0, 0, 0, 0)",
+            "[READBACK] Present #100 size=1280x720 format=24 buffer=0",
+            "[SHADER PLACEHOLDER] stage=CS hash=fb1aa7e82eb127e4 reason=no-usable-SM5-bytecode",
+            "  Top-left (0, 0): RGBA=(0, 0, 0, 0)",
+            "  Top-right (1279, 0): RGBA=(0, 0, 0, 0)",
+            "  Center (640, 360): RGBA=(0, 0, 0, 0)",
+            "  Bottom-left (0, 719): RGBA=(0, 0, 0, 0)",
+            "  Bottom-right (1279, 719): RGBA=(0, 0, 0, 0)",
+        ]
+
+        for line in v001_lines:
+            state.feed_line(line)
+
+        self.assertTrue(state.present100_reached())
+        report = state.build_report("v001_native.log")
+        p100 = report["present_100"]
+
+        rb_src = p100["source_readback"]
+        rb_bb = p100["backbuffer_readback"]
+        self.assertIsNotNone(rb_src)
+        self.assertIsNotNone(rb_bb)
+
+        # Merged metadata from both [READBACK_SRC] Present #100 header lines
+        self.assertEqual(rb_src["present"], 100)
+        self.assertEqual(rb_src["source"], "0000024096331C38")
+        self.assertEqual(rb_src["dimension"], 3)
+        self.assertEqual(rb_src["width"], 1280)
+        self.assertEqual(rb_src["height"], 720)
+        self.assertEqual(rb_src["format"], 24)
+        self.assertEqual(rb_src["sequence"], 100)
+        self.assertEqual(len(rb_src["sample_pixels_rgba"]), 5)
+        self.assertEqual(rb_src["non_black_count"], 0)
+        self.assertEqual(rb_src["total_sampled"], 5)
+        self.assertEqual(rb_src["non_black_pct"], 0.0)
+        self.assertTrue(rb_src["emitted_complete_event"])
+
+        self.assertEqual(rb_bb["present"], 100)
+        self.assertEqual(rb_bb["width"], 1280)
+        self.assertEqual(rb_bb["height"], 720)
+        self.assertEqual(rb_bb["format"], 24)
+        self.assertEqual(rb_bb["buffer"], 0)
+        self.assertEqual(len(rb_bb["sample_pixels_rgba"]), 5)
+        self.assertEqual(rb_bb["non_black_count"], 0)
+        self.assertEqual(rb_bb["total_sampled"], 5)
+        self.assertEqual(rb_bb["non_black_pct"], 0.0)
+        self.assertTrue(rb_bb["emitted_complete_event"])
+
+        # Ensure live events were emitted for both READBACK_SRC and READBACK_BB at Present #100
+        event_types = [evt["event_type"] for _s, evt in events]
+        self.assertIn("READBACK_SRC", event_types)
+        self.assertIn("READBACK_BB", event_types)
+
+    def test_v003_native_bb_source_history_draw_line_parsing(self) -> None:
+        state = lfm.LiveMonitorState()
+        state.feed_line(
+            "[BB_SOURCE_HISTORY] Resource 000002844D502778 "
+            "operations=64 draws=64 skipped=0 clears=0"
+        )
+        state.feed_line(
+            "[BB_SOURCE_HISTORY]   Draw #7 api=DrawIndexedInstanced indexed=1 rtv_slot=0 "
+            "pso=0000028463A15200 vs_hash=20e0826b236597a1 ps_hash=44b0a992c2304254 "
+            "elements=6 instances=1 viewport=(0.0,0.0,1280.0,720.0)"
+        )
+
+        history = state.resources_by_ptr["000002844D502778"]
+        self.assertEqual(len(history.retained_draws), 1)
+        draw = history.retained_draws[0]
+        self.assertEqual(draw.draw_type, "DrawIndexedInstanced")
+        self.assertEqual(draw.vs, "20e0826b236597a1")
+        self.assertEqual(draw.ps, "44b0a992c2304254")
+        self.assertEqual(draw.elements, 6)
+        self.assertEqual(draw.instances, 1)
+        self.assertEqual(draw.rtv_slot, 0)
+        self.assertEqual(draw.viewport, "1280x720")
+
+    def test_black_and_alpha_rgba_sample_semantics(self) -> None:
+        """
+        Verifies black/alpha semantics:
+        - RGBA=(0, 0, 0, 255) has RGB=(0,0,0) -> counted as black (non-black=False), though all_samples_zero=False
+        - RGBA=(12, 0, 0, 0) has R=12 -> counted as non-black
+        """
+        state = lfm.LiveMonitorState()
+        lines = [
+            "[READBACK_SRC] Present #100 CopyResource source=0000024096331C38 width=1280 height=720 format=24 sequence=100",
+            "  Top-left: RGBA=(0, 0, 0, 255)",
+            "  Top-right: RGBA=(0, 0, 0, 0)",
+            "  Center: RGBA=(16, 32, 64, 255)",
+            "  Bottom-left: RGBA=(0, 0, 0, 0)",
+            "  Bottom-right: RGBA=(0, 5, 0, 0)",
+        ]
+        for line in lines:
+            state.feed_line(line)
+
+        rb = state.present100_readback_src
+        self.assertIsNotNone(rb)
+        assert rb is not None
+        self.assertTrue(rb.emitted_complete_event)
+        self.assertEqual(rb.non_black_count, 2)
+        self.assertEqual(rb.total_sampled, 5)
+        self.assertEqual(rb.non_black_pct, 40.0)
+        self.assertFalse(rb.all_samples_zero)
+        self.assertFalse(rb.all_samples_rgb_black)
+
+    def test_no_false_present100_fallback_when_only_later_presents_exist(self) -> None:
+        """
+        Ensures that if a log only contains Present #200 readbacks, `present_100` in the report
+        never misreports Present #200 as if it were Present #100, and `present100_reached()` is False.
+        """
+        state = lfm.LiveMonitorState()
+        lines = [
+            "[READBACK_SRC] Present #200 CopyResource source=0000024096331C38 width=1280 height=720 format=24 sequence=200",
+            "  Top-left: RGBA=(0, 0, 0, 0)",
+            "  Top-right: RGBA=(0, 0, 0, 0)",
+            "  Center: RGBA=(0, 0, 0, 0)",
+            "  Bottom-left: RGBA=(0, 0, 0, 0)",
+            "  Bottom-right: RGBA=(0, 0, 0, 0)",
+            "[READBACK] Present #200 size=1280x720 format=24 buffer=0",
+            "  Top-left: RGBA=(0, 0, 0, 0)",
+            "  Top-right: RGBA=(0, 0, 0, 0)",
+            "  Center: RGBA=(0, 0, 0, 0)",
+            "  Bottom-left: RGBA=(0, 0, 0, 0)",
+            "  Bottom-right: RGBA=(0, 0, 0, 0)",
+        ]
+        for line in lines:
+            state.feed_line(line)
+
+        self.assertFalse(state.present100_reached())
+        report = state.build_report("only_present200.log")
+        self.assertIsNone(report["present_100"]["source_readback"])
+        self.assertIsNone(report["present_100"]["backbuffer_readback"])
+
+    def test_run_manifest_module_fingerprint_attestation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest_path = Path(tmpdir) / "run-manifest.json"
+            expected_d3d12 = "A" * 64
+            expected_dxgi = "B" * 64
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "hela-run-manifest/v1",
+                        "runtimeAttestation": "module-and-shader-sha256",
+                        "testVersion": "unit-test-v001",
+                        "runtime": {"d3d12": expected_d3d12, "dxgi": expected_dxgi},
+                        "overrides": {},

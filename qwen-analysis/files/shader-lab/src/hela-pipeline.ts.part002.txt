@@ -1,0 +1,195 @@
+  if (process.platform === "win32") {
+    for (const root of [process.env["ProgramFiles(x86)"], process.env.ProgramFiles]) {
+      if (!root) continue;
+      const bin = path.join(root, "Windows Kits", "10", "bin");
+      if (!fs.existsSync(bin)) continue;
+      const vers = fs.readdirSync(bin).filter((v) => /^10\./.test(v)).sort().reverse();
+      for (const v of vers) {
+        const p = path.join(bin, v, "x64", "dxc.exe");
+        if (fs.existsSync(p)) return p;
+      }
+    }
+  }
+  return "dxc";
+}
+
+function isWithin(parent: string, child: string): boolean {
+  const relative = path.relative(path.resolve(parent), path.resolve(child));
+  return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
+}
+
+async function defaultHelaPackageGate(
+  stagingDir: string,
+  opts: { mode?: "build" | "check" } = {},
+): Promise<HelaPackageGateReport> {
+  const gateCandidates = [
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../tools/hela-package/package-gate.mjs"),
+    path.resolve(process.cwd(), "tools/hela-package/package-gate.mjs"),
+  ];
+  const gatePath = gateCandidates.find((candidate) => fs.existsSync(candidate));
+  if (!gatePath) {
+    throw new Error("Gate package Hela non trovato: tools/hela-package/package-gate.mjs.");
+  }
+  const gateModule = await import(pathToFileURL(gatePath).href) as unknown as {
+    runPackageGate: (dir: string, options?: { mode?: "build" | "check" }) => Promise<HelaPackageGateReport>;
+  };
+  return gateModule.runPackageGate(stagingDir, opts);
+}
+
+function assertNotProtectedGamePath(targetPath: string, role: string): void {
+  const normalized = path.resolve(targetPath).toLowerCase();
+  for (const segment of PROTECTED_PATH_SEGMENTS) {
+    if (normalized.includes(segment)) {
+      throw new Error(`Rifiutato ${role} dentro percorso protetto del gioco/proxy (${segment}): ${targetPath}`);
+    }
+  }
+}
+
+export function readAndValidateManifest(manifestPath: string): HelaRunManifestV1 {
+  const resolved = path.resolve(manifestPath);
+  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+    throw new Error(`Manifest non trovato: ${resolved}`);
+  }
+  const manifestText = fs.readFileSync(resolved, "utf8").replace(/^\uFEFF/, "");
+  const manifest = JSON.parse(manifestText) as HelaRunManifestV1;
+  if (
+    manifest.schema !== "hela-run-manifest/v1" ||
+    manifest.runtimeAttestation !== "module-and-shader-sha256" ||
+    !manifest.testVersion?.trim() ||
+    !manifest.runtime ||
+    !HEX64.test(manifest.runtime.d3d12 ?? "") ||
+    !HEX64.test(manifest.runtime.dxgi ?? "") ||
+    !manifest.overrides ||
+    !Array.isArray(manifest.requiredOverrides)
+  ) {
+    throw new Error(`Manifest non valido rispetto a hela-run-manifest/v1: ${resolved}`);
+  }
+  for (const [name, hash] of Object.entries(manifest.overrides)) {
+    if (!CSO_NAME.test(name) || !HEX64.test(hash)) {
+      throw new Error(`Voce override non valida nel manifest (${name}): ${resolved}`);
+    }
+  }
+  for (const req of manifest.requiredOverrides) {
+    if (!manifest.overrides[req]) {
+      throw new Error(`requiredOverride '${req}' non presente in overrides: ${resolved}`);
+    }
+  }
+  if (manifest.launchProfile !== undefined) {
+    const profile = manifest.launchProfile;
+    if (
+      !profile ||
+      typeof profile.name !== "string" ||
+      !profile.name.trim() ||
+      !HEX64.test(profile.sha256 ?? "") ||
+      !profile.environment ||
+      typeof profile.environment !== "object" ||
+      Array.isArray(profile.environment) ||
+      Object.entries(profile.environment).some(
+        ([name, value]) => !/^D3D12ON11_/i.test(name) || typeof value !== "string",
+      ) ||
+      !Array.isArray(profile.arguments) ||
+      profile.arguments.some((arg) => typeof arg !== "string") ||
+      !profile.attestation ||
+      typeof profile.attestation !== "object" ||
+      Array.isArray(profile.attestation)
+    ) {
+      throw new Error(`launchProfile non valido nel manifest: ${resolved}`);
+    }
+    const actualSha = computeLaunchEnvironmentSha256(profile.environment);
+    if (actualSha.toLowerCase() !== profile.sha256.toLowerCase()) {
+      throw new Error(
+        `launchProfile fingerprint mismatch nel manifest: atteso ${profile.sha256}, calcolato ${actualSha}`,
+      );
+    }
+  }
+  return manifest;
+}
+
+function findExistingDisasm(inputPath: string): string | undefined {
+  const parsed = path.parse(inputPath);
+  const candidates = [
+    path.join(parsed.dir, `${parsed.name}_dxil.txt`),
+    `${inputPath}.txt`,
+  ];
+  return candidates.find((c) => fs.existsSync(c));
+}
+
+function walkShaderFiles(dir: string): string[] {
+  const out: string[] = [];
+  const stack = [dir];
+  while (stack.length) {
+    const cur = stack.pop()!;
+    for (const entry of fs.readdirSync(cur, { withFileTypes: true })) {
+      const full = path.join(cur, entry.name);
+      if (entry.isDirectory() && entry.name !== "node_modules" && entry.name !== ".git") {
+        stack.push(full);
+      } else if (entry.isFile() && [".dxil", ".cso"].includes(path.extname(entry.name).toLowerCase())) {
+        out.push(full);
+      }
+    }
+  }
+  return out.sort((a, b) => a.localeCompare(b));
+}
+
+function normalizeVsOutputSigKey(sig: SigElement[]): string {
+  return sig
+    .filter((e) => e.sysValue.toUpperCase() === "NONE" && e.register !== null)
+    .map((e) => `${e.register}:${e.name.toUpperCase()}${e.index}:${(e.mask ?? "").toLowerCase()}:${(e.format ?? "").toLowerCase()}`)
+    .sort()
+    .join("|");
+}
+
+function checkVsAgainstDiagnosticInputLayout(
+  vsInputSig: SigElement[],
+  targetElements: TargetInputLayoutElement[],
+): { ok: boolean; mismatches: string[] } {
+  const mismatches: string[] = [];
+  const targetSemantics = new Set(
+    targetElements.map((e) => `${e.semantic.toUpperCase()}${e.semanticIndex}`),
+  );
+  for (const input of vsInputSig) {
+    if (input.sysValue.toUpperCase() !== "NONE") continue;
+    const key = `${input.name.toUpperCase()}${input.index}`;
+    if (!targetSemantics.has(key)) {
+      mismatches.push(`VS richiede input ${input.name}${input.index}, assente in [TARGET_INPUT_LAYOUT] diagnostico.`);
+    }
+  }
+  return { ok: mismatches.length === 0, mismatches };
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Pipeline PSO-aware in staging isolato che riusa `convertDxilToHlsl`, `fnv1a64`,
+ * `analyzeFiles`, `compareShaderSignatures`, `findFxc` e `run` di Shader Lab.
+ *
+ * Regole fail-closed:
+ * - Non sovrascrive mai `stagingDir` esistente né scrive dentro percorsi di input o del gioco.
+ * - Un PS condiviso da più VS (o abbinato a uno o più VS) è `pair-validated` SOLO se TUTTI
+ *   i VS abbinati hanno disassemblato + `.cso` verificati e firme compatibili; altrimenti
+ *   diventa `pair-incomplete`, `pair-conflict` o `pair-failed` ed è escluso dal manifest.
+ * - Preserva sempre 100% degli hash `overrides` e `requiredOverrides` del baseline manifest.
+ */
+export async function buildHelaOverrideStage(
+  options: BuildHelaStageOptions,
+  deps: BuildHelaStageDependencies = {},
+): Promise<BuildHelaStageReport> {
+  const dumpDir = path.resolve(options.dumpDir);
+  const stagingDir = path.resolve(options.stagingDir);
+  assertNotProtectedGamePath(stagingDir, "stagingDir");
+
+  if (!fs.existsSync(dumpDir) || !fs.statSync(dumpDir).isDirectory()) {
+    throw new Error(`Cartella dump DXIL non valida: ${dumpDir}`);
+  }
+  if (isWithin(dumpDir, stagingDir) || isWithin(stagingDir, dumpDir)) {
+    throw new Error("stagingDir deve essere completamente separata da dumpDir.");
+  }
+  if (options.baselineManifestPath) {
+    const baseDir = path.dirname(path.resolve(options.baselineManifestPath));
+    if (isWithin(baseDir, stagingDir)) {
+      throw new Error("stagingDir non può risiedere dentro la cartella del baseline manifest.");
+    }
+  }
+  if (options.baselineOverridesDir && isWithin(path.resolve(options.baselineOverridesDir), stagingDir)) {

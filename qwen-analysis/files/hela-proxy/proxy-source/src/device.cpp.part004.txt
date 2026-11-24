@@ -1,0 +1,152 @@
+        desc->Layout == D3D12_TEXTURE_LAYOUT_64KB_UNDEFINED_SWIZZLE &&
+        desc->SampleDesc.Count == 1;
+    const bool validBuffer = desc &&
+        desc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER &&
+        desc->Layout == D3D12_TEXTURE_LAYOUT_ROW_MAJOR &&
+        desc->SampleDesc.Count == 1 &&
+        desc->Height == 1 &&
+        desc->DepthOrArraySize == 1 &&
+        desc->MipLevels == 1 &&
+        desc->Format == DXGI_FORMAT_UNKNOWN;
+    if (!validTexture2D && !validBuffer) {
+        Log("CreateReservedResource unsupported descriptor (only single-sample 2D 64KB-undefined-swizzle textures and row-major buffers are translated)");
+        return E_NOTIMPL;
+    }
+    if (tiledTier < D3D11_TILED_RESOURCES_TIER_2 || !d11_2 || !ctx2) {
+        Log("CreateReservedResource unavailable: D3D11 tiled resources tier=%u device2=%u context2=%u",
+            tiledTier, d11_2 ? 1u : 0u, ctx2 ? 1u : 0u);
+        return E_NOTIMPL;
+    }
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    heap.CreationNodeMask = heap.VisibleNodeMask = 1;
+    Resource* resource = nullptr;
+    if (Cfg().traceCallers) Log("CreateReservedResource backing-create begin");
+    const HRESULT createResult = Resource::Create(this, &heap, D3D12_HEAP_FLAG_NONE,
+        desc, &resource, true);
+    if (Cfg().traceCallers)
+        Log("CreateReservedResource backing-create end result=0x%08lx", createResult);
+    if (FAILED(createResult)) {
+        Log("CreateReservedResource tiled resource creation failed dimension=%u result=0x%08lx",
+            desc->Dimension, createResult);
+        return createResult;
+    }
+    const HRESULT queryResult = resource->QueryInterface(riid, out);
+    Log("CreateReservedResource tiled resource dimension=%u width=%llu native-width=%llu result=0x%08lx",
+        desc->Dimension, static_cast<unsigned long long>(desc->Width),
+        static_cast<unsigned long long>(resource->nativeWidth), queryResult);
+    resource->Release();
+    return queryResult;
+}
+
+void STDMETHODCALLTYPE Device::GetResourceTiling(ID3D12Resource* source, UINT* numTiles,
+    D3D12_PACKED_MIP_INFO* packedMips, D3D12_TILE_SHAPE* tileShape,
+    UINT* numSubresourceTilings, UINT firstSubresourceTiling,
+    D3D12_SUBRESOURCE_TILING* subresourceTilings) {
+    auto* resource = source ? dynamic_cast<Resource*>(source) : nullptr;
+    if (!resource || !resource->tiled || !resource->Raw() || !d11_2) {
+        Log("GetResourceTiling ignored invalid or non-tiled resource");
+        return;
+    }
+    UINT requestedTilings = numSubresourceTilings ? *numSubresourceTilings : 0;
+    std::vector<D3D11_SUBRESOURCE_TILING> nativeTilings;
+    if (subresourceTilings && requestedTilings) {
+        try {
+            nativeTilings.resize(requestedTilings);
+        } catch (const std::bad_alloc&) {
+            Log("GetResourceTiling could not allocate %u subresource entries", requestedTilings);
+            return;
+        }
+    }
+    D3D11_PACKED_MIP_DESC nativePacked{};
+    D3D11_TILE_SHAPE nativeShape{};
+    UINT nativeNumTiles = 0;
+    UINT nativeCount = requestedTilings;
+    d11_2->GetResourceTiling(resource->Raw(), &nativeNumTiles, packedMips ? &nativePacked : nullptr,
+        tileShape ? &nativeShape : nullptr, numSubresourceTilings ? &nativeCount : nullptr,
+        firstSubresourceTiling, nativeTilings.empty() ? nullptr : nativeTilings.data());
+    if (resource->IsBuffer()) {
+        const UINT virtualTiles = static_cast<UINT>(
+            AlignUp(resource->desc.Width, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT) /
+            D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
+        if (numTiles) *numTiles = virtualTiles;
+        if (packedMips) {
+            packedMips->NumStandardMips = 1;
+            packedMips->NumPackedMips = 0;
+            packedMips->NumTilesForPackedMips = 0;
+            packedMips->StartTileIndexInOverallResource = 0;
+        }
+        if (tileShape) {
+            tileShape->WidthInTexels = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+            tileShape->HeightInTexels = 1;
+            tileShape->DepthInTexels = 1;
+        }
+        const UINT returnedSubresources =
+            numSubresourceTilings && firstSubresourceTiling == 0 && requestedTilings > 0 ? 1u : 0u;
+        if (numSubresourceTilings) *numSubresourceTilings = returnedSubresources;
+        if (subresourceTilings && returnedSubresources > 0) {
+            subresourceTilings[0].WidthInTiles = virtualTiles;
+            subresourceTilings[0].HeightInTiles = 1;
+            subresourceTilings[0].DepthInTiles = 1;
+            subresourceTilings[0].StartTileIndexInOverallResource = 0;
+        }
+        Log("GetResourceTiling buffer virtual-tiles=%u native-tiles=%u requested-subresources=%u returned-subresources=%u",
+            virtualTiles, nativeNumTiles, requestedTilings, returnedSubresources);
+        return;
+    }
+    if (numTiles) *numTiles = nativeNumTiles;
+    if (packedMips) {
+        packedMips->NumStandardMips = nativePacked.NumStandardMips;
+        packedMips->NumPackedMips = nativePacked.NumPackedMips;
+        packedMips->NumTilesForPackedMips = nativePacked.NumTilesForPackedMips;
+        packedMips->StartTileIndexInOverallResource = nativePacked.StartTileIndexInOverallResource;
+    }
+    if (tileShape) {
+        tileShape->WidthInTexels = nativeShape.WidthInTexels;
+        tileShape->HeightInTexels = nativeShape.HeightInTexels;
+        tileShape->DepthInTexels = nativeShape.DepthInTexels;
+    }
+    if (numSubresourceTilings) *numSubresourceTilings = nativeCount;
+    for (size_t i = 0; i < nativeTilings.size(); ++i) {
+        subresourceTilings[i].WidthInTiles = nativeTilings[i].WidthInTiles;
+        subresourceTilings[i].HeightInTiles = nativeTilings[i].HeightInTiles;
+        subresourceTilings[i].DepthInTiles = nativeTilings[i].DepthInTiles;
+        subresourceTilings[i].StartTileIndexInOverallResource =
+            nativeTilings[i].StartTileIndexInOverallResource;
+    }
+    Log("GetResourceTiling tiles=%u packed-mips=%u standard-mips=%u requested-subresources=%u returned-subresources=%u",
+        nativeNumTiles, nativePacked.NumPackedMips, nativePacked.NumStandardMips,
+        requestedTilings, nativeCount);
+}
+
+HRESULT STDMETHODCALLTYPE Device::CreateHeap(const D3D12_HEAP_DESC* desc, REFIID riid, void** out) {
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    Log("CreateHeap request size=%llu type=%u flags=0x%x alignment=%llu",
+        static_cast<unsigned long long>(desc ? desc->SizeInBytes : 0),
+        desc ? desc->Properties.Type : D3D12_HEAP_TYPE_CUSTOM,
+        desc ? static_cast<UINT>(desc->Flags) : 0,
+        static_cast<unsigned long long>(desc ? desc->Alignment : 0));
+    if (!desc || !desc->SizeInBytes || desc->Properties.Type > D3D12_HEAP_TYPE_CUSTOM) return E_INVALIDARG;
+    auto* heap = new (std::nothrow) HeapObj(this, *desc);
+    if (!heap) return E_OUTOFMEMORY;
+    const HRESULT result = heap->QueryInterface(riid, out);
+    heap->Release();
+    Log("CreateHeap result=0x%08lx", result);
+    return result;
+}
+
+HRESULT STDMETHODCALLTYPE Device::CreatePlacedResource(ID3D12Heap* sourceHeap, UINT64 offset,
+    const D3D12_RESOURCE_DESC* desc, D3D12_RESOURCE_STATES initialState,
+    const D3D12_CLEAR_VALUE*, REFIID riid, void** out) {
+    TraceApi("Device::CreatePlacedResource");
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    auto* heap = sourceHeap ? dynamic_cast<HeapObj*>(sourceHeap) : nullptr;
+    if (!heap || !desc) return E_INVALIDARG;
+    Log("CreatePlacedResource request offset=%llu dimension=%u width=%llu sample-count=%u alignment=%llu layout=%u resource-flags=0x%x heap-size=%llu heap-type=%u heap-flags=0x%x state=0x%x",
+        static_cast<unsigned long long>(offset), desc->Dimension,
+        static_cast<unsigned long long>(desc->Width), desc->SampleDesc.Count,
+        static_cast<unsigned long long>(desc->Alignment), desc->Layout,
+        static_cast<UINT>(desc->Flags),
+        static_cast<unsigned long long>(heap->hd.SizeInBytes),

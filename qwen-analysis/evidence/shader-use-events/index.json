@@ -1,0 +1,21 @@
+{
+  "schema": "qwen.evidence.dataset-index",
+  "dataset": "shader-use-events",
+  "recordCount": 1216,
+  "byteCount": 291499,
+  "sha256": "07242a2ee01f25e5707dfc85d315995fd4a28517567294db133ce0bc134526f8",
+  "indexParts": [
+    {
+      "path": "evidence/shader-use-events/index-part001.json",
+      "itemCount": 30,
+      "byteCount": 7693,
+      "sha256": "ace69cd70806ce9627093e401318f2472a7435a4607e0ef38cbc7356b7426194"
+    },
+    {
+      "path": "evidence/shader-use-events/index-part002.json",
+      "itemCount": 7,
+      "byteCount": 1825,
+      "sha256": "2db79c96fe6a5c3f82b6dbbeb7baade3deff690da2e9231924af80335faea0f7"
+    }
+  ]
+}

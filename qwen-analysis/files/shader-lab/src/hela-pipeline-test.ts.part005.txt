@@ -1,0 +1,130 @@
+    assert.equal(planned.baselineOverrideCount, 1);
+    assert.equal(planned.totalOverrides, 2, "baseline preservato + 1 nuovo candidato aggiunto");
+    assert.deepEqual(planned.addedOverrides, [newOnlyName]);
+    const plannedJson = JSON.parse(fs.readFileSync(plannedPath, "utf8")) as HelaRunManifestV1;
+    assert.equal(plannedJson.overrides[baselineCsoName], baselineCsoSha);
+    assert.deepEqual(plannedJson.requiredOverrides, [baselineCsoName]);
+    assert.equal(plannedJson.overrides[newOnlyName], sha256Buffer(newOnlyCso));
+    assert.equal(plannedJson.launchProfile?.environment.D3D12ON11_DUMP_SHADERS, "1");
+    assert.equal(
+      plannedJson.launchProfile?.sha256,
+      computeLaunchEnvironmentSha256(plannedJson.launchProfile!.environment),
+    );
+
+    // Rifiuta sovrascrittura se outManifestPath esiste già
+    assert.throws(
+      () =>
+        planHelaManifestPatch({
+          baselineManifestPath,
+          stagingOverridesDir: deltaStagingOverrides,
+          outManifestPath: plannedPath,
+          testVersion: "bad-overwrite",
+        }),
+      /esiste già/,
+    );
+
+    // Rifiuta conflitto hash su file baseline
+    const conflictDeltaDir = path.join(tmp, "conflict-delta-overrides");
+    fs.mkdirSync(conflictDeltaDir, { recursive: true });
+    fs.writeFileSync(path.join(conflictDeltaDir, baselineCsoName), makeFakeContainer("legacy", 1, 999));
+    assert.throws(
+      () =>
+        planHelaManifestPatch({
+          baselineManifestPath,
+          stagingOverridesDir: conflictDeltaDir,
+          outManifestPath: path.join(tmp, "planned-candidates", "conflict.json"),
+          testVersion: "bad-conflict",
+        }),
+      /Conflitto hash sul file baseline/,
+    );
+
+    // 7. Test verifyHelaRun: distingue Present non raggiunto / Present raggiunto + BMP nero / Present raggiunto + pixel non neri
+    const baseAttestLines = [
+      "MODULE_FINGERPRINT role=d3d12 sha256=14dfba07e9a37b1c8adbc7fe11de6ba14ee0ab3968e953b85a097d32dbf69e98",
+      "MODULE_FINGERPRINT role=dxgi_proxy sha256=09d13c05bf198c74b4190a9cb1be1c96966a0ece7641d8621c08a00465e0f857",
+      "DIAGNOSTIC_MASK_NVIDIA: native-vendor=0x10de device=0x1c8c exposed-vendor=0xffff",
+      "D3D12CreateDevice adapter source=proxy-unwrap",
+      "CheckFeatureSupport end feature=D3D12_OPTIONS tiled-tier=3",
+      "Config caller-trace=0",
+      `SHADER READY stage=VS hash=20e0826b236597a1 source=SM5-override path=o\\${baselineCsoName} bytes=${baselineCsoBytes.length} sha256=${baselineCsoSha} model=5_0`,
+    ];
+
+    // 7a. Present non raggiunto (swap=0, present=0)
+    const runNoPresent = path.join(tmp, "run-no-present");
+    fs.mkdirSync(runNoPresent, { recursive: true });
+    fs.writeFileSync(path.join(runNoPresent, "run-manifest.json"), JSON.stringify(baselineManifest));
+    fs.writeFileSync(
+      path.join(runNoPresent, "d3d12on11.log"),
+      [...baseAttestLines, "[RENDER_TRACE] [HEARTBEAT] tid=1 up=1000ms swap=0 present=0"].join("\n"),
+    );
+    const noPresRes = verifyHelaRun({ runDir: runNoPresent, targetPresent: 1400 });
+    assert.equal(noPresRes.attestationPassed, true);
+    assert.equal(noPresRes.presentStatus.reached, false);
+    assert.equal(noPresRes.verdict, "present-not-reached");
+    assert.equal(noPresRes.menuValidated, false);
+
+    // 7b. Present #1400 raggiunto ma BMP top-down neri (caso v1.1.2 / v1.1.3)
+    const runBlack = path.join(tmp, "run-black");
+    fs.mkdirSync(path.join(runBlack, "readbacks"), { recursive: true });
+    fs.writeFileSync(path.join(runBlack, "run-manifest.json"), JSON.stringify(baselineManifest));
+    fs.writeFileSync(
+      path.join(runBlack, "d3d12on11.log"),
+      [
+        ...baseAttestLines,
+        "[READBACK_IDENTITY] readback_present_count=1400 buffer_index=0 native_backbuffer=00000100 width=32 height=32 format=87 copy_sequence=7 copy_source=00000200",
+      ].join("\n"),
+    );
+    fs.writeFileSync(path.join(runBlack, "readbacks", "HelaReadback_Present1400_source.bmp"), makeBmp24(32, 32, false, true));
+    fs.writeFileSync(path.join(runBlack, "readbacks", "HelaReadback_Present1400_backbuffer.bmp"), makeBmp24(32, 32, false, true));
+    fs.writeFileSync(path.join(runBlack, "readbacks", "HelaReadback_Present100_backbuffer.bmp"), makeBmp24(32, 32, true, true));
+    const blackRes = verifyHelaRun({ runDir: runBlack, targetPresent: 1400 });
+    assert.equal(blackRes.attestationPassed, true);
+    assert.equal(blackRes.presentStatus.reached, true);
+    assert.equal(blackRes.presentStatus.targetPresentReached, true);
+    assert.equal(blackRes.bmpReadbackStatus, "black-readback");
+    assert.equal(blackRes.bmpPathsNotMatchingTarget.length, 1, "un BMP di un Present precedente non deve influire sul target");
+    assert.equal(blackRes.verdict, "present-reached-black-readback");
+    assert.equal(blackRes.menuValidated, false);
+
+    // 7c. Present #1400 raggiunto e pixel non neri osservati -> menuValidated RESTA false!
+    fs.writeFileSync(path.join(runBlack, "readbacks", "HelaReadback_Present1400_backbuffer.bmp"), makeBmp24(32, 32, true, true));
+    const nonZeroRes = verifyHelaRun({ runDir: runBlack, targetPresent: 1400 });
+    assert.equal(nonZeroRes.bmpReadbackStatus, "nonzero-pixels-observed");
+    assert.equal(nonZeroRes.verdict, "present-reached-nonzero-pixels-observed");
+    assert.equal(nonZeroRes.menuValidated, false, "pixel non neri osservati NON equivalgono a menu validato");
+
+    // 7d. Il contatore heartbeat non sostituisce il target readback Present.
+    const runReadbackTargetMissing = path.join(tmp, "run-readback-target-missing");
+    fs.mkdirSync(path.join(runReadbackTargetMissing, "readbacks"), { recursive: true });
+    fs.writeFileSync(path.join(runReadbackTargetMissing, "run-manifest.json"), JSON.stringify(baselineManifest));
+    fs.writeFileSync(
+      path.join(runReadbackTargetMissing, "d3d12on11.log"),
+      [
+        ...baseAttestLines,
+        "[RENDER_TRACE] [HEARTBEAT] tid=1 up=1000ms swap=1 present=1400",
+        "[READBACK_IDENTITY] readback_present_count=100 buffer_index=0 native_backbuffer=00000100 width=32 height=32 format=87 copy_sequence=1 copy_source=00000200",
+      ].join("\n"),
+    );
+    fs.writeFileSync(
+      path.join(runReadbackTargetMissing, "readbacks", "HelaReadback_Present100_backbuffer.bmp"),
+      makeBmp24(32, 32, true, true),
+    );
+    const targetMissingRes = verifyHelaRun({ runDir: runReadbackTargetMissing, targetPresent: 1400 });
+    assert.equal(targetMissingRes.presentStatus.reached, true);
+    assert.equal(targetMissingRes.presentStatus.targetPresentReached, false);
+    assert.equal(targetMissingRes.bmpReadbackStatus, "missing");
+    assert.equal(targetMissingRes.verdict, "present-not-reached");
+
+    // 7e. Attestazione fallita
+    const runBadAttest = path.join(tmp, "run-bad-attest");
+    fs.mkdirSync(runBadAttest, { recursive: true });
+    fs.writeFileSync(path.join(runBadAttest, "run-manifest.json"), JSON.stringify(baselineManifest));
+    fs.writeFileSync(path.join(runBadAttest, "d3d12on11.log"), baseAttestLines.slice(0, 5).join("\n"));
+    const badRes = verifyHelaRun({ runDir: runBadAttest });
+    assert.equal(badRes.attestationPassed, false);
+    assert.equal(badRes.verdict, "attestation-failed");
+    assert.deepEqual(badRes.missingRequiredOverrides, [baselineCsoName]);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}

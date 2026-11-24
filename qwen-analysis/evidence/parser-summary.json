@@ -1,0 +1,94 @@
+{
+  "schema": "qwen.hela.proxy-parser-summary",
+  "attestation": {
+    "modules": {
+      "d3d12": "23e2c8ba52a1cba32d01595c505e047b21b2744a3df807cade734f648ccd7fbe",
+      "dxgi_proxy": "edd099d49c4b669c05e1fd46f4af0e251cbee7065a9d596aa93c6d4fafca4aad"
+    },
+    "maskedNvidiaAdapter": true,
+    "callerTrace": false,
+    "exposedVendor": "0xffff",
+    "adapterSource": "proxy-unwrap",
+    "tiledResourcesTier": 3
+  },
+  "presentProgress": {
+    "swapChainsCreated": 1,
+    "maxHeartbeatPresent": 1887,
+    "maxSummaryPresent": 1887,
+    "maxReadbackPresent": 1900,
+    "maxObservedPresent": 1900
+  },
+  "summary": {
+    "uniqueShaders": 4880,
+    "nativeSm5": 0,
+    "overrideReady": 13,
+    "placeholders": 4867,
+    "blockedOrFailed": 0,
+    "graphicsPsosTotal": 144,
+    "graphicsPsosPlaceholder": 141,
+    "computePsosTotal": 232,
+    "computePsosPlaceholder": 228,
+    "executedGraphicsPairsCount": 3,
+    "inputLayoutFailures": 0
+  },
+  "targetInputLayoutCoverage": {
+    "scope": "diagnostic-vs-20e0826b236597a1-only",
+    "diagnosticVsHash": "20e0826b236597a1",
+    "elementCount": 204
+  },
+  "counts": {
+    "shaderObservations": 4880,
+    "graphicsPsos": 144,
+    "computePsos": 232,
+    "drawShaderUseGroups": 30,
+    "computeShaderUseGroups": 0,
+    "shaderUseEvents": 1216,
+    "readbackIdentities": 19,
+    "sampledReadbacks": 38,
+    "targetDrawCopies": 2388,
+    "copyToBackbufferRecords": 1993,
+    "sourceHistorySnapshots": 19,
+    "cmdlistSummaryRecords": 16202,
+    "heartbeatSnapshots": 41,
+    "targetMarkerRecords": 2923,
+    "targetDrawCaptureRecords": 0
+  },
+  "markerCounts": {
+    "TARGET_CBV": 12,
+    "TARGET_DESCRIPTOR_WRITE": 64,
+    "TARGET_DRAW_COPY": 2388,
+    "TARGET_DRAW_DIAG": 18,
+    "TARGET_DRAW_STATS": 6,
+    "TARGET_INDEX_DATA": 6,
+    "TARGET_INPUT_LAYOUT": 238,
+    "TARGET_PS_BINDINGS": 6,
+    "TARGET_ROOT_BIND": 12,
+    "TARGET_ROOT_CBV": 24,
+    "TARGET_ROOT_HEAP": 24,
+    "TARGET_ROOT_PARAM": 48,
+    "TARGET_ROOT_RANGE": 24,
+    "TARGET_ROOT_SLOT0": 24,
+    "TARGET_ROOT_TABLE": 24,
+    "TARGET_TEXEL": 1,
+    "TARGET_VERTEX_DATA": 4
+  },
+  "placeholderPresentRangeCoverage": {
+    "total": 4867,
+    "withRange": 0,
+    "withoutRange": 4867,
+    "monitorSampleCount": 256,
+    "derivation": "join exact hash against retained SHADER_USE_EVENT and per-group summaries; no placeholder hash matched those events, so Present ranges remain unavailable"
+  },
+  "renderTrace": {
+    "signalEvents": 33681,
+    "signalRangeGroups": 12,
+    "waitEvents": 5669,
+    "waitRangeGroups": 5669,
+    "createPlacedResourceRecords": 126,
+    "notObservedCounts": {
+      "ReleasePlacedRange": 0,
+      "ALIAS_ACCEPTED": 0,
+      "STRUCT_COPY_TRUNCATE": 0
+    }
+  }
+}

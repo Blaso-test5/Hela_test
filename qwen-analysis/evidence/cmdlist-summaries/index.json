@@ -1,0 +1,57 @@
+{
+  "schema": "qwen.evidence.dataset-index",
+  "dataset": "cmdlist-summaries",
+  "recordCount": 16202,
+  "byteCount": 1902923,
+  "sha256": "dfa49be24b478d1ef20768e27a1025bd09d7bd523510b876d699516baae14ff5",
+  "indexParts": [
+    {
+      "path": "evidence/cmdlist-summaries/index-part001.json",
+      "itemCount": 30,
+      "byteCount": 7727,
+      "sha256": "0e5f97f10e8b0b73815953642515f915b1bd19ca3d5f5b10481f0f8e70ec3bea"
+    },
+    {
+      "path": "evidence/cmdlist-summaries/index-part002.json",
+      "itemCount": 30,
+      "byteCount": 7760,
+      "sha256": "45b3de13eb22f755050798b51afb04aac9a7f46d8f90d0a13963f7d07f970931"
+    },
+    {
+      "path": "evidence/cmdlist-summaries/index-part003.json",
+      "itemCount": 30,
+      "byteCount": 7760,
+      "sha256": "9f6c367ad9d064a35a6fbf23a0839da029b70c81df0c27717769a2b1aa81ea4c"
+    },
+    {
+      "path": "evidence/cmdlist-summaries/index-part004.json",
+      "itemCount": 30,
+      "byteCount": 7760,
+      "sha256": "eab38275509dcd357b09e62a1a7fba1877a7c3d1df57eb1c9d5a56bed7276ac4"
+    },
+    {
+      "path": "evidence/cmdlist-summaries/index-part005.json",
+      "itemCount": 30,
+      "byteCount": 7765,
+      "sha256": "db886759171da238ed6b9553533c1d4215354c7e5121ca3c0c2455165d5965c8"
+    },
+    {
+      "path": "evidence/cmdlist-summaries/index-part006.json",
+      "itemCount": 30,
+      "byteCount": 7820,
+      "sha256": "b6c2c8d71082e363750f43855870a6af660870096b18434e1a856962b1a032e4"
+    },
+    {
+      "path": "evidence/cmdlist-summaries/index-part007.json",
+      "itemCount": 30,
+      "byteCount": 7820,
+      "sha256": "474ba68dacf6ad789c0ade2e1cc739b8383dce5811c4781a5e0f7a8f3c0bb3ef"
+    },
+    {
+      "path": "evidence/cmdlist-summaries/index-part008.json",
+      "itemCount": 30,
+      "byteCount": 7820,
+      "sha256": "acebcbffaf6f92730d5f657cb4fa973adb2486ce9814fa246a496f81cfeb5e18"
+    }
+  ]
+}

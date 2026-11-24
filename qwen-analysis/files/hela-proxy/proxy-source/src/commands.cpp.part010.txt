@@ -1,0 +1,193 @@
+        state.computeShaderHash = 0;
+        return;
+    }
+    state.skipDraws = !pipeline->compute && pipeline->missingShader;
+    state.skipDispatches = pipeline->compute && pipeline->missingShader;
+    state.hasGraphicsPipeline = !pipeline->compute;
+    state.hasComputePipeline = pipeline->compute;
+    state.graphicsPlaceholderVs = !pipeline->compute && pipeline->missingVs;
+    state.computePlaceholderCs = pipeline->compute && pipeline->missingCs;
+    state.graphicsMissingShaderStages = pipeline->compute ? 0 : pipeline->missingShaderStages;
+    state.computeMissingShaderStages = pipeline->compute ? pipeline->missingShaderStages : 0;
+    state.graphicsPipelineIdentity = pipeline->compute
+        ? 0 : reinterpret_cast<uintptr_t>(pipeline);
+    state.graphicsShaderHash = pipeline->compute ? 0 : pipeline->shaderHash;
+    state.graphicsPixelShaderHash = pipeline->compute ? 0 : pipeline->pixelShaderHash;
+    state.graphicsGeometryShaderHash = pipeline->compute ? 0 : pipeline->geometryShaderHash;
+    state.graphicsHullShaderHash = pipeline->compute ? 0 : pipeline->hullShaderHash;
+    state.graphicsDomainShaderHash = pipeline->compute ? 0 : pipeline->domainShaderHash;
+    state.computeShaderHash = pipeline->compute ? pipeline->shaderHash : 0;
+    if (pipeline->missingShader)
+        Log("Skipped execution for PSO placeholder with missing SM5 shader override");
+    state.c->VSSetShader(pipeline->vs.Get(), nullptr, 0);
+    state.c->PSSetShader(pipeline->ps.Get(), nullptr, 0);
+    state.c->GSSetShader(pipeline->gs.Get(), nullptr, 0);
+    state.c->HSSetShader(pipeline->hs.Get(), nullptr, 0);
+    state.c->DSSetShader(pipeline->ds.Get(), nullptr, 0);
+    state.c->CSSetShader(pipeline->cs.Get(), nullptr, 0);
+    state.c->IASetInputLayout(pipeline->il.Get());
+    state.c->RSSetState(pipeline->rs.Get());
+    state.bs = pipeline->bs;
+    state.dss = pipeline->dss;
+    state.sampleMask = pipeline->sampleMask;
+    state.ApplyOM();
+}
+
+} // namespace
+
+void DumpBackbufferSourceHistory(UINT64 readbackPresentCount) {
+    DumpBackbufferSourceHistoryImpl(readbackPresentCount);
+}
+
+void STDMETHODCALLTYPE CommandList::SetDescriptorHeaps(UINT count, ID3D12DescriptorHeap* const* heaps) {
+    if (count > 2 || (count && !heaps)) {
+        Log("Rejected invalid descriptor heap array");
+        return;
+    }
+    std::vector<Ptr<IUnknown>> replacement;
+    bool hasResourceHeap = false;
+    bool hasSamplerHeap = false;
+    for (UINT i = 0; i < count; ++i) {
+        auto* heap = dynamic_cast<DescriptorHeap*>(heaps[i]);
+        if (!heap || !(heap->hd.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)) {
+            Log("SetDescriptorHeaps requires wrapper-owned shader-visible heaps");
+            return;
+        }
+        bool& alreadySet = heap->hd.Type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER
+            ? hasSamplerHeap : hasResourceHeap;
+        if (alreadySet) {
+            Log("SetDescriptorHeaps received duplicate heap types");
+            return;
+        }
+        alreadySet = true;
+        replacement.emplace_back(static_cast<ID3D12DescriptorHeap*>(heap));
+    }
+    descriptorHeaps = std::move(replacement);
+}
+
+HRESULT STDMETHODCALLTYPE Device::CreateCommandQueue(const D3D12_COMMAND_QUEUE_DESC* source,
+    REFIID riid, void** out) {
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    if (!source ||
+        (source->Type != D3D12_COMMAND_LIST_TYPE_DIRECT &&
+         source->Type != D3D12_COMMAND_LIST_TYPE_COMPUTE &&
+         source->Type != D3D12_COMMAND_LIST_TYPE_COPY) ||
+        (source->Priority != D3D12_COMMAND_QUEUE_PRIORITY_NORMAL &&
+         source->Priority != D3D12_COMMAND_QUEUE_PRIORITY_HIGH) ||
+        source->Flags != D3D12_COMMAND_QUEUE_FLAG_NONE ||
+        (source->NodeMask != 0 && source->NodeMask != 1))
+        return E_INVALIDARG;
+    auto* queue = new (std::nothrow) CommandQueue(this, *source);
+    if (!queue) return E_OUTOFMEMORY;
+    const HRESULT result = queue->QueryInterface(riid, out);
+    queue->Release();
+    Log("CreateCommandQueue type=%u result=0x%08lx", source->Type, result);
+    return result;
+}
+
+HRESULT STDMETHODCALLTYPE Device::CreateCommandList(UINT nodeMask, D3D12_COMMAND_LIST_TYPE type,
+    ID3D12CommandAllocator* allocator, ID3D12PipelineState* initialState, REFIID riid, void** out) {
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    if ((nodeMask != 0 && nodeMask != 1) || type > D3D12_COMMAND_LIST_TYPE_COPY || !allocator)
+        return E_INVALIDARG;
+    auto* commandList = new (std::nothrow) CommandList(this, type);
+    if (!commandList) return E_OUTOFMEMORY;
+    if (initialState) commandList->SetPipelineState(initialState);
+    const HRESULT result = commandList->QueryInterface(riid, out);
+    commandList->Release();
+    Log("CreateCommandList type=%u result=0x%08lx", type, result);
+    return result;
+}
+
+HRESULT STDMETHODCALLTYPE Device::CreateCommandSignature(const D3D12_COMMAND_SIGNATURE_DESC* desc,
+    ID3D12RootSignature* rootSignature, REFIID riid, void** out) {
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    if (!desc || !desc->pArgumentDescs || desc->NumArgumentDescs != 1 ||
+        !desc->ByteStride || (desc->ByteStride & 3) ||
+        (desc->NodeMask != 0 && desc->NodeMask != 1)) {
+        Log("CreateCommandSignature rejected invalid descriptor");
+        return E_INVALIDARG;
+    }
+    UINT argumentSize = 0;
+    switch (desc->pArgumentDescs[0].Type) {
+    case D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH:
+        argumentSize = sizeof(UINT) * 3;
+        break;
+    case D3D12_INDIRECT_ARGUMENT_TYPE_DRAW:
+        argumentSize = sizeof(UINT) * 4;
+        break;
+    case D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED:
+        argumentSize = sizeof(UINT) * 5;
+        break;
+    default:
+        Log("CreateCommandSignature unsupported argument type=%u",
+            desc->pArgumentDescs[0].Type);
+        return E_NOTIMPL;
+    }
+    if (desc->ByteStride < argumentSize) {
+        Log("CreateCommandSignature stride=%u is smaller than argument size=%u",
+            desc->ByteStride, argumentSize);
+        return E_INVALIDARG;
+    }
+
+    auto* signature = new (std::nothrow) CommandSignature(this,
+        desc->pArgumentDescs[0].Type, desc->ByteStride, rootSignature);
+    if (!signature) return E_OUTOFMEMORY;
+    const HRESULT result = signature->QueryInterface(riid, out);
+    signature->Release();
+    Log("CreateCommandSignature argument-type=%u stride=%u result=0x%08lx",
+        desc->pArgumentDescs[0].Type, desc->ByteStride, result);
+    return result;
+}
+
+std::shared_ptr<const BindSnap> CommandList::Snap(BindState& bind) {
+    if (!bind.snap) {
+        auto snapshot = std::make_shared<BindSnap>();
+        snapshot->keep = bind.keep;
+        snapshot->rs = bind.rs;
+        snapshot->args = bind.args;
+        snapshot->descriptorHeaps = descriptorHeaps;
+        bind.snap = std::move(snapshot);
+    }
+    return bind.snap;
+}
+
+void CommandList::SetRootArg(BindState& bind, UINT index, RootArg&& arg) {
+    if (bind.args.size() <= index) bind.args.resize(static_cast<size_t>(index) + 1);
+    bind.args[index] = std::move(arg);
+    bind.snap.reset();
+}
+
+void CommandList::DrawCommon(Cmd draw, bool) {
+    Add(std::move(draw));
+}
+
+HRESULT STDMETHODCALLTYPE CommandList::Close() {
+    if (closed) return E_FAIL;
+    closed = true;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE CommandList::Reset(ID3D12CommandAllocator* allocator, ID3D12PipelineState* initialState) {
+    if (!allocator) return E_INVALIDARG;
+    if (!closed) return E_FAIL;
+    cmds.clear();
+    gfx = {};
+    comp = {};
+    descriptorHeaps.clear();
+    closed = false;
+    if (initialState) SetPipelineState(initialState);
+    return S_OK;
+}
+
+void STDMETHODCALLTYPE CommandList::ClearState(ID3D12PipelineState* initialState) {
+    gfx = {};
+    comp = {};
+    Ptr<IUnknown> keep = initialState ? Ptr<IUnknown>(initialState) : Ptr<IUnknown>();
+    Add([keep](ExecState& state) {
+        state.skipDraws = false;
+        state.skipDispatches = false;
+        state.hasGraphicsPipeline = false;

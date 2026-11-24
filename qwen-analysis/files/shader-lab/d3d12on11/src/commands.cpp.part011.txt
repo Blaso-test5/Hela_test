@@ -1,0 +1,158 @@
+    TraceApi("CommandList::Dispatch");
+    auto snapshot = Snap(comp);
+    Add([=](ExecState& state) {
+        if (state.skipDispatches) {
+            if (Cfg().diagnosticRenderTrace) {
+                auto& stats = TraceStats();
+                if (state.computePlaceholderCs)
+                    stats.dispatchSkipPlaceholderCs.fetch_add(1, std::memory_order_relaxed);
+                else
+                    stats.dispatchSkipNoPso.fetch_add(1, std::memory_order_relaxed);
+            }
+            RecordDispatchExecution(state, true);
+            return;
+        }
+        BindRootSnapshot(state, snapshot, true);
+        state.c->Dispatch(x, y, z);
+        RecordDispatchExecution(state, false);
+        FlushStructWrites(state);
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::ExecuteIndirect(ID3D12CommandSignature* sourceSignature,
+    UINT maxCommandCount, ID3D12Resource* sourceArgumentBuffer, UINT64 argumentBufferOffset,
+    ID3D12Resource* sourceCountBuffer, UINT64 countBufferOffset) {
+    TraceApi("CommandList::ExecuteIndirect");
+    auto* signature = sourceSignature ? dynamic_cast<CommandSignature*>(sourceSignature) : nullptr;
+    auto* arguments = sourceArgumentBuffer ? dynamic_cast<Resource*>(sourceArgumentBuffer) : nullptr;
+    const bool compute = signature &&
+        signature->argumentType == D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
+    if (!signature || !arguments || !arguments->IsBuffer() || sourceCountBuffer ||
+        (compute && type == D3D12_COMMAND_LIST_TYPE_COPY) ||
+        (!compute && type != D3D12_COMMAND_LIST_TYPE_DIRECT)) {
+        Log("ExecuteIndirect unsupported signature/list type or count buffer=%p offset=%llu",
+            sourceCountBuffer, static_cast<unsigned long long>(countBufferOffset));
+        Unimpl("ID3D12GraphicsCommandList::ExecuteIndirect");
+        return;
+    }
+    if (!maxCommandCount) return;
+
+    const UINT argumentSize = compute ? sizeof(UINT) * 3
+        : signature->argumentType == D3D12_INDIRECT_ARGUMENT_TYPE_DRAW
+            ? sizeof(UINT) * 4 : sizeof(UINT) * 5;
+    const UINT64 lastOffset = static_cast<UINT64>(maxCommandCount - 1) *
+        signature->byteStride;
+    if ((argumentBufferOffset & 3) ||
+        lastOffset > UINT64_MAX - argumentSize ||
+        argumentBufferOffset > arguments->desc.Width ||
+        lastOffset + argumentSize > arguments->desc.Width - argumentBufferOffset ||
+        argumentBufferOffset > UINT64_MAX - lastOffset ||
+        argumentBufferOffset + lastOffset > UINT_MAX) {
+        Log("ExecuteIndirect rejected argument range offset=%llu count=%u stride=%u width=%llu",
+            static_cast<unsigned long long>(argumentBufferOffset), maxCommandCount,
+            signature->byteStride, static_cast<unsigned long long>(arguments->desc.Width));
+        return;
+    }
+
+    auto snapshot = Snap(compute ? comp : gfx);
+    Ptr<IUnknown> signatureKeep(sourceSignature);
+    Ptr<IUnknown> argumentsKeep(sourceArgumentBuffer);
+    const D3D12_INDIRECT_ARGUMENT_TYPE argumentType = signature->argumentType;
+    const UINT byteStride = signature->byteStride;
+    Add([=](ExecState& state) {
+        if (compute ? state.skipDispatches : state.skipDraws) {
+            if (!compute)
+                LogSkippedDraw(state, "ExecuteIndirect", maxCommandCount, byteStride,
+                    maxCommandCount);
+            if (Cfg().diagnosticRenderTrace) {
+                auto& stats = TraceStats();
+                if (compute && state.computePlaceholderCs)
+                    stats.dispatchSkipPlaceholderCs.fetch_add(1, std::memory_order_relaxed);
+                else if (compute)
+                    stats.dispatchSkipNoPso.fetch_add(1, std::memory_order_relaxed);
+                else if (state.graphicsPlaceholderVs)
+                    stats.drawSkipPlaceholderVs.fetch_add(1, std::memory_order_relaxed);
+                else
+                    stats.drawSkipPlaceholderOther.fetch_add(1, std::memory_order_relaxed);
+            }
+            if (compute) RecordDispatchExecution(state, true, maxCommandCount);
+            return;
+        }
+        auto* commandSignature = dynamic_cast<CommandSignature*>(signatureKeep.Get());
+        auto* argumentResource = dynamic_cast<Resource*>(argumentsKeep.Get());
+        if (!commandSignature || !argumentResource || !argumentResource->GpuBuffer()) {
+            Log("ExecuteIndirect backing resource unavailable");
+            return;
+        }
+        const UINT64 byteCount = static_cast<UINT64>(maxCommandCount - 1) *
+            byteStride + argumentSize;
+        if (argumentResource->heap == D3D12_HEAP_TYPE_UPLOAD)
+            argumentResource->SyncToGpu(argumentBufferOffset, byteCount);
+        BindRootSnapshot(state, snapshot, compute);
+        ID3D11Buffer* argumentBuffer = argumentResource->GpuBuffer();
+        for (UINT i = 0; i < maxCommandCount; ++i) {
+            const UINT offset = static_cast<UINT>(argumentBufferOffset +
+                static_cast<UINT64>(i) * byteStride);
+            switch (argumentType) {
+            case D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH:
+                state.c->DispatchIndirect(argumentBuffer, offset);
+                RecordDispatchExecution(state, false);
+                break;
+            case D3D12_INDIRECT_ARGUMENT_TYPE_DRAW:
+                state.c->DrawInstancedIndirect(argumentBuffer, offset);
+                RecordDrawExecution(state, false, "ExecuteIndirect", 0, 0, true);
+                break;
+            case D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED:
+                state.c->DrawIndexedInstancedIndirect(argumentBuffer, offset);
+                RecordDrawExecution(state, true, "ExecuteIndirect", 0, 0, true);
+                break;
+            default:
+                Log("ExecuteIndirect encountered unsupported argument type=%u", argumentType);
+                return;
+            }
+            FlushStructWrites(state);
+        }
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::CopyBufferRegion(ID3D12Resource* destination, UINT64 destinationOffset,
+    ID3D12Resource* source, UINT64 sourceOffset, UINT64 byteCount) {
+    Resource* dst = AsResource(destination);
+    Resource* src = AsResource(source);
+    if (!dst || !src || !dst->IsBuffer() || !src->IsBuffer() ||
+        destinationOffset > dst->desc.Width || byteCount > dst->desc.Width - destinationOffset ||
+        sourceOffset > src->desc.Width || byteCount > src->desc.Width - sourceOffset ||
+        destinationOffset > UINT_MAX || sourceOffset > UINT_MAX || byteCount > UINT_MAX) {
+        Log("Rejected invalid CopyBufferRegion request");
+        return;
+    }
+    Ptr<IUnknown> keepDst(static_cast<ID3D12Resource*>(dst));
+    Ptr<IUnknown> keepSrc(static_cast<ID3D12Resource*>(src));
+    Add([keepDst, keepSrc, destinationOffset, sourceOffset, byteCount](ExecState& state) {
+        auto* dstResource = dynamic_cast<Resource*>(keepDst.Get());
+        auto* srcResource = dynamic_cast<Resource*>(keepSrc.Get());
+        if (!dstResource || !srcResource) return;
+        D3D11_BOX box{};
+        box.left = static_cast<UINT>(sourceOffset);
+        box.right = static_cast<UINT>(sourceOffset + byteCount);
+        box.top = 0;
+        box.bottom = 1;
+        box.front = 0;
+        box.back = 1;
+        if (srcResource->heap == D3D12_HEAP_TYPE_UPLOAD)
+            srcResource->SyncToGpu(sourceOffset, byteCount);
+        state.c->CopySubresourceRegion(dstResource->Raw(), 0, static_cast<UINT>(destinationOffset), 0, 0,
+                                       srcResource->Raw(), 0, &box);
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::CopyTextureRegion(const D3D12_TEXTURE_COPY_LOCATION* destination,
+    UINT x, UINT y, UINT z, const D3D12_TEXTURE_COPY_LOCATION* source, const D3D12_BOX* sourceBox) {
+    if (!destination || !source || !destination->pResource || !source->pResource) {
+        Log("Rejected null CopyTextureRegion location");
+        return;
+    }
+
+    Resource* dst = AsResource(destination->pResource);
+    Resource* src = AsResource(source->pResource);
+    if (!dst || !src) {

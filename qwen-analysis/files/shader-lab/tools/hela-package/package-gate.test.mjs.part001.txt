@@ -1,0 +1,188 @@
+/**
+Test offline del gate package (P0-1). Solo fs + crypto su tmpdir:
+le "DLL" sono byte fittizi, mai caricati come librerie; nessun processo figlio, nessuna rete.
+Esecuzione: node --test tools/hela-package/
+*/
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { createHash } from "node:crypto";
+import {
+runPackageGate,
+normalizeRelPath,
+MANIFEST_FILE,
+INVENTORY_FILE,
+REPORT_FILE,
+} from "./package-gate.mjs";
+const sha = (b) => createHash("sha256").update(b).digest("hex");
+const ZERO = "0".repeat(64);
+const codes = (r) => r.issues.map((i) => i.code);
+/** Crea uno staging temporaneo con runtime fittizi e manifest coerente (o custom). */
+async function makeStage(t, opts = {}) {
+const dir = await mkdtemp(path.join(tmpdir(), "hela-gate-"));
+t.after(() => rm(dir, { recursive: true, force: true }));
+const runtimeFiles = opts.runtimeFiles ?? {
+"runtime/d3d12.dll": Buffer.from("fake-d3d12-not-a-real-dll"),
+"runtime/dxgi.dll": Buffer.from("fake-dxgi-not-a-real-dll"),
+};
+const overrideFiles = opts.overrideFiles ?? {};
+for (const [rel, buf] of Object.entries({ ...runtimeFiles, ...overrideFiles })) {
+const abs = path.join(dir, rel);
+await mkdir(path.dirname(abs), { recursive: true });
+await writeFile(abs, buf);
+}
+const manifest = opts.manifest ?? {
+schemaVersion: 1,
+packageId: "test-package",
+runtime: Object.entries(runtimeFiles).map(([p, b]) => ({ path: p, sha256: sha(b) })),
+overrides: Object.entries(overrideFiles).map(([p, b], i) => ({ id: `ov-${i}`, path: p, sha256: sha(b) })),
+};
+await writeFile(path.join(dir, MANIFEST_FILE), JSON.stringify(manifest, null, 2));
+return { dir, manifest };
+}
+test("normalizeRelPath: normalizza backslash, rifiuta path non sicuri", () => {
+assert.deepEqual(normalizeRelPath("runtime\\d3d12.dll"), { ok: true, value: "runtime/d3d12.dll" });
+for (const bad of ["", "../x", "a/../b", "/abs", "C:\\x", "C:/x", "a//b", "a/./b", "a\u0000b"]) {
+assert.equal(normalizeRelPath(bad).ok, false, `doveva rifiutare: ${JSON.stringify(bad)}`);
+}
+});
+test("happy path: inventario ordinato, lifecycle staged-only, check-mode ok", async (t) => {
+const { dir } = await makeStage(t, {
+overrideFiles: {
+"overrides/b.dxil": Buffer.from("bbb"),
+"overrides/a.dxil": Buffer.from("aaa"),
+},
+});
+const r = await runPackageGate(dir);
+assert.equal(r.ok, true, JSON.stringify(r.issues));
+assert.equal(r.lifecycle, "staged-only");
+assert.equal(r.installed, false);
+assert.equal(r.networkUsed, false);
+const inv = JSON.parse(await readFile(path.join(dir, INVENTORY_FILE), "utf8"));
+assert.equal(inv.overrides.length, 2);
+assert.deepEqual(inv.overrides.map((e) => e.path), ["overrides/a.dxil", "overrides/b.dxil"]);
+assert.equal(inv.overrides[0].sha256, sha(Buffer.from("aaa")));
+assert.equal(r.inventory.entryCount, 2);
+const check = await runPackageGate(dir, { mode: "check" });
+assert.equal(check.ok, true, JSON.stringify(check.issues));
+});
+test("manifest JSON con BOM UTF-8 è accettato", async (t) => {
+const { dir } = await makeStage(t);
+const manifestPath = path.join(dir, MANIFEST_FILE);
+const manifest = await readFile(manifestPath);
+await writeFile(manifestPath, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), manifest]));
+const result = await runPackageGate(dir);
+assert.equal(result.ok, true, JSON.stringify(result.issues));
+});
+test("runtime DLL mancante: gate fallisce, nessun inventario consumabile", async (t) => {
+const { dir } = await makeStage(t, { overrideFiles: { "overrides/a.dxil": Buffer.from("a") } });
+await rm(path.join(dir, "runtime/dxgi.dll"));
+const r = await runPackageGate(dir);
+assert.equal(r.ok, false);
+assert.ok(codes(r).includes("MISSING_RUNTIME"));
+await assert.rejects(readFile(path.join(dir, INVENTORY_FILE)));
+const report = JSON.parse(await readFile(path.join(dir, REPORT_FILE), "utf8"));
+assert.equal(report.ok, false);
+assert.equal(report.lifecycle, "staged-only");
+});
+test("hash diverso dal manifest: HASH_MISMATCH", async (t) => {
+const { dir } = await makeStage(t, {
+overrideFiles: { "overrides/a.dxil": Buffer.from("a") },
+manifest: {
+schemaVersion: 1,
+packageId: "p",
+runtime: [{ path: "runtime/d3d12.dll" }, { path: "runtime/dxgi.dll" }],
+overrides: [{ id: "a", path: "overrides/a.dxil", sha256: ZERO }],
+},
+});
+const r = await runPackageGate(dir);
+assert.equal(r.ok, false);
+assert.ok(codes(r).includes("HASH_MISMATCH"));
+});
+test("file extra in overrides/ non nel manifest: INVENTORY_EXTRA", async (t) => {
+const { dir } = await makeStage(t, { overrideFiles: { "overrides/a.dxil": Buffer.from("a") } });
+await writeFile(path.join(dir, "overrides/extra.dxil"), Buffer.from("extra"));
+const r = await runPackageGate(dir);
+assert.equal(r.ok, false);
+assert.ok(codes(r).includes("INVENTORY_EXTRA"));
+});
+test("override dichiarato ma assente su disco: MISSING_OVERRIDE", async (t) => {
+const { dir } = await makeStage(t, { overrideFiles: { "overrides/a.dxil": Buffer.from("a") } });
+await rm(path.join(dir, "overrides/a.dxil"));
+const r = await runPackageGate(dir);
+assert.equal(r.ok, false);
+assert.ok(codes(r).includes("MISSING_OVERRIDE"));
+});
+test("path non sicuro e location invalida nel manifest", async (t) => {
+const { dir } = await makeStage(t, {
+manifest: {
+schemaVersion: 1,
+packageId: "p",
+runtime: [{ path: "runtime/d3d12.dll" }, { path: "runtime/dxgi.dll" }],
+overrides: [
+{ id: "x", path: "../evil.dxil" },
+{ id: "y", path: "shaders/a.dxil" },
+],
+},
+});
+const r = await runPackageGate(dir);
+assert.equal(r.ok, false);
+assert.ok(codes(r).includes("UNSAFE_PATH"));
+assert.ok(codes(r).includes("INVALID_OVERRIDE_LOCATION"));
+});
+test("determinismo: due build producono inventario identico byte-per-byte", async (t) => {
+const { dir } = await makeStage(t, {
+overrideFiles: {
+"overrides/a.dxil": Buffer.from("a"),
+"overrides/b.dxil": Buffer.from("b"),
+},
+});
+await runPackageGate(dir);
+const first = await readFile(path.join(dir, INVENTORY_FILE), "utf8");
+await runPackageGate(dir);
+const second = await readFile(path.join(dir, INVENTORY_FILE), "utf8");
+assert.equal(second, first);
+});
+test("gate fallito dopo build ok: rimuove l'inventario stale", async (t) => {
+const { dir } = await makeStage(t, { overrideFiles: { "overrides/a.dxil": Buffer.from("a") } });
+assert.equal((await runPackageGate(dir)).ok, true);
+await rm(path.join(dir, "runtime/d3d12.dll"));
+const r = await runPackageGate(dir);
+assert.equal(r.ok, false);
+assert.equal(r.staleInventoryRemoved, true);
+await assert.rejects(readFile(path.join(dir, INVENTORY_FILE)));
+});
+test("check-mode: rileva inventario manomesso (INVENTORY_MISMATCH)", async (t) => {
+const { dir } = await makeStage(t, { overrideFiles: { "overrides/a.dxil": Buffer.from("a") } });
+assert.equal((await runPackageGate(dir)).ok, true);
+const invPath = path.join(dir, INVENTORY_FILE);
+const inv = JSON.parse(await readFile(invPath, "utf8"));
+inv.overrides[0].sha256 = ZERO;
+await writeFile(invPath, JSON.stringify(inv, null, 2));
+const r = await runPackageGate(dir, { mode: "check" });
+assert.equal(r.ok, false);
+assert.ok(codes(r).includes("INVENTORY_MISMATCH"));
+});
+test("check-mode senza inventario: fallisce ed e' read-only", async (t) => {
+const { dir } = await makeStage(t, { overrideFiles: { "overrides/a.dxil": Buffer.from("a") } });
+const r = await runPackageGate(dir, { mode: "check" });
+assert.equal(r.ok, false);
+assert.ok(codes(r).includes("INVENTORY_MISSING"));
+await assert.rejects(readFile(path.join(dir, REPORT_FILE)));
+await assert.rejects(readFile(path.join(dir, INVENTORY_FILE)));
+});
+test("runtime richiesto non dichiarato nel manifest: RUNTIME_NOT_DECLARED", async (t) => {
+const { dir } = await makeStage(t, {
+manifest: {
+schemaVersion: 1,
+packageId: "p",
+runtime: [{ path: "runtime/d3d12.dll" }],
+overrides: [],
+},
+});
+const r = await runPackageGate(dir);
+assert.equal(r.ok, false);
+assert.ok(codes(r).includes("RUNTIME_NOT_DECLARED"));
+});

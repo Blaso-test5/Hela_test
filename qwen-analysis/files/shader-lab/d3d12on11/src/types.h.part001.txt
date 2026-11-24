@@ -1,0 +1,178 @@
+#pragma once
+#include "core.h"
+
+struct Resource; struct DescriptorHeap; struct RootSignature; struct PipelineState; struct Fence;
+
+enum StageBits : UINT { S_VS = 1, S_HS = 2, S_DS = 4, S_GS = 8, S_PS = 16, S_CS = 32 };
+
+// ------------------------------------------------------------------ descriptor
+enum class DKind : uint8_t { None, CBV, SRV, UAV, RTV, DSV, Sampler };
+
+struct Descriptor {
+    DKind kind = DKind::None;
+    UINT diagnosticFailureId = 0;
+    HRESULT diagnosticFailureResult = S_OK;
+    Ptr<ID3D11ShaderResourceView> srv;
+    Ptr<ID3D11UnorderedAccessView> uav;
+    Ptr<ID3D11RenderTargetView> rtv;
+    Ptr<ID3D11DepthStencilView> dsv;
+    Ptr<ID3D11SamplerState> smp;
+    Ptr<IUnknown> keep;          // risorsa sorgente (CBV / viste buffer)
+    Resource* res = nullptr;     // identita' soltanto (non possiede)
+    UINT64 bufOff = 0, bufSize = 0;
+    UINT structStride = 0;       // >0: vista structured -> usa la copia structured
+    bool uavWrite = false;
+};
+static const UINT kDescStride = (UINT)sizeof(Descriptor);
+
+// ------------------------------------------------------------------ risorse
+struct Resource : Stub_ID3D12Resource {
+    D3D12_RESOURCE_DESC desc{};
+    D3D12_HEAP_PROPERTIES hp{};
+    D3D12_HEAP_FLAGS hflags = D3D12_HEAP_FLAG_NONE;
+    D3D12_HEAP_TYPE heap = D3D12_HEAP_TYPE_DEFAULT;   // tipo effettivo: DEFAULT / UPLOAD / READBACK
+    UINT64 va = 0;
+    Ptr<ID3D11Buffer> buf;         // buffer GPU principale
+    Ptr<ID3D11Resource> tex;       // texture 1D/2D/3D
+    Ptr<ID3D11Buffer> staging;     // READBACK
+    std::vector<uint8_t> shadow;   // memoria CPU (UPLOAD / READBACK)
+    bool backbuffer = false;
+    bool tiled = false;
+    UINT64 nativeWidth = 0;
+    Ptr<ID3D12Heap> placedHeap;
+    UINT64 placedOffset = 0;
+    UINT64 placedSize = 0;
+    std::map<std::pair<UINT64, UINT64>, Ptr<ID3D11Buffer>> cbWindows;
+    std::map<UINT, Ptr<ID3D11Buffer>> structCopies;
+    std::mutex mu;
+    int mapCount = 0;
+
+    explicit Resource(Device* d) : Stub_ID3D12Resource(d) {}
+    ~Resource() override;
+    static HRESULT Create(Device* d, const D3D12_HEAP_PROPERTIES* hp, D3D12_HEAP_FLAGS f,
+                          const D3D12_RESOURCE_DESC* desc, Resource** out, bool tiled = false);
+    bool IsBuffer() const { return desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER; }
+    UINT NumSubresources() const;
+    ID3D11Resource* Raw() const { return IsBuffer() ? (ID3D11Resource*)buf.Get() : tex.Get(); }
+    ID3D11Buffer* GpuBuffer();                                   // crea la copia GPU lazy per UPLOAD
+    void SyncToGpu(UINT64 off, UINT64 size);                     // UPLOAD: shadow -> GpuBuffer
+    ID3D11Buffer* CbWindow(UINT64 off, UINT64 size);             // cbuffer sincronizzato
+    ID3D11Buffer* StructCopy(UINT stride);                       // copia structured (crea)
+    void SyncStruct(UINT stride);                                // primario/shadow -> copia
+    void WriteBackStruct(UINT stride);                           // copia -> primario (dopo UAV)
+    HRESULT RefreshReadback();                                   // staging -> shadow
+
+    HRESULT STDMETHODCALLTYPE Map(UINT sub, const D3D12_RANGE* rr, void** data) override;
+    void STDMETHODCALLTYPE Unmap(UINT sub, const D3D12_RANGE* wr) override;
+    D3D12_RESOURCE_DESC STDMETHODCALLTYPE GetDesc() override { return desc; }
+    D3D12_GPU_VIRTUAL_ADDRESS STDMETHODCALLTYPE GetGPUVirtualAddress() override { return va; }
+    HRESULT STDMETHODCALLTYPE GetHeapProperties(D3D12_HEAP_PROPERTIES* p, D3D12_HEAP_FLAGS* f) override {
+        if (tiled) {
+            Log("GetHeapProperties called on a reserved resource; returning E_INVALIDARG");
+            return E_INVALIDARG;
+        }
+        if (p) *p = hp;
+        if (f) *f = hflags;
+        return S_OK; }
+};
+
+struct PlacedRangeInfo {
+    UINT64 offset = 0;
+    UINT64 size = 0;
+    Resource* resource = nullptr;
+    D3D12_RESOURCE_DIMENSION dimension = D3D12_RESOURCE_DIMENSION_UNKNOWN;
+    UINT64 width = 0;
+    UINT height = 0;
+    UINT16 depthOrArray = 0;
+    UINT16 mipLevels = 0;
+    DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+    D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE;
+    DWORD creatorTid = 0;
+};
+
+struct HeapObj : Stub_ID3D12Heap {
+    D3D12_HEAP_DESC hd{};
+    Ptr<ID3D11Buffer> tilePool;
+    std::mutex tilePoolMutex;
+    std::mutex placementMutex;
+    std::map<UINT64, PlacedRangeInfo> placedRanges;
+    HeapObj(Device* d, const D3D12_HEAP_DESC& x) : Stub_ID3D12Heap(d), hd(x) {}
+    D3D12_HEAP_DESC STDMETHODCALLTYPE GetDesc() override { return hd; }
+    HRESULT GetTilePool(ID3D11Buffer** out);
+    HRESULT ReservePlacedRange(UINT64 offset, UINT64 size, const D3D12_RESOURCE_DESC* desc,
+        PlacedRangeInfo* outConflict = nullptr);
+    void BindPlacedResource(UINT64 offset, Resource* resource);
+    void ReleasePlacedRange(UINT64 offset, Resource* resource = nullptr);
+};
+
+inline UINT64 CurrentGpuTimestampNs() {
+    LARGE_INTEGER qpc{}, frequency{};
+    if (!QueryPerformanceCounter(&qpc) || !QueryPerformanceFrequency(&frequency) ||
+        frequency.QuadPart <= 0 || qpc.QuadPart < 0)
+        return 0;
+    const UINT64 ticks = static_cast<UINT64>(qpc.QuadPart);
+    const UINT64 hz = static_cast<UINT64>(frequency.QuadPart);
+    return (ticks / hz) * 1000000000ULL +
+        ((ticks % hz) * 1000000000ULL) / hz;
+}
+
+struct QueryHeapObj : Stub_ID3D12QueryHeap {
+    D3D12_QUERY_HEAP_DESC desc{};
+    std::mutex mutex;
+    std::vector<Ptr<ID3D11Query>> queries;
+    std::vector<UINT64> timestamps;
+
+    QueryHeapObj(Device* d, const D3D12_QUERY_HEAP_DESC& queryDesc)
+        : Stub_ID3D12QueryHeap(d), desc(queryDesc),
+          queries(queryDesc.Count), timestamps(queryDesc.Count, 0) {}
+};
+
+UINT64 AllocVA(UINT64 size, Resource* r);
+void FreeVA(UINT64 va);
+Resource* ResolveVA(UINT64 va, UINT64* offset);
+D3D12_HEAP_TYPE EffectiveHeapType(const D3D12_HEAP_PROPERTIES& hp);
+
+struct DescriptorHeap : Stub_ID3D12DescriptorHeap {
+    D3D12_DESCRIPTOR_HEAP_DESC hd{};
+    std::vector<Descriptor> items;
+    UINT64 gpuBase = 0;
+    DescriptorHeap(Device* d, const D3D12_DESCRIPTOR_HEAP_DESC& x);
+    ~DescriptorHeap() override;
+    D3D12_DESCRIPTOR_HEAP_DESC STDMETHODCALLTYPE GetDesc() override { return hd; }
+    D3D12_CPU_DESCRIPTOR_HANDLE STDMETHODCALLTYPE GetCPUDescriptorHandleForHeapStart() override {
+        D3D12_CPU_DESCRIPTOR_HANDLE h; h.ptr = (SIZE_T)items.data(); return h; }
+    D3D12_GPU_DESCRIPTOR_HANDLE STDMETHODCALLTYPE GetGPUDescriptorHandleForHeapStart() override {
+        D3D12_GPU_DESCRIPTOR_HANDLE h; h.ptr = gpuBase; return h; }
+};
+DescriptorHeap* FindHeapByGpu(UINT64 gpuPtr, UINT* index);
+DescriptorHeap* FindHeapByCpu(SIZE_T cpuPtr, UINT* index);
+void ClearBackbufferDescriptors(Device* device);
+
+// ------------------------------------------------------------------ root signature
+struct RangeInfo {
+    D3D12_DESCRIPTOR_RANGE_TYPE type;
+    UINT num, baseReg, space, offset;
+    std::vector<UINT> slots;
+};
+struct RootParam {
+    D3D12_ROOT_PARAMETER_TYPE type = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    D3D12_SHADER_VISIBILITY vis = D3D12_SHADER_VISIBILITY_ALL;
+    UINT num32 = 0, reg = 0, space = 0, slot = 0;
+    std::vector<RangeInfo> ranges;
+    Ptr<ID3D11Buffer> cb;   // root constants
+};
+struct StaticSamplerInfo { UINT slot; UINT space; D3D12_SHADER_VISIBILITY vis; Ptr<ID3D11SamplerState> st; };
+
+struct RootSignature : Stub_ID3D12RootSignature {
+    std::vector<RootParam> params;
+    std::vector<StaticSamplerInfo> statics;
+    UINT id = 0;
+    D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+    using Stub_ID3D12RootSignature::Stub_ID3D12RootSignature;
+    static HRESULT Create(Device* d, const void* blob, SIZE_T len, RootSignature** out);
+};
+
+// ------------------------------------------------------------------ PSO
+struct PipelineState : Stub_ID3D12PipelineState {
+    bool compute = false, missingShader = false, missingVs = false, missingCs = false;
+    UINT missingShaderStages = 0;

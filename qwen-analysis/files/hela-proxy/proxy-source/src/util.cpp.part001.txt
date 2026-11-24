@@ -1,0 +1,131 @@
+#include "types.h"
+#include "shader_use_ledger.h"
+#include <bcrypt.h>
+#include <sys/stat.h>
+#include <direct.h>
+#include <limits>
+#include <system_error>
+#include <thread>
+
+// ------------------------------------------------------------------ configurazione e log
+static Config g_cfg;
+Config& Cfg() { return g_cfg; }
+
+static std::mutex g_logMu;
+static FILE* g_logFile = nullptr;
+static std::string g_logPath;
+static bool g_logOpenFailureReported = false;
+static d3d12on11::ShaderUseLedger g_shaderUseLedger;
+
+static std::string EnvOr(const char* name, const std::string& def) {
+    char buf[1024];
+    DWORD n = GetEnvironmentVariableA(name, buf, sizeof(buf));
+    return (n > 0 && n < sizeof(buf)) ? std::string(buf) : def;
+}
+
+static std::string IniStr(const std::string& ini, const char* key, const char* def) {
+    char buf[1024];
+    GetPrivateProfileStringA("d3d12on11", key, def, buf, sizeof(buf), ini.c_str());
+    return buf;
+}
+
+void LoadConfig(HMODULE self) {
+    char path[MAX_PATH] = {};
+    GetModuleFileNameA(self, path, MAX_PATH);
+    std::string p = path;
+    size_t slash = p.find_last_of("\\/");
+    g_cfg.baseDir = slash == std::string::npos ? "." : p.substr(0, slash);
+    LogModuleFingerprint("d3d12", self);
+    std::string ini = g_cfg.baseDir + "\\d3d12on11.ini";
+    if (GetFileAttributesA(ini.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        const std::string patchIni = g_cfg.baseDir + "\\D3D12On11Patch\\d3d12on11.ini";
+        if (GetFileAttributesA(patchIni.c_str()) != INVALID_FILE_ATTRIBUTES)
+            ini = patchIni;
+    }
+    auto rel = [&](const std::string& v) { return (v.size() > 1 && v[1] == ':') ? v : g_cfg.baseDir + "\\" + v; };
+
+    g_cfg.log = EnvOr("D3D12ON11_LOG", IniStr(ini, "log", "1")) != "0";
+    g_cfg.debugLayer = EnvOr("D3D12ON11_DEBUG", IniStr(ini, "debug", "0")) == "1";
+    g_cfg.diagnosticCapabilities = EnvOr("D3D12ON11_DIAGNOSTIC_CAPABILITIES",
+        IniStr(ini, "diagnostic_capabilities", "0")) == "1";
+    g_cfg.traceCallers = EnvOr("D3D12ON11_TRACE_CALLERS",
+        IniStr(ini, "trace_callers", "0")) == "1";
+    g_cfg.diagnosticRenderTrace = EnvOr("D3D12ON11_DIAGNOSTIC_RENDER_TRACE",
+        IniStr(ini, "diagnostic_render_trace", "0")) == "1";
+    g_cfg.crashDiagnostics = EnvOr("D3D12ON11_CRASH_DIAGNOSTICS",
+        IniStr(ini, "crash_diagnostics", "0")) == "1";
+    g_cfg.dumpShaders = EnvOr("D3D12ON11_DUMP_SHADERS", IniStr(ini, "dump_shaders", "1")) != "0";
+    g_cfg.overridesDir = rel(EnvOr("D3D12ON11_OVERRIDES", IniStr(ini, "overrides", "d3d12on11\\overrides")));
+    g_cfg.dumpDir = rel(EnvOr("D3D12ON11_DUMP", IniStr(ini, "dump", "d3d12on11\\dump")));
+    const std::string bindingMap = EnvOr("D3D12ON11_BINDING_MAP", IniStr(ini, "binding_map", ""));
+    if (!bindingMap.empty()) {
+        g_cfg.bindingMapPath = rel(bindingMap);
+        std::vector<uint8_t> bytes;
+        if (ReadFileBytes(g_cfg.bindingMapPath, bytes)) {
+            const std::string contents(bytes.begin(), bytes.end());
+            const std::regex entry("\"([btsu]):([0-9]+):([0-9]+)\"\\s*:\\s*([0-9]+)");
+            for (std::sregex_iterator it(contents.begin(), contents.end(), entry), end; it != end; ++it) {
+                const auto& match = *it;
+                g_cfg.bindingMap[match[1].str() + ":" + match[2].str() + ":" + match[3].str()] =
+                    static_cast<UINT>(std::stoul(match[4].str()));
+            }
+            Log("Loaded %zu register binding overrides from %s", g_cfg.bindingMap.size(), g_cfg.bindingMapPath.c_str());
+        } else {
+            Log("Configured binding map could not be read: %s", g_cfg.bindingMapPath.c_str());
+        }
+    }
+    std::string sm = EnvOr("D3D12ON11_SHADER_MODEL", IniStr(ini, "shader_model", "5_1"));
+    g_cfg.shaderModel = sm == "5_0" ? 0x50 : sm == "6_0" ? 0x60 : sm == "6_1" ? 0x61 : sm == "6_2" ? 0x62
+                       : sm == "6_3" ? 0x63 : sm == "6_4" ? 0x64 : sm == "6_5" ? 0x65 : sm == "6_6" ? 0x66
+                       : sm == "6_7" ? 0x67 : 0x51;
+    Log("=== D3D12On11 diagnostic session ===");
+    Log("Config ini=%s log=%u debug-layer=%u advertised-shader-model=%u_%u",
+        ini.c_str(), g_cfg.log, g_cfg.debugLayer, g_cfg.shaderModel >> 4, g_cfg.shaderModel & 0xf);
+    Log("Config diagnostic-capabilities=%u%s", g_cfg.diagnosticCapabilities,
+        g_cfg.diagnosticCapabilities ? " (UNSAFE: reports selected capabilities not fully implemented by D3D11 proxy)" : "");
+    Log("Config caller-trace=%u", g_cfg.traceCallers);
+    Log("Config diagnostic-render-trace=%u", g_cfg.diagnosticRenderTrace);
+    Log("Config crash-diagnostics=%u", g_cfg.crashDiagnostics);
+    Log("Config shader-dump=%u dump-dir=%s overrides-dir=%s binding-map=%s entries=%zu",
+        g_cfg.dumpShaders, g_cfg.dumpDir.c_str(), g_cfg.overridesDir.c_str(),
+        g_cfg.bindingMapPath.empty() ? "(none)" : g_cfg.bindingMapPath.c_str(), g_cfg.bindingMap.size());
+    Log("Note: DXIL is not compiled by the proxy; a matching SM5 .cso override is required.");
+
+    auto& stats = TraceStats();
+    const uint64_t now = GetTickCount64();
+    stats.startTickMs.store(now, std::memory_order_relaxed);
+    stats.lastApiTickMs.store(now, std::memory_order_relaxed);
+    if (g_cfg.diagnosticRenderTrace) {
+        try {
+            std::thread([] {
+                for (;;) {
+                    Sleep(2000);
+                    auto& s = TraceStats();
+                    const uint64_t tick = GetTickCount64();
+                    const uint64_t start = s.startTickMs.load(std::memory_order_relaxed);
+                    const uint64_t lastTick = s.lastApiTickMs.load(std::memory_order_relaxed);
+                    const char* lastApi = s.lastApiName.load(std::memory_order_relaxed);
+                    Log("[RENDER_TRACE] [HEARTBEAT] tid=%lu up=%llums last-api=%s(tid=%lu,ago=%llums) "
+                        "exec=%llu sig=%llu wait=%llu wctx=%llu(fail=%llu,max-spin=%llu) "
+                        "swap=%llu present=%llu pso(G=%llu,C=%llu,last=%016llx) "
+                        "draw(ok=%llu,rtv=%llu,bb=%llu,nullrtv=%llu,skip-pso=%llu,skip-vs=%llu,"
+                        "skip-other=%llu,skip-vb=%llu,skip-ib=%llu,skip-map=%llu,missing-vb=%llu,missing-ib=%llu) "
+                        "disp(ok=%llu,skip-pso=%llu,skip-cs=%llu) placed(ok=%llu,ovl=%llu,rel=%llu,live=%lld)",
+                        GetCurrentThreadId(),
+                        static_cast<unsigned long long>(tick - start),
+                        lastApi ? lastApi : "none",
+                        s.lastApiTid.load(std::memory_order_relaxed),
+                        static_cast<unsigned long long>(tick >= lastTick ? tick - lastTick : 0),
+                        static_cast<unsigned long long>(s.execCmdLists.load(std::memory_order_relaxed)),
+                        static_cast<unsigned long long>(s.signalCount.load(std::memory_order_relaxed)),
+                        static_cast<unsigned long long>(s.waitCount.load(std::memory_order_relaxed)),
+                        static_cast<unsigned long long>(s.waitCtxCalls.load(std::memory_order_relaxed)),
+                        static_cast<unsigned long long>(s.waitCtxFail.load(std::memory_order_relaxed)),
+                        static_cast<unsigned long long>(s.waitCtxMaxSpins.load(std::memory_order_relaxed)),
+                        static_cast<unsigned long long>(s.swapChainCreated.load(std::memory_order_relaxed)),
+                        static_cast<unsigned long long>(s.presentCount.load(std::memory_order_relaxed)),
+                        static_cast<unsigned long long>(s.psoGraphics.load(std::memory_order_relaxed)),
+                        static_cast<unsigned long long>(s.psoCompute.load(std::memory_order_relaxed)),
+                        static_cast<unsigned long long>(s.lastPsoHash.load(std::memory_order_relaxed)),
+                        static_cast<unsigned long long>(s.drawExec.load(std::memory_order_relaxed)),
+                        static_cast<unsigned long long>(s.drawWithRtv.load(std::memory_order_relaxed)),

@@ -1,0 +1,182 @@
+            psoIndex, (*out)->missingShader ? "placeholder-missing-sm5-override" : "ready",
+            static_cast<void*>(*out), (*out)->missingShaderStages,
+            static_cast<unsigned long long>((*out)->shaderHash), desc->CS.BytecodeLength,
+            (*out)->cs ? 1u : 0u);
+    }
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE Device::CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc,
+    REFIID riid, void** out) {
+    TraceApi("Device::CreateGraphicsPipelineState");
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    PipelineState* pipeline = nullptr;
+    const HRESULT createResult = PipelineState::CreateGraphics(this, desc, &pipeline);
+    if (FAILED(createResult)) {
+        Log("PSO GRAPHICS FAILED result=0x%08lx", createResult);
+        return createResult;
+    }
+    const HRESULT queryResult = pipeline->QueryInterface(riid, out);
+    pipeline->Release();
+    return queryResult;
+}
+
+HRESULT STDMETHODCALLTYPE Device::CreateComputePipelineState(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,
+    REFIID riid, void** out) {
+    TraceApi("Device::CreateComputePipelineState");
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    PipelineState* pipeline = nullptr;
+    const HRESULT createResult = PipelineState::CreateCompute(this, desc, &pipeline);
+    if (FAILED(createResult)) {
+        Log("PSO COMPUTE FAILED result=0x%08lx", createResult);
+        return createResult;
+    }
+    const HRESULT queryResult = pipeline->QueryInterface(riid, out);
+    pipeline->Release();
+    return queryResult;
+}
+
+HRESULT STDMETHODCALLTYPE Device::CreatePipelineState(const D3D12_PIPELINE_STATE_STREAM_DESC* desc,
+    REFIID riid, void** out) {
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    if (!desc || !desc->SizeInBytes || !desc->pPipelineStateSubobjectStream ||
+        (reinterpret_cast<uintptr_t>(desc->pPipelineStateSubobjectStream) & (alignof(void*) - 1)))
+        return E_INVALIDARG;
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC gfx{};
+    gfx.BlendState = DefaultBlendDesc();
+    gfx.SampleMask = UINT_MAX;
+    gfx.RasterizerState = DefaultRasterizerDesc();
+    gfx.DepthStencilState = DefaultDepthStencilDesc();
+    gfx.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    gfx.SampleDesc.Count = 1;
+
+    D3D12_COMPUTE_PIPELINE_STATE_DESC comp{};
+    bool hasCs = false;
+    bool hasVs = false;
+    bool hasExplicitDepthStencil = false;
+    bool hasDsvFormat = false;
+    std::set<UINT> seenSubobjects;
+
+    const auto* stream = static_cast<const uint8_t*>(desc->pPipelineStateSubobjectStream);
+    if (desc->SizeInBytes > static_cast<SIZE_T>(PTRDIFF_MAX)) return E_INVALIDARG;
+    const auto* cursor = stream;
+    const auto* end = stream + desc->SizeInBytes;
+
+    while (cursor < end) {
+        const size_t remaining = static_cast<size_t>(end - cursor);
+        if (remaining < sizeof(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE)) return E_INVALIDARG;
+        D3D12_PIPELINE_STATE_SUBOBJECT_TYPE type{};
+        std::memcpy(&type, cursor, sizeof(type));
+        if (!seenSubobjects.insert(static_cast<UINT>(type)).second) {
+            Log("PSO STREAM duplicate subobject type=%u", static_cast<UINT>(type));
+            return E_INVALIDARG;
+        }
+        size_t advance = 0;
+
+        switch (type) {
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE: {
+            using Sub = StreamSubobject<ID3D12RootSignature*>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            ID3D12RootSignature* root = reinterpret_cast<const Sub*>(cursor)->inner;
+            gfx.pRootSignature = root;
+            comp.pRootSignature = root;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS: {
+            using Sub = StreamSubobject<D3D12_SHADER_BYTECODE>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            gfx.VS = reinterpret_cast<const Sub*>(cursor)->inner;
+            hasVs = HasBytecode(gfx.VS);
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS: {
+            using Sub = StreamSubobject<D3D12_SHADER_BYTECODE>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            gfx.PS = reinterpret_cast<const Sub*>(cursor)->inner;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS: {
+            using Sub = StreamSubobject<D3D12_SHADER_BYTECODE>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            gfx.DS = reinterpret_cast<const Sub*>(cursor)->inner;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS: {
+            using Sub = StreamSubobject<D3D12_SHADER_BYTECODE>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            gfx.HS = reinterpret_cast<const Sub*>(cursor)->inner;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS: {
+            using Sub = StreamSubobject<D3D12_SHADER_BYTECODE>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            gfx.GS = reinterpret_cast<const Sub*>(cursor)->inner;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS: {
+            using Sub = StreamSubobject<D3D12_SHADER_BYTECODE>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            comp.CS = reinterpret_cast<const Sub*>(cursor)->inner;
+            hasCs = HasBytecode(comp.CS);
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_STREAM_OUTPUT: {
+            using Sub = StreamSubobject<D3D12_STREAM_OUTPUT_DESC>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            gfx.StreamOutput = reinterpret_cast<const Sub*>(cursor)->inner;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND: {
+            using Sub = StreamSubobject<D3D12_BLEND_DESC>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            gfx.BlendState = reinterpret_cast<const Sub*>(cursor)->inner;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK: {
+            using Sub = StreamSubobject<UINT>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            gfx.SampleMask = reinterpret_cast<const Sub*>(cursor)->inner;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER: {
+            using Sub = StreamSubobject<D3D12_RASTERIZER_DESC>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            gfx.RasterizerState = reinterpret_cast<const Sub*>(cursor)->inner;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL: {
+            using Sub = StreamSubobject<D3D12_DEPTH_STENCIL_DESC>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            gfx.DepthStencilState = reinterpret_cast<const Sub*>(cursor)->inner;
+            hasExplicitDepthStencil = true;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT: {
+            using Sub = StreamSubobject<D3D12_INPUT_LAYOUT_DESC>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            gfx.InputLayout = reinterpret_cast<const Sub*>(cursor)->inner;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_IB_STRIP_CUT_VALUE: {
+            using Sub = StreamSubobject<D3D12_INDEX_BUFFER_STRIP_CUT_VALUE>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            gfx.IBStripCutValue = reinterpret_cast<const Sub*>(cursor)->inner;
+            advance = sizeof(Sub);
+            break;

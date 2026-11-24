@@ -1,0 +1,144 @@
+import assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { fnv1a64 } from "./dxil-precompile.js";
+import { analyzeBmpBuffer } from "./hela-bmp.js";
+import {
+  parseHelaProxyLog,
+  TARGET_INPUT_LAYOUT_DIAGNOSTIC_VS,
+} from "./hela-log-parser.js";
+import { registerHelaPipelineTools } from "./hela-mcp-tools.js";
+import {
+  buildHelaOverrideStage,
+  computeLaunchEnvironmentSha256,
+  planHelaManifestPatch,
+  readAndValidateManifest,
+  sha256Buffer,
+  verifyHelaRun,
+  type HelaRunManifestV1,
+} from "./hela-pipeline.js";
+
+/** Costruisce un container DXBC minimo con chunk DXIL o SHEX per test offline. */
+function makeFakeContainer(kind: "dxil" | "legacy", progTypeCode: number, seed: number): Buffer {
+  const fourcc = kind === "dxil" ? "DXIL" : "SHEX";
+  const payload = Buffer.alloc(16);
+  const ver = ((progTypeCode & 0xffff) << 16) | (kind === "dxil" ? 0x67 : 0x50);
+  payload.writeUInt32LE(ver >>> 0, 0);
+  payload.writeUInt32LE(seed >>> 0, 4);
+
+  const headerSize = 32 + 4;
+  const buf = Buffer.alloc(headerSize + 8 + payload.length);
+  buf.write("DXBC", 0, 4, "ascii");
+  buf.writeUInt32LE(1, 28);
+  buf.writeUInt32LE(headerSize, 32);
+  buf.write(fourcc, headerSize, 4, "ascii");
+  buf.writeUInt32LE(payload.length, headerSize + 4);
+  payload.copy(buf, headerSize + 8);
+  return buf;
+}
+
+/** Costruisce un BMP 24-bit BI_RGB (top-down se topDown=true, come SaveMappedTextureAsBmp in dxgi_proxy.cpp). */
+function makeBmp24(width: number, height: number, setNonBlackPixel = false, topDown = true): Buffer {
+  const rowStride = Math.ceil((width * 3) / 4) * 4;
+  const pixelBytes = rowStride * height;
+  const buf = Buffer.alloc(54 + pixelBytes);
+  buf.write("BM", 0, 2, "ascii");
+  buf.writeUInt32LE(buf.length, 2);
+  buf.writeUInt32LE(54, 10);
+  buf.writeUInt32LE(40, 14);
+  buf.writeInt32LE(width, 18);
+  buf.writeInt32LE(topDown ? -height : height, 22);
+  buf.writeUInt16LE(1, 26);
+  buf.writeUInt16LE(24, 28);
+  buf.writeUInt32LE(0, 30);
+  if (setNonBlackPixel) {
+    buf[54] = 0x10; // B
+    buf[55] = 0x80; // G
+    buf[56] = 0xf0; // R
+  }
+  return buf;
+}
+
+export async function runHelaPipelineTests(): Promise<void> {
+  // 1. Verifica bit-a-bit dello SHA-256 del launchProfile v1.1.2 (ProxyManager.ps1)
+  const v112Env: Record<string, string> = {
+    D3D12ON11_DIAGNOSTIC_MASK_NVIDIA: "1",
+    D3D12ON11_MASK_VENDOR_ID: "ffff",
+    D3D12ON11_DIAGNOSTIC_CAPABILITIES: "1",
+    D3D12ON11_TILED_RESOURCES_TIER: "3",
+    D3D12ON11_SHADER_MODEL: "6_7",
+    D3D12ON11_TRACE_CALLERS: "0",
+    D3D12ON11_DIAGNOSTIC_RENDER_TRACE: "1",
+    D3D12ON11_DUMP_SHADERS: "0",
+    D3D12ON11_OVERRIDES: "@RUN_OVERRIDES@",
+    D3D12ON11_DUMP: "@RUN_DUMP@",
+  };
+  assert.equal(
+    computeLaunchEnvironmentSha256(v112Env),
+    "02dd14ff52bdd38b68589091c4eaa07908d22d488e6a43499ba1a95738499e1d",
+    "computeLaunchEnvironmentSha256 deve coincidere con ProxyManager.ps1 su v1.1.2",
+  );
+
+  // 2. Verifica BMP top-down (biHeight negativo come dxgi_proxy.cpp) e bottom-up
+  const blackTopDown = analyzeBmpBuffer(makeBmp24(16, 8, false, true), "topdown-black.bmp");
+  assert.equal(blackTopDown.valid, true);
+  assert.equal(blackTopDown.orientation, "top-down");
+  assert.equal(blackTopDown.totalPixels, 128);
+  assert.equal(blackTopDown.nonBlackPixels, 0);
+
+  const litBottomUp = analyzeBmpBuffer(makeBmp24(16, 8, true, false), "bottomup-lit.bmp");
+  assert.equal(litBottomUp.valid, true);
+  assert.equal(litBottomUp.orientation, "bottom-up");
+  assert.equal(litBottomUp.nonBlackPixels, 1);
+  assert.equal(litBottomUp.maxChannelValue, 0xf0);
+  const bitfieldsBmp = makeBmp24(16, 8);
+  bitfieldsBmp.writeUInt32LE(3, 30);
+  assert.equal(analyzeBmpBuffer(bitfieldsBmp).valid, false, "non interpretare maschere BI_BITFIELDS come BGR");
+
+  // 3. Verifica registrazione pulita dei 4 tool MCP su McpServer
+  const mcpServer = new McpServer({ name: "test-hela-bridge", version: "0.1.0" });
+  registerHelaPipelineTools(mcpServer);
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "shader-lab-hela-v2-test-"));
+  try {
+    // 4. Parser allineato ai formati reali C++ (pipeline.cpp, util.cpp, commands.cpp, dxgi_proxy.cpp)
+    const vsA = makeFakeContainer("dxil", 1, 101);
+    const vsB = makeFakeContainer("dxil", 1, 102);
+    const vsBadOut = makeFakeContainer("dxil", 1, 104);
+    const vsMissing = makeFakeContainer("dxil", 1, 103);
+    const psSharedCompat = makeFakeContainer("dxil", 0, 201);
+    const psSharedIncomplete = makeFakeContainer("dxil", 0, 202);
+    const psSharedConflict = makeFakeContainer("dxil", 0, 203);
+    const csWave = makeFakeContainer("dxil", 5, 301);
+
+    const vsAHash = fnv1a64(vsA);
+    const vsBHash = fnv1a64(vsB);
+    const vsBadOutHash = fnv1a64(vsBadOut);
+    const vsMissingHash = fnv1a64(vsMissing);
+    const psCompatHash = fnv1a64(psSharedCompat);
+    const psIncompleteHash = fnv1a64(psSharedIncomplete);
+    const psConflictHash = fnv1a64(psSharedConflict);
+    const csWaveHash = fnv1a64(csWave);
+
+    const realisticLog = [
+      "[12:00:00.001] [tid=100] MODULE_FINGERPRINT role=d3d12 path=C:\\Hela\\d3d12.dll bytes=500000 sha256=14dfba07e9a37b1c8adbc7fe11de6ba14ee0ab3968e953b85a097d32dbf69e98",
+      "[12:00:00.002] [tid=100] MODULE_FINGERPRINT role=dxgi_proxy path=C:\\Hela\\dxgi.dll bytes=200000 sha256=09d13c05bf198c74b4190a9cb1be1c96966a0ece7641d8621c08a00465e0f857",
+      "[12:00:00.010] [tid=100] DIAGNOSTIC_MASK_NVIDIA: native-vendor=0x10de device=0x1c8c exposed-vendor=0xffff luid=00000000:00010000",
+      "[12:00:00.011] [tid=100] D3D12CreateDevice adapter source=proxy-unwrap",
+      "[12:00:00.012] [tid=100] CheckFeatureSupport end feature=D3D12_OPTIONS tiled-tier=3",
+      "[12:00:00.013] [tid=100] Config caller-trace=0",
+      `[12:00:01.000] [tid=100] SHADER BEGIN stage=VS hash=${TARGET_INPUT_LAYOUT_DIAGNOSTIC_VS} bytes=1024 DXBC=1 DXIL=1 legacy=0 model=6_7 RTS0=1`,
+      `[12:00:01.001] [tid=100] [TARGET_INPUT_LAYOUT] element=0 semantic=ATTRIBUTE semantic_index=0 slot=0 format=2 offset=0 classification=0 step_rate=0`,
+      `[12:00:01.100] [tid=100] SHADER BEGIN stage=VS hash=${vsAHash} bytes=${vsA.length} DXBC=1 DXIL=1 legacy=0 model=6_7 RTS0=1`,
+      `[12:00:01.101] [tid=100] SHADER PLACEHOLDER stage=VS hash=${vsAHash} reason=no-usable-SM5-bytecode DXBC=1 DXIL=1 action=provide-sm5-override overrides=o\\${vsAHash}.cso`,
+      `[12:00:01.102] [tid=100] SHADER BEGIN stage=VS hash=${vsBHash} bytes=${vsB.length} DXBC=1 DXIL=1 legacy=0 model=6_7 RTS0=1`,
+      `[12:00:01.103] [tid=100] SHADER PLACEHOLDER stage=VS hash=${vsBHash} reason=no-usable-SM5-bytecode DXBC=1 DXIL=1 action=provide-sm5-override overrides=o\\${vsBHash}.cso`,
+      `[12:00:01.103] [tid=100] SHADER BEGIN stage=VS hash=${vsBadOutHash} bytes=${vsBadOut.length} DXBC=1 DXIL=1 legacy=0 model=6_7 RTS0=1`,
+      `[12:00:01.103] [tid=100] SHADER PLACEHOLDER stage=VS hash=${vsBadOutHash} reason=no-usable-SM5-bytecode DXBC=1 DXIL=1 action=provide-sm5-override overrides=o\\${vsBadOutHash}.cso`,
+      `[12:00:01.104] [tid=100] SHADER BEGIN stage=PS hash=${psCompatHash} bytes=${psSharedCompat.length} DXBC=1 DXIL=1 legacy=0 model=6_7 RTS0=1`,
+      `[12:00:01.105] [tid=100] SHADER PLACEHOLDER stage=PS hash=${psCompatHash} reason=no-usable-SM5-bytecode DXBC=1 DXIL=1 action=provide-sm5-override overrides=o\\${psCompatHash}.cso`,
+      `[12:00:01.106] [tid=100] SHADER BEGIN stage=PS hash=${psIncompleteHash} bytes=${psSharedIncomplete.length} DXBC=1 DXIL=1 legacy=0 model=6_7 RTS0=1`,
+      `[12:00:01.107] [tid=100] SHADER PLACEHOLDER stage=PS hash=${psIncompleteHash} reason=no-usable-SM5-bytecode DXBC=1 DXIL=1 action=provide-sm5-override overrides=o\\${psIncompleteHash}.cso`,
+      `[12:00:01.108] [tid=100] SHADER BEGIN stage=PS hash=${psConflictHash} bytes=${psSharedConflict.length} DXBC=1 DXIL=1 legacy=0 model=6_7 RTS0=1`,

@@ -1,0 +1,33 @@
+{
+  "schema": "qwen.evidence.dataset-index",
+  "dataset": "target-marker-records",
+  "recordCount": 2923,
+  "byteCount": 817944,
+  "sha256": "d660cd5462fb45d17f75a520d38ff6070fe0a13b4847d1c2798c8bc9092bd54c",
+  "indexParts": [
+    {
+      "path": "evidence/target-marker-records/index-part001.json",
+      "itemCount": 30,
+      "byteCount": 7814,
+      "sha256": "74492b7a8f0f3ddcc1e0286a7482371be46fe2bd82b05f4b9d122493d6b40aa8"
+    },
+    {
+      "path": "evidence/target-marker-records/index-part002.json",
+      "itemCount": 30,
+      "byteCount": 7877,
+      "sha256": "20a32544b42d756aab397c6969dff810314b30056e5c68cbc176061b9b014fa0"
+    },
+    {
+      "path": "evidence/target-marker-records/index-part003.json",
+      "itemCount": 30,
+      "byteCount": 7880,
+      "sha256": "6e9a721147a6a5419174475567c679c6083d936d83ffceb78a72869a1493cf5b"
+    },
+    {
+      "path": "evidence/target-marker-records/index-part004.json",
+      "itemCount": 14,
+      "byteCount": 3688,
+      "sha256": "5f15dbd7295ea29f013739ebb56e383c5b68f4766c5c8ad59e541784f6c8b26b"
+    }
+  ]
+}

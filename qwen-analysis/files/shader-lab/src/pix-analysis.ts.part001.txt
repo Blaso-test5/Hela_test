@@ -1,0 +1,213 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import { analyzeFiles, type DxilReport } from "./dxil-analyzer.js";
+import { run } from "./external.js";
+import { analyzePixCapture, formatPixReport, findPixTool, type PixCaptureReport } from "./pix-capture.js";
+import { parsePixEventListText } from "./pix-events.js";
+
+export interface PixDeepAnalysisOptions {
+  pixPath: string;
+  outputDir: string;
+  eventListPath?: string;
+  pixExportDir?: string;
+  queueName?: string;
+  pixToolPath?: string;
+  dxcPath?: string;
+  powerShellPath?: string;
+}
+interface ShaderStage {
+  stage: string;
+  byteLength: number;
+}
+
+interface PsoRead {
+  psoId: number;
+  offset: number;
+  compressedSize: number;
+  decodedSize: number;
+  shaders: ShaderStage[];
+}
+
+interface ExtractedShader {
+  psoId: number;
+  stage: string;
+  byteLength: number;
+  sha256: string;
+  fileName: string;
+  shaderModel?: string;
+  report: DxilReport;
+  psoRefs: number[];
+}
+
+interface EventListInfo {
+  path: string;
+  eventRows: number;
+  psoIds: number[];
+  queueIds: number[];
+  rows: { globalId: number | null; queueId: number | null; name: string; psoId: number | null }[];
+}
+
+export interface PixDeepAnalysisReport {
+  pixPath: string;
+  outputDir: string;
+  queueName: string | null;
+  queueNameVerifiedByFile: false;
+  staticScan: PixCaptureReport;
+  eventList: Omit<EventListInfo, "rows"> | null;
+  eventExportWarning: string | null;
+  psoCount: number;
+  shaderPayloadCount: number;
+  uniqueShaderCount: number;
+  disassembledCount: number;
+  disassemblyFailures: string[];
+  unmatchedEventPsoIds: number[];
+  verdicts: Record<string, number>;
+  stages: Record<string, number>;
+  shaderModels: Record<string, number>;
+  findings: Record<string, { severity: string; shaders: number; occurrences: number; message: string }>;
+  artifacts: {
+    reportJson: string;
+    reportMarkdown: string;
+    shaderMapCsv: string;
+    eventList: string | null;
+    shadersDirectory: string;
+  };
+}
+
+const STAGE_BYTECODE = /(?:cpsoDesc|pssDesc)\.(VS|PS|GS|HS|DS|CS)\s*=\s*\{\s*reinterpret_cast<BYTE\*>\(&data\[offset\]\),\s*(\d+)\s*\}\s*;/g;
+const RESOURCE_READ = /g_resourceReader->Read\(\s*\w+\s*,\s*(\d+)\s*\)\s*;/;
+const API_FUNCTION = /void\s+([A-Za-z0-9_]+)\s*\(\s*\)\s*\{([\s\S]*?)(?=\r?\n\/\/ ApiObjectId|\r?\nvoid\s+[A-Za-z0-9_]+\s*\(\s*\)\s*\{|\s*$)/g;
+const INITIALIZER_CALL = /\b((?:CreateAndInitResource|CreateComputePipelineState|CreatePipelineState)_\d+)\s*\(\s*\)\s*;/g;
+
+function extractFunctions(source: string, functions: Map<string, string>): void {
+  API_FUNCTION.lastIndex = 0;
+  for (const match of source.matchAll(API_FUNCTION)) functions.set(match[1], match[2]);
+}
+
+export function buildPixPsoReads(exportDirectory: string): PsoRead[] {
+  const resourcesPath = path.join(exportDirectory, "resources.bin");
+  const psoPath = path.join(exportDirectory, "CreatePSOs.cpp");
+  if (!fs.existsSync(resourcesPath) || !fs.existsSync(psoPath)) {
+    throw new Error("Export C++ PIX incompleto: servono resources.bin e CreatePSOs.cpp.");
+  }
+
+  const frameFiles = fs.readdirSync(exportDirectory)
+    .filter((name) => /^FrameResources_\d+\.cpp$/i.test(name))
+    .sort();
+  if (!frameFiles.length) throw new Error("Export C++ PIX incompleto: FrameResources_*.cpp non trovato.");
+
+  const functions = new Map<string, string>();
+  const orderedCalls: string[] = [];
+  for (const name of frameFiles) {
+    const text = fs.readFileSync(path.join(exportDirectory, name), "utf8");
+    INITIALIZER_CALL.lastIndex = 0;
+    for (const match of text.matchAll(INITIALIZER_CALL)) orderedCalls.push(match[1]);
+  }
+
+  for (const name of fs.readdirSync(exportDirectory)) {
+    if (/^(?:CreateAndInitResources_\d+|CreatePSOs)\.cpp$/i.test(name)) {
+      extractFunctions(fs.readFileSync(path.join(exportDirectory, name), "utf8"), functions);
+    }
+  }
+
+  const psoReads: PsoRead[] = [];
+  let resourceOffset = 0;
+  for (const functionName of orderedCalls) {
+    const body = functions.get(functionName);
+    if (!body) throw new Error(`Funzione PIX mancante nell'export: ${functionName}.`);
+    const read = body.match(RESOURCE_READ);
+    if (!read) throw new Error(`Lettura risorsa non riconosciuta in ${functionName}.`);
+    const compressedSize = Number(read[1]);
+    if (!Number.isSafeInteger(compressedSize) || compressedSize <= 0) {
+      throw new Error(`Dimensione risorsa non valida in ${functionName}.`);
+    }
+
+    const pso = functionName.match(/^(?:CreateComputePipelineState|CreatePipelineState)_(\d+)$/);
+    if (pso) {
+      STAGE_BYTECODE.lastIndex = 0;
+      const shaders = [...body.matchAll(STAGE_BYTECODE)].map((match) => ({
+        stage: match[1],
+        byteLength: Number(match[2]),
+      }));
+      if (!shaders.length || shaders.some((shader) => !Number.isSafeInteger(shader.byteLength) || shader.byteLength <= 0)) {
+        throw new Error(`Bytecode PSO non riconosciuto: ${functionName}.`);
+      }
+      psoReads.push({
+        psoId: Number(pso[1]),
+        offset: resourceOffset,
+        compressedSize,
+        decodedSize: shaders.reduce((sum, shader) => sum + shader.byteLength, 0),
+        shaders,
+      });
+    }
+    resourceOffset += compressedSize;
+  }
+
+  const resourcesSize = fs.statSync(resourcesPath).size;
+  if (resourceOffset > resourcesSize) {
+    throw new Error(`Letture generate (${resourceOffset}) oltre resources.bin (${resourcesSize} byte).`);
+  }
+  if (!psoReads.length) throw new Error("Nessun PSO trovato nell'export C++ PIX.");
+  return psoReads;
+}
+
+function findDxc(configured?: string): string | null {
+  const override = configured || process.env.DXC_PATH;
+  if (override) {
+    if (!fs.existsSync(override) || !fs.statSync(override).isFile()) {
+      throw new Error(`dxc.exe configurato non trovato: ${override}`);
+    }
+    return override;
+  }
+  if (process.platform === "win32") {
+    for (const root of [process.env["ProgramFiles(x86)"], process.env.ProgramFiles]) {
+      if (!root) continue;
+      const bin = path.join(root, "Windows Kits", "10", "bin");
+      if (!fs.existsSync(bin)) continue;
+      const versions = fs.readdirSync(bin).filter((entry) => /^10\./.test(entry)).sort().reverse();
+      for (const version of versions) {
+        const candidate = path.join(bin, version, "x64", "dxc.exe");
+        if (fs.existsSync(candidate)) return candidate;
+      }
+    }
+  }
+  for (const directory of (process.env.PATH || "").split(path.delimiter)) {
+    if (!directory) continue;
+    const candidate = path.join(directory, "dxc.exe");
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+  }
+  return null;
+}
+
+function findPowerShell(configured?: string): string {
+  const override = configured || process.env.POWERSHELL_PATH;
+  if (override) {
+    if (!fs.existsSync(override) || !fs.statSync(override).isFile()) {
+      throw new Error(`PowerShell configurato non trovato: ${override}`);
+    }
+    return override;
+  }
+  if (process.platform !== "win32") throw new Error("PowerShell è richiesto per l'estrazione XPRESS su Windows.");
+  const systemRoot = process.env.SystemRoot;
+  const windowsPowerShell = systemRoot && path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+  if (windowsPowerShell && fs.existsSync(windowsPowerShell)) return windowsPowerShell;
+  return "powershell.exe";
+}
+
+function resolvePixTool(configured?: string): string | null {
+  if (configured) {
+    if (!fs.existsSync(configured) || !fs.statSync(configured).isFile()) {
+      throw new Error(`pixtool.exe configurato non trovato: ${configured}`);
+    }
+    return configured;
+  }
+  return findPixTool();
+}
+
+async function exportCppProject(pixPath: string, exportDirectory: string, pixToolPath?: string): Promise<void> {
+  const pixtool = resolvePixTool(pixToolPath);
+  if (!pixtool) throw new Error("pixtool.exe non trovato. Imposta PIXTOOL_PATH o fornisci un export C++ PIX esistente.");
+  const result = await run(
+    pixtool,

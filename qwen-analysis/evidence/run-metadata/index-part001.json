@@ -1,0 +1,32 @@
+{
+  "items": [
+    {
+      "path": "evidence/run-metadata/part001.txt",
+      "lineStart": 1,
+      "lineEnd": 202,
+      "byteCount": 7965,
+      "sha256": "12ab2a7abab2768f0a28143b1777fada75e94676381c411cfbc51d138dd29433"
+    },
+    {
+      "path": "evidence/run-metadata/part002.txt",
+      "lineStart": 203,
+      "lineEnd": 485,
+      "byteCount": 8000,
+      "sha256": "a440312cd8ff0b61ca49475b1ef90ce82f56c8ea91e1cdcf662563df4d7644b3"
+    },
+    {
+      "path": "evidence/run-metadata/part003.txt",
+      "lineStart": 486,
+      "lineEnd": 763,
+      "byteCount": 8000,
+      "sha256": "709613937a251f6e884789921cfe6cb03039121a651c6304231a4cb64dbe6fd4"
+    },
+    {
+      "path": "evidence/run-metadata/part004.txt",
+      "lineStart": 764,
+      "lineEnd": 863,
+      "byteCount": 2677,
+      "sha256": "c66ff2ff33d8bdaf5e9b6cf34448c37480faf05f2ebe4b87595c3dd27e71624f"
+    }
+  ]
+}

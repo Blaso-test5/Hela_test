@@ -1,0 +1,147 @@
+        Log("PSO GRAPHICS #%u BEGIN VS=%zu PS=%zu GS=%zu HS=%zu DS=%zu input-elements=%u RTVs=%u samples=%u/%u topology=%u flags=0x%x",
+            psoIndex, desc->VS.BytecodeLength, desc->PS.BytecodeLength, desc->GS.BytecodeLength,
+            desc->HS.BytecodeLength, desc->DS.BytecodeLength, desc->InputLayout.NumElements,
+            desc->NumRenderTargets, desc->SampleDesc.Count, desc->SampleDesc.Quality,
+            desc->PrimitiveTopologyType, desc->Flags);
+    }
+    if (desc->StreamOutput.NumEntries || desc->StreamOutput.NumStrides || desc->StreamOutput.pSODeclaration ||
+        desc->StreamOutput.pBufferStrides || desc->StreamOutput.RasterizedStream) {
+        Unimpl("ID3D12Device::CreateGraphicsPipelineState stream output");
+        Log("PSO GRAPHICS BLOCKED reason=stream-output");
+        return E_NOTIMPL;
+    }
+
+    std::unique_ptr<PipelineState> pipeline(new (std::nothrow) PipelineState(device));
+    if (!pipeline) return E_OUTOFMEMORY;
+    HRESULT result = CheckRootSignature(desc->pRootSignature, pipeline->rootSig);
+    if (FAILED(result)) return result;
+    bool anyMissingOverride = false;
+    UINT missingShaderStages = 0;
+    std::vector<uint8_t> vsCode;
+    if (FAILED(result = CreateVertexShader(device, desc->VS, pipeline->vs, vsCode))) return result;
+    pipeline->missingVs = result == S_FALSE;
+    pipeline->shaderHash = Fnv1a64(desc->VS.pShaderBytecode, desc->VS.BytecodeLength);
+    if (pipeline->shaderHash == 0x20e0826b236597a1ULL && desc->InputLayout.NumElements) {
+        if (!desc->InputLayout.pInputElementDescs) {
+            Log("[TARGET_INPUT_LAYOUT] status=missing-elements count=%u",
+                desc->InputLayout.NumElements);
+        } else {
+            Log("[TARGET_INPUT_LAYOUT] elements=%u", desc->InputLayout.NumElements);
+            for (UINT i = 0; i < desc->InputLayout.NumElements; ++i) {
+                const auto& input = desc->InputLayout.pInputElementDescs[i];
+                Log("[TARGET_INPUT_LAYOUT] element=%u semantic=%s semantic_index=%u "
+                    "slot=%u format=%u offset=%u classification=%u step_rate=%u",
+                    i, input.SemanticName ? input.SemanticName : "(null)",
+                    input.SemanticIndex, input.InputSlot,
+                    static_cast<unsigned int>(input.Format), input.AlignedByteOffset,
+                    static_cast<unsigned int>(input.InputSlotClass),
+                    input.InstanceDataStepRate);
+            }
+        }
+    }
+    if (result == S_FALSE) {
+        anyMissingOverride = true;
+        missingShaderStages |= 1u << 0;
+    }
+    if (HasBytecode(desc->PS)) {
+        if (FAILED(result = CreatePixelShader(device, desc->PS, pipeline->ps))) return result;
+        pipeline->pixelShaderHash = Fnv1a64(desc->PS.pShaderBytecode, desc->PS.BytecodeLength);
+        if (result == S_FALSE) {
+            anyMissingOverride = true;
+            missingShaderStages |= 1u << 1;
+        }
+    }
+    if (HasBytecode(desc->GS)) {
+        if (FAILED(result = CreateGeometryShader(device, desc->GS, pipeline->gs))) return result;
+        if (result == S_FALSE) {
+            anyMissingOverride = true;
+            missingShaderStages |= 1u << 2;
+        }
+    }
+    if (HasBytecode(desc->HS)) {
+        if (FAILED(result = CreateHullShader(device, desc->HS, pipeline->hs))) return result;
+        if (result == S_FALSE) {
+            anyMissingOverride = true;
+            missingShaderStages |= 1u << 3;
+        }
+    }
+    if (HasBytecode(desc->DS)) {
+        if (FAILED(result = CreateDomainShader(device, desc->DS, pipeline->ds))) return result;
+        if (result == S_FALSE) {
+            anyMissingOverride = true;
+            missingShaderStages |= 1u << 4;
+        }
+    }
+    if (FAILED(result = CreateInputLayout(device, desc->InputLayout, vsCode, pipeline->il))) return result;
+    if (FAILED(result = CreateRasterizer(device, desc->RasterizerState, pipeline->rs))) return result;
+    if (FAILED(result = CreateBlend(device, desc->BlendState, pipeline->bs))) return result;
+    if (FAILED(result = CreateDepthStencil(device, desc->DepthStencilState, pipeline->dss))) return result;
+
+    pipeline->sampleMask = desc->SampleMask;
+    pipeline->missingShader = anyMissingOverride;
+    pipeline->missingShaderStages = missingShaderStages;
+    pipeline->geometryShaderHash = ShaderHash(desc->GS);
+    pipeline->hullShaderHash = ShaderHash(desc->HS);
+    pipeline->domainShaderHash = ShaderHash(desc->DS);
+    if (Cfg().diagnosticRenderTrace) {
+        auto& stats = TraceStats();
+        stats.psoGraphics.fetch_add(1, std::memory_order_relaxed);
+        stats.lastPsoHash.store(pipeline->shaderHash, std::memory_order_relaxed);
+    }
+    *out = pipeline.release();
+    static std::atomic<uint32_t> missingGraphicsPsoLogCount{0};
+    const uint64_t vsHash = ShaderHash(desc->VS);
+    const uint64_t psHash = ShaderHash(desc->PS);
+    const uint64_t gsHash = ShaderHash(desc->GS);
+    const uint64_t hsHash = ShaderHash(desc->HS);
+    const uint64_t dsHash = ShaderHash(desc->DS);
+    const bool targetPso = vsHash == 0x20e0826b236597a1ULL &&
+        (psHash == 0x44b0a992c2304254ULL || psHash == 0xd77600bde0076c33ULL);
+    const bool logMissingPso = (*out)->missingShader &&
+        (missingGraphicsPsoLogCount.fetch_add(1, std::memory_order_relaxed) < 128 || targetPso);
+    if (logMilestone || logMissingPso) {
+        Log("PSO GRAPHICS #%u READY status=%s pso=%p missing_mask=0x%02x "
+            "VS=%016llx/%zu PS=%016llx/%zu GS=%016llx/%zu HS=%016llx/%zu DS=%016llx/%zu "
+            "d11_vs=%u d11_ps=%u d11_il=%u",
+            psoIndex, (*out)->missingShader ? "placeholder-missing-sm5-override" : "ready",
+            static_cast<void*>(*out), (*out)->missingShaderStages,
+            static_cast<unsigned long long>(vsHash), desc->VS.BytecodeLength,
+            static_cast<unsigned long long>(psHash), desc->PS.BytecodeLength,
+            static_cast<unsigned long long>(gsHash), desc->GS.BytecodeLength,
+            static_cast<unsigned long long>(hsHash), desc->HS.BytecodeLength,
+            static_cast<unsigned long long>(dsHash), desc->DS.BytecodeLength,
+            (*out)->vs ? 1u : 0u, (*out)->ps ? 1u : 0u, (*out)->il ? 1u : 0u);
+    }
+    return S_OK;
+}
+
+HRESULT PipelineState::CreateCompute(Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,
+                                     PipelineState** out) {
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    if (!device || !desc || !HasBytecode(desc->CS)) return E_INVALIDARG;
+    const uint32_t psoIndex = ++g_computePsoCount;
+    const bool logMilestone = ShouldLogPsoMilestone(psoIndex);
+    if (logMilestone)
+        Log("PSO COMPUTE #%u BEGIN CS=%zu flags=0x%x", psoIndex, desc->CS.BytecodeLength, desc->Flags);
+    std::unique_ptr<PipelineState> pipeline(new (std::nothrow) PipelineState(device));
+    if (!pipeline) return E_OUTOFMEMORY;
+    HRESULT result = CheckRootSignature(desc->pRootSignature, pipeline->rootSig);
+    if (FAILED(result)) return result;
+    if (FAILED(result = CreateComputeShader(device, desc->CS, pipeline->cs))) return result;
+    pipeline->missingCs = result == S_FALSE;
+    pipeline->shaderHash = Fnv1a64(desc->CS.pShaderBytecode, desc->CS.BytecodeLength);
+    pipeline->missingShader = result == S_FALSE;
+    pipeline->missingShaderStages = result == S_FALSE ? (1u << 5) : 0;
+    pipeline->compute = true;
+    if (Cfg().diagnosticRenderTrace) {
+        auto& stats = TraceStats();
+        stats.psoCompute.fetch_add(1, std::memory_order_relaxed);
+        stats.lastPsoHash.store(pipeline->shaderHash, std::memory_order_relaxed);
+    }
+    *out = pipeline.release();
+    static std::atomic<uint32_t> missingComputePsoLogCount{0};
+    if (logMilestone || ((*out)->missingShader &&
+        missingComputePsoLogCount.fetch_add(1, std::memory_order_relaxed) < 128)) {
+        Log("PSO COMPUTE #%u READY status=%s pso=%p missing_mask=0x%02x "
+            "CS=%016llx/%zu d11_cs=%u",

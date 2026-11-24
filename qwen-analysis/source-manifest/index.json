@@ -1,0 +1,172 @@
+{
+  "schema": "qwen.source-manifest.index",
+  "repositoryCommits": {
+    "Blaso-test5/Hela_test": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "Blaso89/Shader-Lab": "29d8ad893344ae477bf555f12ed41d74e048d625"
+  },
+  "sourceFileCount": 112,
+  "uniquePublishedContents": 93,
+  "parts": [
+    {
+      "path": "source-manifest/files-part001.json",
+      "fileEntries": 7,
+      "byteCount": 6431,
+      "lineCount": 177,
+      "sha256": "903b6a47b5cc8f9cbc94218c508236fafd3bd0cd86cdcbbcd2b2e3b7d4fedeb4"
+    },
+    {
+      "path": "source-manifest/files-part002.json",
+      "fileEntries": 2,
+      "byteCount": 6526,
+      "lineCount": 179,
+      "sha256": "22b5e55329ea3e22411c250e130ab91fff20d99b6a641c2f5acef122b2ef00ab"
+    },
+    {
+      "path": "source-manifest/files-part003.json",
+      "fileEntries": 5,
+      "byteCount": 6595,
+      "lineCount": 182,
+      "sha256": "29127c6d117f3769be3695aebf6b612a1872492b6ca0926725ce95b6100f6089"
+    },
+    {
+      "path": "source-manifest/files-part004.json",
+      "fileEntries": 5,
+      "byteCount": 6601,
+      "lineCount": 182,
+      "sha256": "606280b7772e9ab4d168be00d13876753187c1055ea8e4b87e7aa86239f53680"
+    },
+    {
+      "path": "source-manifest/files-part005.json",
+      "fileEntries": 5,
+      "byteCount": 6607,
+      "lineCount": 182,
+      "sha256": "67f477a142f0c7468bb375ae03d0e0193ba774d366aa3793781a7a411bd15b28"
+    },
+    {
+      "path": "source-manifest/files-part006.json",
+      "fileEntries": 8,
+      "byteCount": 6798,
+      "lineCount": 185,
+      "sha256": "0f01da1755dd2e2dd34c44a80d1cf060222861e80ef7e543560283ad122ea95c"
+    },
+    {
+      "path": "source-manifest/files-part007.json",
+      "fileEntries": 4,
+      "byteCount": 5163,
+      "lineCount": 139,
+      "sha256": "d34741f2e6fbfcfb2ea5da5c2c7b6c11d2c6f02fe09bd6841dc4bc5cbba003a0"
+    },
+    {
+      "path": "source-manifest/files-part008.json",
+      "fileEntries": 3,
+      "byteCount": 5398,
+      "lineCount": 141,
+      "sha256": "b4a06c62fcf1758d9c0d5a85758b9c22c3ce2283dcc01ad520ae9fbf1f75f19b"
+    },
+    {
+      "path": "source-manifest/files-part009.json",
+      "fileEntries": 3,
+      "byteCount": 6842,
+      "lineCount": 171,
+      "sha256": "1db7f04f77593083b79ef7f4f51cf187c225c40bb256ee70034310a68d4c6f51"
+    },
+    {
+      "path": "source-manifest/files-part010.json",
+      "fileEntries": 6,
+      "byteCount": 6744,
+      "lineCount": 181,
+      "sha256": "488da63cdb0efbc1ff3b1fc12e6e3156696847ce8b25db35d8ceddded12652ca"
+    },
+    {
+      "path": "source-manifest/files-part011.json",
+      "fileEntries": 6,
+      "byteCount": 6420,
+      "lineCount": 183,
+      "sha256": "a2de9bf5d279fea06c4b39e89e853136e381a6071f547a93fad9a19d026052b0"
+    },
+    {
+      "path": "source-manifest/files-part012.json",
+      "fileEntries": 3,
+      "byteCount": 2325,
+      "lineCount": 68,
+      "sha256": "c7a7afa18b5759df25385d659e1363e16eb89f518bb27719f8d617b1877695bd"
+    },
+    {
+      "path": "source-manifest/files-part013.json",
+      "fileEntries": 2,
+      "byteCount": 6407,
+      "lineCount": 179,
+      "sha256": "eb3019d1f0dfc4f1328865b0922bedf8879c54d215df4bc5b314f850a46a9c2d"
+    },
+    {
+      "path": "source-manifest/files-part014.json",
+      "fileEntries": 5,
+      "byteCount": 6438,
+      "lineCount": 182,
+      "sha256": "1acf56bddd566b4a3670e6e6cc6091d6925d123d244d0e128a4ff4decca998b4"
+    },
+    {
+      "path": "source-manifest/files-part015.json",
+      "fileEntries": 5,
+      "byteCount": 6443,
+      "lineCount": 182,
+      "sha256": "d79e16ae44ce83225ee6f293ce8f8f8205fde2a233c6bf6fde9aa719b51c99aa"
+    },
+    {
+      "path": "source-manifest/files-part016.json",
+      "fileEntries": 5,
+      "byteCount": 6428,
+      "lineCount": 182,
+      "sha256": "607391f356d110466c45f11970b380618875b2e298a52a867238c77b884f573f"
+    },
+    {
+      "path": "source-manifest/files-part017.json",
+      "fileEntries": 7,
+      "byteCount": 5780,
+      "lineCount": 163,
+      "sha256": "7b2667f141275c46aab5a31f35c05f60f96c77be2e55107cdd7adce07e6b68d4"
+    },
+    {
+      "path": "source-manifest/files-part018.json",
+      "fileEntries": 5,
+      "byteCount": 5944,
+      "lineCount": 168,
+      "sha256": "f51c2a983d1db1f67fc25f883e8125502c8a3cfedb4684112921e4de9e7633d7"
+    },
+    {
+      "path": "source-manifest/files-part019.json",
+      "fileEntries": 6,
+      "byteCount": 6486,
+      "lineCount": 190,
+      "sha256": "fe6788613751651206fbb85e85fa2a99e21772acdac6f9f14f03de01f3e10e19"
+    },
+    {
+      "path": "source-manifest/files-part020.json",
+      "fileEntries": 5,
+      "byteCount": 6085,
+      "lineCount": 175,
+      "sha256": "0690d4b7a70a2654d3b0741d00e06b9f59969315c0acea153eb26c432f39c9a5"
+    },
+    {
+      "path": "source-manifest/files-part021.json",
+      "fileEntries": 5,
+      "byteCount": 6785,
+      "lineCount": 196,
+      "sha256": "1a876d551cf9553255bef69bdebd15822c3e5437dc9fa9554f62d8182d135330"
+    },
+    {
+      "path": "source-manifest/files-part022.json",
+      "fileEntries": 6,
+      "byteCount": 6136,
+      "lineCount": 176,
+      "sha256": "ba6895318d15f13192301789dfabfb34489ab97e31e40d17c17bb30fa776bc04"
+    },
+    {
+      "path": "source-manifest/files-part023.json",
+      "fileEntries": 4,
+      "byteCount": 3369,
+      "lineCount": 97,
+      "sha256": "7def9408adcc83dc1e8c8e2196dce502eebac8dc54704c4fb5fc6391b7b3d31a"
+    }
+  ]
+}
