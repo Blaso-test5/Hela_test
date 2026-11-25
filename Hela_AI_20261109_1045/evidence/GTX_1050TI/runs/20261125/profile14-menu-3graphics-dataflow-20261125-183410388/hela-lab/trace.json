@@ -1,0 +1,10 @@
+{
+  "present": 1800,
+  "backbufferSource": "13DE0749178",
+  "chain": [],
+  "starved": [],
+  "verdict": "NO_COMPOSITE_EDGE_TO_BACKBUFFER",
+  "limitations": [
+    "Il trace usa puntatori e una finestra Present; non stabilisce una prova causale."
+  ]
+}
