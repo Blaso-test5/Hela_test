@@ -20,6 +20,7 @@ std::mutex g_resourceDrawMutex;
 std::map<ID3D11Resource*, BackbufferSourceHistory> g_backbufferSourceHistory;
 std::mutex g_targetDrawDiagMutex;
 std::map<ID3D11Resource*, UINT> g_targetDrawDiagResourceCounts;
+std::map<ID3D11Resource*, UINT> g_targetDrawAttemptCounts;
 UINT g_targetDrawDiagCount = 0;
 
 struct TargetDrawPipelineStats {
@@ -47,14 +48,43 @@ constexpr uint64_t kTargetDiagnosticVs = 0x20e0826b236597a1ULL;
 constexpr uint64_t kTargetDiagnosticPs0 = 0x44b0a992c2304254ULL;
 constexpr uint64_t kTargetDiagnosticPs1 = 0xd77600bde0076c33ULL;
 
+UINT TargetDrawCaptureResourceHit() {
+    static const UINT resourceHit = [] {
+        wchar_t value[32]{};
+        const DWORD length = GetEnvironmentVariableW(
+            L"D3D12ON11_TARGET_DRAW_CAPTURE_RESOURCE_HIT", value, ARRAYSIZE(value));
+        if (!length) return 0u;
+        if (length >= ARRAYSIZE(value)) {
+            Log("D3D12ON11_TARGET_DRAW_CAPTURE_RESOURCE_HIT is too long; capture disabled");
+            return 0u;
+        }
+
+        wchar_t* end = nullptr;
+        errno = 0;
+        const unsigned long parsed = wcstoul(value, &end, 10);
+        if (errno == ERANGE || end == value || *end != L'\0' ||
+            parsed == 0 || parsed > UINT_MAX) {
+            Log("D3D12ON11_TARGET_DRAW_CAPTURE_RESOURCE_HIT is invalid; capture disabled");
+            return 0u;
+        }
+        return static_cast<UINT>(parsed);
+    }();
+    return resourceHit;
+}
+
 UINT ClaimTargetDrawDiagSlot(ID3D11Resource* resource, UINT& resourceHit,
     bool selectedCapture) {
     if (!resource) return 0;
     std::lock_guard<std::mutex> lock(g_targetDrawDiagMutex);
-    UINT& resourceCount = g_targetDrawDiagResourceCounts[resource];
-    if (!selectedCapture && (resourceCount >= 2 || g_targetDrawDiagCount >= 6))
+    const UINT attempt = ++g_targetDrawAttemptCounts[resource];
+    resourceHit = attempt;
+    UINT& captured = g_targetDrawDiagResourceCounts[resource];
+    const UINT captureResourceHit = TargetDrawCaptureResourceHit();
+    const bool resourceHitCapture = captureResourceHit != 0 && attempt == captureResourceHit;
+    const bool defaultCapture = captured < 2 && g_targetDrawDiagCount < 6;
+    if (!selectedCapture && !resourceHitCapture && !defaultCapture)
         return 0;
-    resourceHit = ++resourceCount;
+    ++captured;
     return ++g_targetDrawDiagCount;
 }
 
@@ -355,7 +385,10 @@ void LogTargetDrawDiagnostic(ExecState& state, UINT indexCount, UINT instanceCou
     const UINT hit = ClaimTargetDrawDiagSlot(
         rtvResource.Get(), resourceHit, selectedCapture);
     if (!hit) return;
-    if (selectedCapture) {
+    const bool resourceHitCapture =
+        TargetDrawCaptureResourceHit() != 0 && resourceHit == TargetDrawCaptureResourceHit();
+    const bool fullCapture = selectedCapture || resourceHitCapture;
+    if (fullCapture) {
         Log("[TARGET_DRAW_CAPTURE] expected_draw_index=%llu hit=%u rtv_resource=%p "
             "vs=%016llx ps=%016llx",
             static_cast<unsigned long long>(nextDrawIndex), hit, rtvResource.Get(),
@@ -485,7 +518,7 @@ void LogTargetDrawDiagnostic(ExecState& state, UINT indexCount, UINT instanceCou
         static_cast<unsigned int>(psSamplerDesc.AddressV),
         static_cast<unsigned int>(psSamplerDesc.AddressW));
 
-    if (hit == 1 || selectedCapture) {
+    if (hit == 1 || fullCapture) {
         if (!psTexture) {
             Log("[TARGET_TEXEL] hit=%u status=not_texture2d query_hr=0x%08lx dimension=%u",
                 hit, psTextureQueryResult, static_cast<unsigned int>(psResourceDimension));
@@ -557,7 +590,7 @@ void LogTargetDrawDiagnostic(ExecState& state, UINT indexCount, UINT instanceCou
         if (!rawVertexBuffers[slot]) continue;
         vertexBufferMask |= 1u << slot;
         ++vertexBufferCount;
-        if ((hit == 1 || selectedCapture) && slot == 0)
+        if ((hit == 1 || fullCapture) && slot == 0)
             LogTargetVertexData(state, hit, rawVertexBuffers[slot],
                 vertexStrides[slot], vertexOffsets[slot]);
         rawVertexBuffers[slot]->Release();
@@ -885,6 +918,49 @@ void LogSkippedDraw(ExecState& state, const char* operation,
         state.graphicsPlaceholderVs ? 1u : 0u, state.skipDraws ? 1u : 0u,
         state.graphicsMissingShaderStages,
         arg0, arg1, state.numRtv, state.rtvBackbuffer ? 1u : 0u);
+}
+
+bool DataflowTraceEnabled() {
+    static const bool enabled = [] {
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(
+            L"D3D12ON11_DATAFLOW_TRACE", value, ARRAYSIZE(value)) == 1 &&
+            value[0] == L'1';
+    }();
+    return enabled;
+}
+
+void LogDataflowDraw(ExecState& state, const char* operation, const char* outcome) {
+    if (!DataflowTraceEnabled()) return;
+    const uint64_t present = TraceStats().presentCount.load(std::memory_order_relaxed);
+    bool logged = false;
+    for (UINT i = 0; i < state.numRtv && i < ARRAYSIZE(state.rtvs); ++i) {
+        ID3D11Resource* resource = state.rtvResources[i].Get();
+        if (!resource) continue;
+        Log("[DATAFLOW_DRAW] api=%s outcome=%s rtv=%p vs=%016llx ps=%016llx present=%llu",
+            operation, outcome, reinterpret_cast<void*>(resource),
+            static_cast<unsigned long long>(state.graphicsShaderHash),
+            static_cast<unsigned long long>(state.graphicsPixelShaderHash),
+            static_cast<unsigned long long>(present));
+        logged = true;
+    }
+    if (!logged) {
+        Log("[DATAFLOW_DRAW] api=%s outcome=%s rtv=0 vs=%016llx ps=%016llx present=%llu",
+            operation, outcome,
+            static_cast<unsigned long long>(state.graphicsShaderHash),
+            static_cast<unsigned long long>(state.graphicsPixelShaderHash),
+            static_cast<unsigned long long>(present));
+    }
+}
+
+void LogDataflowCopy(const char* operation, ID3D11Resource* source,
+    ID3D11Resource* destination) {
+    if (!DataflowTraceEnabled()) return;
+    const uint64_t present = TraceStats().presentCount.load(std::memory_order_relaxed);
+    Log("[DATAFLOW_COPY] api=%s src=%p dst=%p present=%llu",
+        operation, reinterpret_cast<void*>(source),
+        reinterpret_cast<void*>(destination),
+        static_cast<unsigned long long>(present));
 }
 
 void DumpBackbufferSourceHistoryImpl(UINT64 readbackPresentCount) {
@@ -1718,6 +1794,7 @@ void STDMETHODCALLTYPE CommandList::DrawInstanced(UINT vertexCount, UINT instanc
     Add([=](ExecState& state) {
         if (state.skipDraws) {
             LogSkippedDraw(state, "DrawInstanced", vertexCount, instanceCount);
+            LogDataflowDraw(state, "DrawInstanced", "skipped");
             if (Cfg().diagnosticRenderTrace) {
                 auto& stats = TraceStats();
                 if (state.graphicsPlaceholderVs)
@@ -1730,6 +1807,7 @@ void STDMETHODCALLTYPE CommandList::DrawInstanced(UINT vertexCount, UINT instanc
         BindRootSnapshot(state, snapshot, false);
         state.c->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
         RecordDrawExecution(state, false, "DrawInstanced", vertexCount, instanceCount);
+        LogDataflowDraw(state, "DrawInstanced", "executed");
         FlushStructWrites(state);
     });
 }
@@ -1741,6 +1819,7 @@ void STDMETHODCALLTYPE CommandList::DrawIndexedInstanced(UINT indexCount, UINT i
     Add([=](ExecState& state) {
         if (state.skipDraws) {
             LogSkippedDraw(state, "DrawIndexedInstanced", indexCount, instanceCount);
+            LogDataflowDraw(state, "DrawIndexedInstanced", "skipped");
             if (Cfg().diagnosticRenderTrace) {
                 auto& stats = TraceStats();
                 if (state.graphicsPlaceholderVs)
@@ -1757,6 +1836,7 @@ void STDMETHODCALLTYPE CommandList::DrawIndexedInstanced(UINT indexCount, UINT i
         state.c->DrawIndexedInstanced(indexCount, instanceCount, startIndex, baseVertex, startInstance);
         FinishTargetDrawPipelineStats(state, std::move(pipelineStats));
         RecordDrawExecution(state, true, "DrawIndexedInstanced", indexCount, instanceCount);
+        LogDataflowDraw(state, "DrawIndexedInstanced", "executed");
         FlushStructWrites(state);
     });
 }
@@ -1825,9 +1905,11 @@ void STDMETHODCALLTYPE CommandList::ExecuteIndirect(ID3D12CommandSignature* sour
     const UINT byteStride = signature->byteStride;
     Add([=](ExecState& state) {
         if (compute ? state.skipDispatches : state.skipDraws) {
-            if (!compute)
+            if (!compute) {
                 LogSkippedDraw(state, "ExecuteIndirect", maxCommandCount, byteStride,
                     maxCommandCount);
+                LogDataflowDraw(state, "ExecuteIndirect", "skipped");
+            }
             if (Cfg().diagnosticRenderTrace) {
                 auto& stats = TraceStats();
                 if (compute && state.computePlaceholderCs)
@@ -1865,10 +1947,12 @@ void STDMETHODCALLTYPE CommandList::ExecuteIndirect(ID3D12CommandSignature* sour
             case D3D12_INDIRECT_ARGUMENT_TYPE_DRAW:
                 state.c->DrawInstancedIndirect(argumentBuffer, offset);
                 RecordDrawExecution(state, false, "ExecuteIndirect", 0, 0, true);
+                LogDataflowDraw(state, "ExecuteIndirect", "executed");
                 break;
             case D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED:
                 state.c->DrawIndexedInstancedIndirect(argumentBuffer, offset);
                 RecordDrawExecution(state, true, "ExecuteIndirect", 0, 0, true);
+                LogDataflowDraw(state, "ExecuteIndirect", "executed");
                 break;
             default:
                 Log("ExecuteIndirect encountered unsupported argument type=%u", argumentType);
@@ -1905,6 +1989,7 @@ void STDMETHODCALLTYPE CommandList::CopyBufferRegion(ID3D12Resource* destination
         box.back = 1;
         if (srcResource->heap == D3D12_HEAP_TYPE_UPLOAD)
             srcResource->SyncToGpu(sourceOffset, byteCount);
+        LogDataflowCopy("CopyBufferRegion", srcResource->Raw(), dstResource->Raw());
         state.c->CopySubresourceRegion(dstResource->Raw(), 0, static_cast<UINT>(destinationOffset), 0, 0,
                                        srcResource->Raw(), 0, &box);
     });
@@ -1954,6 +2039,7 @@ void STDMETHODCALLTYPE CommandList::CopyTextureRegion(const D3D12_TEXTURE_COPY_L
         auto* srcResource = dynamic_cast<Resource*>(keepSrc.Get());
         if (dstResource && srcResource) {
             LogBackbufferCopy("CopyTextureRegion", dstResource, srcResource);
+            LogDataflowCopy("CopyTextureRegion", srcResource->Raw(), dstResource->Raw());
             state.c->CopySubresourceRegion(dstResource->Raw(), dstSubresource, x, y, z,
                                            srcResource->Raw(), srcSubresource, &box);
         }
@@ -2055,6 +2141,7 @@ void STDMETHODCALLTYPE CommandList::CopyTextureRegion(const D3D12_TEXTURE_COPY_L
             const D3D11_BOX box{region.left, region.top, region.front,
                 region.right, region.bottom, region.back};
             LogBackbufferCopy("CopyTextureRegion", dstResource, srcResource);
+            LogDataflowCopy("CopyTextureRegion", srcResource->Raw(), dstResource->Raw());
             state.c->CopySubresourceRegion(dstResource->Raw(), subresource, x, y, z,
                 stagingTexture.Get(), stagingSubresource, &box);
         });
@@ -2130,6 +2217,7 @@ void STDMETHODCALLTYPE CommandList::CopyTextureRegion(const D3D12_TEXTURE_COPY_L
             }
             const D3D11_BOX box{region.left, region.top, region.front,
                 region.right, region.bottom, region.back};
+            LogDataflowCopy("CopyTextureRegion", srcResource->Raw(), dstResource->Raw());
             state.c->CopySubresourceRegion(stagingTexture.Get(), stagingSubresource, x, y, z,
                 srcResource->Raw(), sourceSubresource, &box);
             D3D11_MAPPED_SUBRESOURCE mapped{};
@@ -2191,6 +2279,7 @@ void STDMETHODCALLTYPE CommandList::CopyResource(ID3D12Resource* destination, ID
         auto* srcResource = dynamic_cast<Resource*>(keepSrc.Get());
         if (dstResource && srcResource) {
             LogBackbufferCopy("CopyResource", dstResource, srcResource);
+            LogDataflowCopy("CopyResource", srcResource->Raw(), dstResource->Raw());
             if (dstResource->backbuffer && Cfg().diagnosticRenderTrace)
                 ++state.copyToBackbuffer;
             state.c->CopyResource(dstResource->Raw(), srcResource->Raw());
