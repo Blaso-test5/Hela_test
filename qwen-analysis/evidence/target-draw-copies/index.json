@@ -1,0 +1,27 @@
+{
+  "schema": "qwen.evidence.dataset-index",
+  "dataset": "target-draw-copies",
+  "recordCount": 2388,
+  "byteCount": 585851,
+  "sha256": "0747fdd111363365b37559976b65bca90aa1e4ac13518a75781c2d9f53fe46b3",
+  "indexParts": [
+    {
+      "path": "evidence/target-draw-copies/index-part001.json",
+      "itemCount": 30,
+      "byteCount": 7723,
+      "sha256": "075cb704d9927d437281423e9f4c589efc80cceef9591fd1c865aee504d13bef"
+    },
+    {
+      "path": "evidence/target-draw-copies/index-part002.json",
+      "itemCount": 30,
+      "byteCount": 7787,
+      "sha256": "4a317133501046fabea338cc60a64ad42f9d9351b4a32e56e1544543056664e3"
+    },
+    {
+      "path": "evidence/target-draw-copies/index-part003.json",
+      "itemCount": 15,
+      "byteCount": 3905,
+      "sha256": "bbe0f2203289b3b46805eb54b8f1d027c0271c69a1bac885887e79fd0fbda409"
+    }
+  ]
+}

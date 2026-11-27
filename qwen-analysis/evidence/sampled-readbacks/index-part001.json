@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "path": "evidence/sampled-readbacks/part0001.ndjson",
+      "recordStart": 1,
+      "recordEnd": 38,
+      "recordCount": 38,
+      "byteCount": 3500,
+      "sha256": "27377f8a97e59cc67b4d204f198fef7de2ea2b222c35d3e13f7208e901cbed5e"
+    }
+  ]
+}

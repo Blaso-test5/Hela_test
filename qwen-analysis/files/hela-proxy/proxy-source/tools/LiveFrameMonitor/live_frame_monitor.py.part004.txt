@@ -1,0 +1,173 @@
+                return rb
+        return self.last_touched_readback
+
+    def feed_line(self, raw_line: str) -> None:
+        self.lines_processed += 1
+        line_no = self.lines_processed
+        line = raw_line.strip()
+        if not line:
+            return
+
+        fingerprint = RE_MODULE_FINGERPRINT.search(line)
+        if fingerprint:
+            role = "d3d12" if fingerprint.group(1).lower() == "d3d12" else "dxgi"
+            digest = fingerprint.group(2).lower()
+            observations = self.module_fingerprint_observations.setdefault(role, [])
+            if digest not in observations and len(observations) < 4:
+                observations.append(digest)
+            expected = (
+                self.run_manifest["expected_modules"].get(role)
+                if self.run_manifest else None
+            )
+            status = "matches" if expected == digest else "mismatch" if expected else "observed"
+            self._emit(
+                "MODULE_FINGERPRINT",
+                f"[MODULE_FINGERPRINT] {role}={digest} status={status}",
+                {"role": role, "sha256": digest, "expected_sha256": expected, "status": status},
+            )
+            return
+
+        fingerprint_failure = RE_MODULE_FINGERPRINT_FAILED.search(line)
+        if fingerprint_failure:
+            role = "d3d12" if fingerprint_failure.group(1).lower() == "d3d12" else "dxgi"
+            reason = fingerprint_failure.group(2)
+            self.module_fingerprint_failures[role] = reason
+            self._emit(
+                "MODULE_FINGERPRINT_FAILED",
+                f"[MODULE_FINGERPRINT_FAILED] {role} reason={reason}",
+                {"role": role, "reason": reason},
+            )
+            return
+
+        # 1. Resource History header line
+        m_hist = RE_HISTORY_RESOURCE.search(line)
+        if m_hist:
+            ptr = norm_ptr(m_hist.group(1))
+            if ptr not in self.resources_by_ptr and len(self.resources_by_ptr) >= MAX_TRACKED_RESOURCES:
+                oldest_key = next(iter(self.resources_by_ptr))
+                del self.resources_by_ptr[oldest_key]
+            rec = ResourceHistory(
+                resource=ptr,
+                operations=int(m_hist.group(2)),
+                draws=int(m_hist.group(3)),
+                skipped=int(m_hist.group(4)),
+                clears=int(m_hist.group(5)),
+                line_no=line_no,
+            )
+            self.resources_by_ptr[ptr] = rec
+            self.current_history_resource = rec
+            self._emit(
+                "SOURCE_HISTORY",
+                f"[HISTORY] Resource {ptr}: operations={rec.operations} draws={rec.draws} "
+                f"skipped={rec.skipped} clears={rec.clears}",
+                {"resource": ptr, "draws": rec.draws, "skipped": rec.skipped, "clears": rec.clears},
+            )
+            return
+
+        # 2. [READBACK_SRC] Present #N header (merges split `CopyResource source=...` and `size=WxH...` headers)
+        m_rb_src = RE_READBACK_SRC_HEADER.search(line)
+        if m_rb_src:
+            present_num = int(m_rb_src.group(1))
+            tail = m_rb_src.group(2)
+            rb = self._get_or_create_readback("source", present_num, line_no)
+            self._merge_readback_header_fields(rb, tail)
+            self.current_history_resource = None
+            self._extract_readback_continuation(line, rb)
+            return
+
+        # 3. [READBACK] Present #N (backbuffer) header
+        m_rb_bb = RE_READBACK_BB_HEADER.search(line)
+        if m_rb_bb:
+            present_num = int(m_rb_bb.group(1))
+            tail = m_rb_bb.group(2)
+            rb = self._get_or_create_readback("backbuffer", present_num, line_no)
+            self._merge_readback_header_fields(rb, tail)
+            self.current_history_resource = None
+            self._extract_readback_continuation(line, rb)
+            return
+
+        # 4. Readback sample / summary continuation lines (even if interleaved with other log lines)
+        if RE_NON_BLACK.search(line) or RE_RGBA_TUPLE.search(line):
+            target_rb = self._resolve_target_readback_for_sample_line(line)
+            if target_rb is not None and self._extract_readback_continuation(line, target_rb):
+                return
+
+        # 5. Retained draw samples under current resource history
+        if self.current_history_resource is not None:
+            m_draw = RE_API_DRAW_ENTRY.search(line) or RE_DRAW_ENTRY.search(line)
+            if m_draw and (RE_VS_HASH.search(line) or RE_PS_HASH.search(line)):
+                vs_m = RE_VS_HASH.search(line)
+                ps_m = RE_PS_HASH.search(line)
+                el_m = RE_ELEMENTS.search(line)
+                in_m = RE_INSTANCES.search(line)
+                rtv_m = RE_RTV_SLOT.search(line)
+                vp_m = RE_VIEWPORT.search(line)
+                vp_str = None
+                if vp_m:
+                    vp_width = vp_m.group("width") or vp_m.group("tuple_width")
+                    vp_height = vp_m.group("height") or vp_m.group("tuple_height")
+                    vp_str = f"{vp_width.split('.')[0]}x{vp_height.split('.')[0]}"
+                self.current_history_resource.retained_draws.append(
+                    DrawSample(
+                        draw_type=m_draw.group(1),
+                        vs=norm_hash(vs_m.group(1)) if vs_m else None,
+                        ps=norm_hash(ps_m.group(1)) if ps_m else None,
+                        elements=int(el_m.group(1)) if el_m else None,
+                        instances=int(in_m.group(1)) if in_m else None,
+                        rtv_slot=int(rtv_m.group(1)) if rtv_m else None,
+                        viewport=vp_str,
+                        line_no=line_no,
+                    )
+                )
+                return
+
+        # 6. Shader Ready / Shader Placeholder (interleaved lines do NOT clear open readbacks)
+        if "SHADER" in line.upper():
+            if RE_SHADER_READY.search(line):
+                self._record_shader(line, line_no, "READY", self.shaders_ready)
+                return
+            if RE_SHADER_PLACEHOLDER.search(line):
+                self._record_shader(line, line_no, "PLACEHOLDER", self.shaders_placeholder)
+                return
+
+        # 7. COPY_TO_BB
+        if "COPY_TO_BB" in line.upper():
+            m_copy = RE_COPY_TO_BB.search(line)
+            if m_copy:
+                src_ptr = norm_ptr(m_copy.group(1))
+                tail = m_copy.group(2)
+                seq_m = RE_SEQ.search(line)
+                seq_val = int(seq_m.group(1)) if seq_m else None
+                kv = {k.lower(): int(v) for k, v in RE_KEY_INT.findall(tail)}
+                entry = {
+                    "line_no": line_no,
+                    "source": src_ptr,
+                    "sequence": seq_val,
+                    **{k: v for k, v in kv.items() if k != "sequence"},
+                }
+                self.copy_to_bb_recent.append(entry)
+                if seq_val == 100:
+                    self.copy_to_bb_seq100 = entry
+                    self._emit(
+                        "COPY_TO_BB_100",
+                        f"[COPY_TO_BB] sequence=100 source={src_ptr}",
+                        entry,
+                    )
+                return
+
+        # 8. Heartbeat counters
+        if "present=" in line.lower() and "skip-vs=" in line.lower():
+            m_hb = RE_HEARTBEAT.search(line)
+            if m_hb:
+                metrics = {k.lower(): int(v) for k, v in RE_HB_KV.findall(line)}
+                hb_entry = {"line_no": line_no, "metrics": metrics}
+                self.heartbeats.append(hb_entry)
+                hb_summary = ", ".join(f"{k}={v}" for k, v in metrics.items())
+                self._emit("HEARTBEAT", f"[HEARTBEAT] {hb_summary}", hb_entry)
+                return
+
+        # 9. Compute dispatch skip clues
+        if RE_DISPATCH_CLUE.search(line):
+            self.dispatch_clue_total += 1
+            clue = {"line_no": line_no, "text": line[:200]}
+            self.dispatch_clues.append(clue)

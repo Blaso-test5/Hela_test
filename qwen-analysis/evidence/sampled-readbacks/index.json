@@ -1,0 +1,15 @@
+{
+  "schema": "qwen.evidence.dataset-index",
+  "dataset": "sampled-readbacks",
+  "recordCount": 38,
+  "byteCount": 3500,
+  "sha256": "27377f8a97e59cc67b4d204f198fef7de2ea2b222c35d3e13f7208e901cbed5e",
+  "indexParts": [
+    {
+      "path": "evidence/sampled-readbacks/index-part001.json",
+      "itemCount": 1,
+      "byteCount": 273,
+      "sha256": "913d0a83ef25358679715a88ef4d6f895c014710d7cc912b7071b669bd0dbff6"
+    }
+  ]
+}

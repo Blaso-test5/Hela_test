@@ -1,0 +1,190 @@
+[
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "package-lock.json",
+    "totalLineCount": 1259,
+    "sourceByteCount": 44323,
+    "sha256": "49f55ef6cf2e888bb1b6481c18d33d06d755040be8fb67f3b5b7de12e0ffbb46",
+    "publishedSha256": "49f55ef6cf2e888bb1b6481c18d33d06d755040be8fb67f3b5b7de12e0ffbb46",
+    "publishedByteCount": 44323,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/package-lock.json.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 237,
+        "byteCount": 7986,
+        "sha256": "487a8f80b3f5624f1855b1d2559bee553bde70e0f6a19202b53b00388685a31b"
+      },
+      {
+        "path": "files/shader-lab/package-lock.json.part002.txt",
+        "lineStart": 238,
+        "lineEnd": 469,
+        "byteCount": 7982,
+        "sha256": "cab12ece121549d036ba5b13640a20c1d17dd4113739140d46faf34f5a576b8d"
+      },
+      {
+        "path": "files/shader-lab/package-lock.json.part003.txt",
+        "lineStart": 470,
+        "lineEnd": 693,
+        "byteCount": 7996,
+        "sha256": "5bf22f32dd9993d814fd353ab8e870dc250e038f9aefaa4378ea480adf99131c"
+      },
+      {
+        "path": "files/shader-lab/package-lock.json.part004.txt",
+        "lineStart": 694,
+        "lineEnd": 904,
+        "byteCount": 7991,
+        "sha256": "4424e7af3efd4d2941c9be527ad723b83d21254096444bfc57a192b88034f65d"
+      },
+      {
+        "path": "files/shader-lab/package-lock.json.part005.txt",
+        "lineStart": 905,
+        "lineEnd": 1134,
+        "byteCount": 7987,
+        "sha256": "db877ec8646dcce00f00e6d3e58a99dc1d1e8689b4294c548eff61efa9e74408"
+      },
+      {
+        "path": "files/shader-lab/package-lock.json.part006.txt",
+        "lineStart": 1135,
+        "lineEnd": 1259,
+        "byteCount": 4381,
+        "sha256": "611b2bf42882c2ffd6fe6d0873e25152a1b132b997994ebb4ba9af31ff03b6ca"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "package.json",
+    "totalLineCount": 21,
+    "sourceByteCount": 613,
+    "sha256": "50d0134b49bbc92ee0686ad1fb96b64f18bd047557ef0d34be16414fd7ca62be",
+    "publishedSha256": "50d0134b49bbc92ee0686ad1fb96b64f18bd047557ef0d34be16414fd7ca62be",
+    "publishedByteCount": 613,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/package.json",
+        "lineStart": 1,
+        "lineEnd": 21,
+        "byteCount": 613,
+        "sha256": "50d0134b49bbc92ee0686ad1fb96b64f18bd047557ef0d34be16414fd7ca62be"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "src/analyzer.ts",
+    "totalLineCount": 126,
+    "sourceByteCount": 6403,
+    "sha256": "883ecef7e6d3d0fa16ec66c9cce94b61d621755fb2c3e2ebb6009d4a3cb9e663",
+    "publishedSha256": "883ecef7e6d3d0fa16ec66c9cce94b61d621755fb2c3e2ebb6009d4a3cb9e663",
+    "publishedByteCount": 6403,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/src/analyzer.ts",
+        "lineStart": 1,
+        "lineEnd": 126,
+        "byteCount": 6403,
+        "sha256": "883ecef7e6d3d0fa16ec66c9cce94b61d621755fb2c3e2ebb6009d4a3cb9e663"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "src/converter.ts",
+    "totalLineCount": 148,
+    "sourceByteCount": 6430,
+    "sha256": "7defaf86d11d138a8f33415e7309c4e4d9db0c91e259b05dbd050223e0d1d56c",
+    "publishedSha256": "7defaf86d11d138a8f33415e7309c4e4d9db0c91e259b05dbd050223e0d1d56c",
+    "publishedByteCount": 6430,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/src/converter.ts",
+        "lineStart": 1,
+        "lineEnd": 148,
+        "byteCount": 6430,
+        "sha256": "7defaf86d11d138a8f33415e7309c4e4d9db0c91e259b05dbd050223e0d1d56c"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "src/dxil-analyzer.ts",
+    "totalLineCount": 257,
+    "sourceByteCount": 15640,
+    "sha256": "715ca21b0fa1ea1aaa585a9f8565018f62599083c35cdeb507ab78f5461cb070",
+    "publishedSha256": "715ca21b0fa1ea1aaa585a9f8565018f62599083c35cdeb507ab78f5461cb070",
+    "publishedByteCount": 15640,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/src/dxil-analyzer.ts.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 118,
+        "byteCount": 7944,
+        "sha256": "01e6c1cd90ebe9b5dae14f4688af3436fccc71d4acf64c2189b9590066108652"
+      },
+      {
+        "path": "files/shader-lab/src/dxil-analyzer.ts.part002.txt",
+        "lineStart": 119,
+        "lineEnd": 257,
+        "byteCount": 7696,
+        "sha256": "95b8f5ced4fcf60bf259aed9fd00bdaafc970d8da8a0e0194141944b85ab667e"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "src/dxil-precompile.ts",
+    "totalLineCount": 368,
+    "sourceByteCount": 16839,
+    "sha256": "9e2e34159b1e9266d36dd2969ac8914ff107dd0d69bd93f28fd9bf3f0c7fb2eb",
+    "publishedSha256": "9e2e34159b1e9266d36dd2969ac8914ff107dd0d69bd93f28fd9bf3f0c7fb2eb",
+    "publishedByteCount": 16839,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/src/dxil-precompile.ts.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 191,
+        "byteCount": 7954,
+        "sha256": "2b220e57959409a5f6097fa80e31dad20b52ac8199af67fc1bf3b4a381663074"
+      },
+      {
+        "path": "files/shader-lab/src/dxil-precompile.ts.part002.txt",
+        "lineStart": 192,
+        "lineEnd": 342,
+        "byteCount": 7987,
+        "sha256": "b0d9e0dae0e1bebca5409237b2e958286baf4fe13a52697bcb187657f4177c5e"
+      },
+      {
+        "path": "files/shader-lab/src/dxil-precompile.ts.part003.txt",
+        "lineStart": 343,
+        "lineEnd": 368,
+        "byteCount": 898,
+        "sha256": "4f3223e2577cf99e4b370dd7b003ab4faf29b63b3b59f29f5f739e27ddca33dc"
+      }
+    ]
+  }
+]

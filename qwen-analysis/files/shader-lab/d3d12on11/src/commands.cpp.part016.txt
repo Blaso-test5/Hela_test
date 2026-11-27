@@ -1,0 +1,163 @@
+void STDMETHODCALLTYPE CommandList::OMSetRenderTargets(UINT count, const D3D12_CPU_DESCRIPTOR_HANDLE* handles,
+    BOOL single, const D3D12_CPU_DESCRIPTOR_HANDLE* depthHandle) {
+    TraceApi("CommandList::OMSetRenderTargets");
+    if (count > 8 || (count && !handles)) return;
+    std::vector<Ptr<ID3D11RenderTargetView>> views(count);
+    std::vector<Ptr<ID3D11Resource>> resources(count);
+    std::vector<bool> backbuffers(count, false);
+    for (UINT i = 0; i < count; ++i) {
+        auto handle = handles[i];
+        if (single) handle.ptr += static_cast<SIZE_T>(i) * kDescStride;
+        Descriptor descriptor = DescriptorAt(handle, DKind::RTV);
+        views[i] = descriptor.rtv;
+        if (descriptor.res && descriptor.res->tex)
+            resources[i] = Ptr<ID3D11Resource>(descriptor.res->tex.Get());
+        backbuffers[i] = descriptor.res && descriptor.res->backbuffer;
+    }
+    Ptr<ID3D11DepthStencilView> depth;
+    if (depthHandle) depth = DescriptorAt(*depthHandle, DKind::DSV).dsv;
+    Add([views = std::move(views), resources = std::move(resources),
+        backbuffers = std::move(backbuffers), depth](ExecState& state) {
+        std::vector<ID3D11RenderTargetView*> raw;
+        raw.reserve(views.size());
+        for (const auto& view : views) raw.push_back(view.Get());
+        state.c->OMSetRenderTargets(static_cast<UINT>(raw.size()), raw.data(), depth.Get());
+        for (UINT i = 0; i < ARRAYSIZE(state.rtvs); ++i) {
+            state.rtvs[i].Reset();
+            state.rtvResources[i].Reset();
+        }
+        state.numRtv = static_cast<UINT>(views.size());
+        state.dsv = depth;
+        state.rtvBackbuffer = false;
+        for (UINT i = 0; i < views.size() && i < 8; ++i) {
+            state.rtvs[i] = views[i];
+            state.rtvResources[i] = resources[i];
+        }
+        for (size_t i = 0; i < backbuffers.size(); ++i)
+            state.rtvBackbuffer = state.rtvBackbuffer || backbuffers[i];
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::ClearDepthStencilView(D3D12_CPU_DESCRIPTOR_HANDLE handle,
+    D3D12_CLEAR_FLAGS flags, FLOAT depth, UINT8 stencil, UINT rectCount, const D3D12_RECT*) {
+    if (rectCount) Unimpl("ID3D12GraphicsCommandList::ClearDepthStencilView rectangles");
+    Descriptor descriptor = DescriptorAt(handle, DKind::DSV);
+    if (!descriptor.dsv) return;
+    UINT nativeFlags = 0;
+    if (flags & D3D12_CLEAR_FLAG_DEPTH) nativeFlags |= D3D11_CLEAR_DEPTH;
+    if (flags & D3D12_CLEAR_FLAG_STENCIL) nativeFlags |= D3D11_CLEAR_STENCIL;
+    Add([descriptor, nativeFlags, depth, stencil](ExecState& state) {
+        state.c->ClearDepthStencilView(descriptor.dsv.Get(), nativeFlags, depth, stencil);
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::ClearRenderTargetView(D3D12_CPU_DESCRIPTOR_HANDLE handle,
+    const FLOAT color[4], UINT rectCount, const D3D12_RECT*) {
+    if (rectCount) Unimpl("ID3D12GraphicsCommandList::ClearRenderTargetView rectangles");
+    if (!color) return;
+    Descriptor descriptor = DescriptorAt(handle, DKind::RTV);
+    if (!descriptor.rtv) return;
+    float copy[4] = {color[0], color[1], color[2], color[3]};
+    Ptr<ID3D11Resource> target;
+    if (descriptor.res && descriptor.res->tex)
+        target = Ptr<ID3D11Resource>(descriptor.res->tex.Get());
+    Add([descriptor, copy, target](ExecState& state) {
+        state.c->ClearRenderTargetView(descriptor.rtv.Get(), copy);
+        char context[128]{};
+        snprintf(context, sizeof(context), "ClearRenderTargetView color=(%.3f,%.3f,%.3f,%.3f)",
+            copy[0], copy[1], copy[2], copy[3]);
+        TrackTargetOperation(target.Get(), context, TargetHistoryKind::Clear);
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::ClearUnorderedAccessViewUint(D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle,
+    D3D12_CPU_DESCRIPTOR_HANDLE, ID3D12Resource*, const UINT values[4], UINT rectCount, const D3D12_RECT*) {
+    if (rectCount) Unimpl("ID3D12GraphicsCommandList::ClearUnorderedAccessViewUint rectangles");
+    if (!values) return;
+    Descriptor descriptor = DescriptorAt(gpuHandle, DKind::UAV);
+    if (!descriptor.uav) return;
+    UINT copy[4] = {values[0], values[1], values[2], values[3]};
+    Add([descriptor, copy](ExecState& state) { state.c->ClearUnorderedAccessViewUint(descriptor.uav.Get(), copy); });
+}
+
+void STDMETHODCALLTYPE CommandList::ClearUnorderedAccessViewFloat(D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle,
+    D3D12_CPU_DESCRIPTOR_HANDLE, ID3D12Resource*, const FLOAT values[4], UINT rectCount, const D3D12_RECT*) {
+    if (rectCount) Unimpl("ID3D12GraphicsCommandList::ClearUnorderedAccessViewFloat rectangles");
+    if (!values) return;
+    Descriptor descriptor = DescriptorAt(gpuHandle, DKind::UAV);
+    if (!descriptor.uav) return;
+    float copy[4] = {values[0], values[1], values[2], values[3]};
+    Add([descriptor, copy](ExecState& state) { state.c->ClearUnorderedAccessViewFloat(descriptor.uav.Get(), copy); });
+}
+
+void STDMETHODCALLTYPE CommandList::BeginQuery(ID3D12QueryHeap* heapIn, D3D12_QUERY_TYPE type, UINT index) {
+    auto* heap = dynamic_cast<QueryHeapObj*>(heapIn);
+    if (!heap || index >= heap->desc.Count ||
+        heap->desc.Type != D3D12_QUERY_HEAP_TYPE_OCCLUSION ||
+        (type != D3D12_QUERY_TYPE_OCCLUSION && type != D3D12_QUERY_TYPE_BINARY_OCCLUSION)) {
+        Log("BeginQuery rejected heap=%p type=%u index=%u",
+            heapIn, static_cast<unsigned>(type), index);
+        return;
+    }
+
+    Ptr<ID3D12QueryHeap> keep(heapIn);
+    Add([keep, index](ExecState& state) {
+        auto* queryHeap = dynamic_cast<QueryHeapObj*>(keep.Get());
+        if (!queryHeap || !state.dev || !state.c) return;
+        Ptr<ID3D11Query> query;
+        {
+            std::lock_guard<std::mutex> lock(queryHeap->mutex);
+            if (!queryHeap->queries[index]) {
+                D3D11_QUERY_DESC desc{D3D11_QUERY_OCCLUSION, 0};
+                const HRESULT result = state.dev->d11->CreateQuery(&desc, queryHeap->queries[index].Put());
+                if (FAILED(result)) {
+                    Log("BeginQuery could not create D3D11 occlusion query: hr=0x%08lx", result);
+                    return;
+                }
+            }
+            query = queryHeap->queries[index];
+        }
+        std::lock_guard<std::recursive_mutex> lock(state.dev->ctxLock);
+        state.c->Begin(query.Get());
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::EndQuery(ID3D12QueryHeap* heapIn, D3D12_QUERY_TYPE type, UINT index) {
+    auto* heap = dynamic_cast<QueryHeapObj*>(heapIn);
+    if (!heap || index >= heap->desc.Count) {
+        Log("EndQuery rejected heap=%p type=%u index=%u",
+            heapIn, static_cast<unsigned>(type), index);
+        return;
+    }
+
+    const bool timestamp = type == D3D12_QUERY_TYPE_TIMESTAMP;
+    const bool occlusion = type == D3D12_QUERY_TYPE_OCCLUSION ||
+        type == D3D12_QUERY_TYPE_BINARY_OCCLUSION;
+    if ((timestamp && heap->desc.Type != D3D12_QUERY_HEAP_TYPE_TIMESTAMP) ||
+        (occlusion && heap->desc.Type != D3D12_QUERY_HEAP_TYPE_OCCLUSION) ||
+        (!timestamp && !occlusion)) {
+        Log("EndQuery rejected incompatible heap/type heap-type=%u query-type=%u",
+            static_cast<unsigned>(heap->desc.Type), static_cast<unsigned>(type));
+        return;
+    }
+
+    Ptr<ID3D12QueryHeap> keep(heapIn);
+    Add([keep, index, timestamp](ExecState& state) {
+        auto* queryHeap = dynamic_cast<QueryHeapObj*>(keep.Get());
+        if (!queryHeap || !state.dev || !state.c) return;
+        if (timestamp) {
+            std::lock_guard<std::mutex> lock(queryHeap->mutex);
+            queryHeap->timestamps[index] = CurrentGpuTimestampNs();
+            return;
+        }
+        Ptr<ID3D11Query> query;
+        {
+            std::lock_guard<std::mutex> lock(queryHeap->mutex);
+            query = queryHeap->queries[index];
+        }
+        if (!query) {
+            Log("EndQuery has no matching D3D11 occlusion query at index=%u", index);
+            return;
+        }
+        std::lock_guard<std::recursive_mutex> lock(state.dev->ctxLock);
+        state.c->End(query.Get());

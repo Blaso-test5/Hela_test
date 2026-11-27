@@ -1,0 +1,152 @@
+            const UINT offset = static_cast<UINT>(argumentBufferOffset +
+                static_cast<UINT64>(i) * byteStride);
+            switch (argumentType) {
+            case D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH:
+                state.c->DispatchIndirect(argumentBuffer, offset);
+                RecordDispatchExecution(state, false);
+                break;
+            case D3D12_INDIRECT_ARGUMENT_TYPE_DRAW:
+                state.c->DrawInstancedIndirect(argumentBuffer, offset);
+                RecordDrawExecution(state, false, "ExecuteIndirect", 0, 0, true);
+                break;
+            case D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED:
+                state.c->DrawIndexedInstancedIndirect(argumentBuffer, offset);
+                RecordDrawExecution(state, true, "ExecuteIndirect", 0, 0, true);
+                break;
+            default:
+                Log("ExecuteIndirect encountered unsupported argument type=%u", argumentType);
+                return;
+            }
+            FlushStructWrites(state);
+        }
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::CopyBufferRegion(ID3D12Resource* destination, UINT64 destinationOffset,
+    ID3D12Resource* source, UINT64 sourceOffset, UINT64 byteCount) {
+    Resource* dst = AsResource(destination);
+    Resource* src = AsResource(source);
+    if (!dst || !src || !dst->IsBuffer() || !src->IsBuffer() ||
+        destinationOffset > dst->desc.Width || byteCount > dst->desc.Width - destinationOffset ||
+        sourceOffset > src->desc.Width || byteCount > src->desc.Width - sourceOffset ||
+        destinationOffset > UINT_MAX || sourceOffset > UINT_MAX || byteCount > UINT_MAX) {
+        Log("Rejected invalid CopyBufferRegion request");
+        return;
+    }
+    Ptr<IUnknown> keepDst(static_cast<ID3D12Resource*>(dst));
+    Ptr<IUnknown> keepSrc(static_cast<ID3D12Resource*>(src));
+    Add([keepDst, keepSrc, destinationOffset, sourceOffset, byteCount](ExecState& state) {
+        auto* dstResource = dynamic_cast<Resource*>(keepDst.Get());
+        auto* srcResource = dynamic_cast<Resource*>(keepSrc.Get());
+        if (!dstResource || !srcResource) return;
+        D3D11_BOX box{};
+        box.left = static_cast<UINT>(sourceOffset);
+        box.right = static_cast<UINT>(sourceOffset + byteCount);
+        box.top = 0;
+        box.bottom = 1;
+        box.front = 0;
+        box.back = 1;
+        if (srcResource->heap == D3D12_HEAP_TYPE_UPLOAD)
+            srcResource->SyncToGpu(sourceOffset, byteCount);
+        state.c->CopySubresourceRegion(dstResource->Raw(), 0, static_cast<UINT>(destinationOffset), 0, 0,
+                                       srcResource->Raw(), 0, &box);
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::CopyTextureRegion(const D3D12_TEXTURE_COPY_LOCATION* destination,
+    UINT x, UINT y, UINT z, const D3D12_TEXTURE_COPY_LOCATION* source, const D3D12_BOX* sourceBox) {
+    if (!destination || !source || !destination->pResource || !source->pResource) {
+        Log("Rejected null CopyTextureRegion location");
+        return;
+    }
+
+    Resource* dst = AsResource(destination->pResource);
+    Resource* src = AsResource(source->pResource);
+    if (!dst || !src) {
+        Log("CopyTextureRegion received a resource not owned by this proxy");
+        return;
+    }
+
+    const bool dstTexture = destination->Type == D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    const bool srcTexture = source->Type == D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    const bool dstFootprint = destination->Type == D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    const bool srcFootprint = source->Type == D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    if (dstTexture && srcTexture) {
+        if (dst->IsBuffer() || src->IsBuffer() ||
+            destination->SubresourceIndex >= dst->NumSubresources() ||
+            source->SubresourceIndex >= src->NumSubresources()) {
+            Log("Rejected invalid texture copy locations");
+            return;
+        }
+    const UINT sourceMip = source->SubresourceIndex % std::max<UINT>(src->desc.MipLevels, 1);
+    const D3D12_BOX sourceRegion = sourceBox ? *sourceBox : D3D12_BOX{
+        0, 0, 0,
+        static_cast<UINT>(std::max<UINT64>(1, src->desc.Width >> sourceMip)),
+        std::max<UINT>(1, src->desc.Height >> sourceMip),
+        src->desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D
+            ? std::max<UINT>(1, src->desc.DepthOrArraySize >> sourceMip) : 1
+    };
+    Ptr<IUnknown> keepDst(static_cast<ID3D12Resource*>(dst));
+    Ptr<IUnknown> keepSrc(static_cast<ID3D12Resource*>(src));
+    const UINT dstSubresource = destination->SubresourceIndex;
+    const UINT srcSubresource = source->SubresourceIndex;
+    D3D11_BOX box{sourceRegion.left, sourceRegion.top, sourceRegion.front,
+                  sourceRegion.right, sourceRegion.bottom, sourceRegion.back};
+    Add([=](ExecState& state) {
+        auto* dstResource = dynamic_cast<Resource*>(keepDst.Get());
+        auto* srcResource = dynamic_cast<Resource*>(keepSrc.Get());
+        if (dstResource && srcResource) {
+            LogBackbufferCopy("CopyTextureRegion", dstResource, srcResource);
+            state.c->CopySubresourceRegion(dstResource->Raw(), dstSubresource, x, y, z,
+                                           srcResource->Raw(), srcSubresource, &box);
+        }
+    });
+        return;
+    }
+
+    if (dstTexture && srcFootprint) {
+        const auto& placed = source->PlacedFootprint;
+        FootprintCopyInfo info{};
+        if (dst->IsBuffer() || destination->SubresourceIndex >= dst->NumSubresources() ||
+            !src->IsBuffer() || src->heap == D3D12_HEAP_TYPE_READBACK ||
+            !ValidateFootprint(src, placed, info) ||
+            placed.Footprint.Format != dst->desc.Format) {
+            Log("Rejected buffer-to-texture footprint copy with incompatible resources or layout");
+            return;
+        }
+        const FormatInfo format = GetFormatInfo(placed.Footprint.Format);
+        const D3D12_BOX region = sourceBox ? *sourceBox : D3D12_BOX{
+            0, 0, 0, placed.Footprint.Width, placed.Footprint.Height, placed.Footprint.Depth
+        };
+        if (!ValidCopyBox(region, placed.Footprint) ||
+            region.left % format.blockW || region.top % format.blockH ||
+            (region.right % format.blockW && region.right != placed.Footprint.Width) ||
+            (region.bottom % format.blockH && region.bottom != placed.Footprint.Height)) {
+            Log("Rejected invalid or block-misaligned source footprint box");
+            return;
+        }
+
+        const UINT mipLevels = std::max<UINT>(dst->desc.MipLevels, 1);
+        const UINT mip = destination->SubresourceIndex % mipLevels;
+        const UINT64 targetWidth = std::max<UINT64>(1, dst->desc.Width >> mip);
+        const UINT targetHeight = dst->desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D
+            ? 1 : std::max<UINT>(1, dst->desc.Height >> mip);
+        const UINT targetDepth = dst->desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D
+            ? std::max<UINT>(1, dst->desc.DepthOrArraySize >> mip) : 1;
+        const UINT copyWidth = region.right - region.left;
+        const UINT copyHeight = region.bottom - region.top;
+        const UINT copyDepth = region.back - region.front;
+        if (x > targetWidth || copyWidth > targetWidth - x ||
+            y > targetHeight || copyHeight > targetHeight - y ||
+            z > targetDepth || copyDepth > targetDepth - z) {
+            Log("Rejected buffer-to-texture footprint copy outside the destination subresource");
+            return;
+        }
+
+        Ptr<IUnknown> keepDst(static_cast<ID3D12Resource*>(dst));
+        Ptr<IUnknown> keepSrc(static_cast<ID3D12Resource*>(src));
+        const D3D12_SUBRESOURCE_FOOTPRINT footprint = placed.Footprint;
+        const UINT subresource = destination->SubresourceIndex;
+        Add([=](ExecState& state) {
+            auto* dstResource = dynamic_cast<Resource*>(keepDst.Get());
+            auto* srcResource = dynamic_cast<Resource*>(keepSrc.Get());

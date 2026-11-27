@@ -1,0 +1,163 @@
+#include "types.h"
+
+namespace {
+
+DescriptorHeap* GetHeap(SIZE_T handle, UINT* index) {
+    DescriptorHeap* heap = FindHeapByCpu(handle, index);
+    if (!heap) Log("Descriptor CPU handle %p is not owned by a live heap", reinterpret_cast<void*>(handle));
+    return heap;
+}
+
+void TraceTargetDescriptorWrite(const char* operation, DescriptorHeap* heap, UINT index,
+                                const Descriptor& descriptor,
+                                const DescriptorHeap* sourceHeap = nullptr,
+                                UINT sourceIndex = UINT_MAX) {
+    constexpr UINT firstIndex = 1998;
+    constexpr UINT endIndex = 2064;
+    static std::atomic<UINT> cpuHeapTraceCount{0};
+    static std::atomic<UINT> gpuHeapTraceCount{0};
+    if (!Cfg().diagnosticRenderTrace || index < firstIndex || index >= endIndex)
+        return;
+    auto& traceCount = heap->gpuBase ? gpuHeapTraceCount : cpuHeapTraceCount;
+    const UINT traceLimit = heap->gpuBase ? 512 : 64;
+    if (traceCount.fetch_add(1, std::memory_order_relaxed) >= traceLimit)
+        return;
+    Log("[TARGET_DESCRIPTOR_WRITE] op=%s heap=%p heap_type=%u gpu_base=0x%llx index=%u kind=%u "
+        "srv=%p resource=%p source_heap=%p source_gpu_base=0x%llx source_index=%u",
+        operation, heap, static_cast<unsigned int>(heap->hd.Type),
+        static_cast<unsigned long long>(heap->gpuBase), index,
+        static_cast<unsigned int>(descriptor.kind), descriptor.srv.Get(), descriptor.keep.Get(),
+        sourceHeap, static_cast<unsigned long long>(sourceHeap ? sourceHeap->gpuBase : 0),
+        sourceIndex);
+}
+
+Resource* AsResource(ID3D12Resource* resource) {
+    return resource ? dynamic_cast<Resource*>(resource) : nullptr;
+}
+
+void Store(D3D12_CPU_DESCRIPTOR_HANDLE handle, Descriptor&& descriptor) {
+    UINT index = 0;
+    DescriptorHeap* heap = GetHeap(handle.ptr, &index);
+    if (!heap) return;
+    TraceTargetDescriptorWrite("store", heap, index, descriptor);
+    heap->items[index] = std::move(descriptor);
+}
+
+void RememberResource(Descriptor& descriptor, Resource* resource) {
+    descriptor.res = resource;
+    if (resource) descriptor.keep = Ptr<IUnknown>(static_cast<ID3D12Resource*>(resource));
+}
+
+UINT ClampBufferElements(ID3D11Buffer* buffer, DXGI_FORMAT format, UINT structStride,
+                         UINT64 firstElement, UINT requestedElements) {
+    if (!buffer || !requestedElements) return requestedElements;
+    D3D11_BUFFER_DESC bufferDesc{};
+    buffer->GetDesc(&bufferDesc);
+    UINT elementBytes = structStride;
+    if (!elementBytes) {
+        const FormatInfo info = GetFormatInfo(format);
+        elementBytes = (info.bits && (info.bits % 8) == 0) ? (info.bits / 8) : 4u;
+    }
+    if (!elementBytes) return requestedElements;
+    const UINT maxTotalElements = bufferDesc.ByteWidth / elementBytes;
+    if (firstElement >= maxTotalElements) return 0;
+    const UINT available = maxTotalElements - static_cast<UINT>(firstElement);
+    return std::min<UINT>(requestedElements, available);
+}
+
+HRESULT CreateBufferSrv(Device* device, Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC& source,
+                        Descriptor& result) {
+    if (source.ViewDimension != D3D12_SRV_DIMENSION_BUFFER) return E_NOTIMPL;
+    const auto& view = source.Buffer;
+    if (!view.NumElements) return E_INVALIDARG;
+    D3D11_SHADER_RESOURCE_VIEW_DESC desc{};
+    const UINT stride = view.StructureByteStride;
+    ID3D11Buffer* buffer = resource->GpuBuffer();
+    if (source.Format == DXGI_FORMAT_R32_TYPELESS && (view.Flags & D3D12_BUFFER_SRV_FLAG_RAW)) {
+        D3D11_BUFFER_DESC bufferDesc{};
+        if (buffer) buffer->GetDesc(&bufferDesc);
+        const bool allowRaw =
+            (bufferDesc.MiscFlags & D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS) != 0;
+        const UINT numElements = ClampBufferElements(
+            buffer, allowRaw ? DXGI_FORMAT_R32_TYPELESS : DXGI_FORMAT_R32_UINT,
+            4, view.FirstElement, view.NumElements);
+        if (!numElements) return E_INVALIDARG;
+        if (allowRaw) {
+            desc.Format = DXGI_FORMAT_R32_TYPELESS;
+            desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+            desc.BufferEx.FirstElement = static_cast<UINT>(view.FirstElement);
+            desc.BufferEx.NumElements = numElements;
+            desc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
+        } else {
+            desc.Format = DXGI_FORMAT_R32_UINT;
+            desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+            desc.Buffer.FirstElement = static_cast<UINT>(view.FirstElement);
+            desc.Buffer.NumElements = numElements;
+        }
+    } else if (stride) {
+        buffer = resource->StructCopy(stride);
+        if (!buffer) return E_OUTOFMEMORY;
+        const UINT numElements = ClampBufferElements(
+            buffer, DXGI_FORMAT_UNKNOWN, stride, view.FirstElement, view.NumElements);
+        if (!numElements) return E_INVALIDARG;
+        desc.Format = DXGI_FORMAT_UNKNOWN;
+        desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+        desc.Buffer.FirstElement = static_cast<UINT>(view.FirstElement);
+        desc.Buffer.NumElements = numElements;
+        result.structStride = stride;
+    } else {
+        if (source.Format == DXGI_FORMAT_UNKNOWN) return E_INVALIDARG;
+        const UINT numElements = ClampBufferElements(
+            buffer, source.Format, 0, view.FirstElement, view.NumElements);
+        if (!numElements) return E_INVALIDARG;
+        desc.Format = source.Format;
+        desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+        desc.Buffer.FirstElement = static_cast<UINT>(view.FirstElement);
+        desc.Buffer.NumElements = numElements;
+    }
+
+    HRESULT hr = device->d11->CreateShaderResourceView(buffer, &desc, result.srv.Put());
+    if (SUCCEEDED(hr)) {
+        result.kind = DKind::SRV;
+        result.bufOff = view.FirstElement * (stride ? stride : 4);
+        result.bufSize = static_cast<UINT64>(view.NumElements) * (stride ? stride : 4);
+    }
+    return hr;
+}
+
+HRESULT CreateTextureSrv(Device* device, Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC& source,
+                         Descriptor& result) {
+    D3D11_SHADER_RESOURCE_VIEW_DESC desc{};
+    desc.Format = source.Format;
+    switch (source.ViewDimension) {
+    case D3D12_SRV_DIMENSION_TEXTURE1D:
+        desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE1D;
+        desc.Texture1D.MostDetailedMip = source.Texture1D.MostDetailedMip;
+        desc.Texture1D.MipLevels = source.Texture1D.MipLevels;
+        break;
+    case D3D12_SRV_DIMENSION_TEXTURE1DARRAY:
+        desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE1DARRAY;
+        desc.Texture1DArray.MostDetailedMip = source.Texture1DArray.MostDetailedMip;
+        desc.Texture1DArray.MipLevels = source.Texture1DArray.MipLevels;
+        desc.Texture1DArray.FirstArraySlice = source.Texture1DArray.FirstArraySlice;
+        desc.Texture1DArray.ArraySize = source.Texture1DArray.ArraySize;
+        break;
+    case D3D12_SRV_DIMENSION_TEXTURE2D:
+        if (source.Texture2D.PlaneSlice) return E_NOTIMPL;
+        desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        desc.Texture2D.MostDetailedMip = source.Texture2D.MostDetailedMip;
+        desc.Texture2D.MipLevels = source.Texture2D.MipLevels;
+        break;
+    case D3D12_SRV_DIMENSION_TEXTURE2DARRAY:
+        if (source.Texture2DArray.PlaneSlice) return E_NOTIMPL;
+        desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+        desc.Texture2DArray.MostDetailedMip = source.Texture2DArray.MostDetailedMip;
+        desc.Texture2DArray.MipLevels = source.Texture2DArray.MipLevels;
+        desc.Texture2DArray.FirstArraySlice = source.Texture2DArray.FirstArraySlice;
+        desc.Texture2DArray.ArraySize = source.Texture2DArray.ArraySize;
+        break;
+    case D3D12_SRV_DIMENSION_TEXTURE2DMS:
+        desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DMS;
+        break;
+    case D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY:
+        desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY;

@@ -1,0 +1,192 @@
+                "kind=dispatch outcome=%s execution_count=%llu cs=%016llx "
+                "missing_mask=0x%02x",
+                static_cast<unsigned long long>(event.ordinal),
+                static_cast<unsigned long long>(event.presentCall),
+                key.skipped ? "skipped" : "executed",
+                static_cast<unsigned long long>(event.executionCount),
+                static_cast<unsigned long long>(key.csHash),
+                key.missingStageMask);
+        } else {
+            Log("[SHADER_USE_EVENT] ordinal=%llu observed_present_calls_returned=%llu "
+                "kind=draw outcome=%s execution_count=%llu vs=%016llx ps=%016llx "
+                "gs=%016llx hs=%016llx ds=%016llx missing_mask=0x%02x "
+                "graphics_pso_bound=%u rtv_is_backbuffer=%u",
+                static_cast<unsigned long long>(event.ordinal),
+                static_cast<unsigned long long>(event.presentCall),
+                key.skipped ? "skipped" : "executed",
+                static_cast<unsigned long long>(event.executionCount),
+                static_cast<unsigned long long>(key.vsHash),
+                static_cast<unsigned long long>(key.psHash),
+                static_cast<unsigned long long>(key.gsHash),
+                static_cast<unsigned long long>(key.hsHash),
+                static_cast<unsigned long long>(key.dsHash),
+                key.missingStageMask,
+                key.hasGraphicsPipeline ? 1u : 0u,
+                key.backbuffer ? 1u : 0u);
+        }
+    }
+}
+
+void Log(const char* fmt, ...) {
+    if (!g_cfg.log) return;
+    std::lock_guard<std::mutex> l(g_logMu);
+    if (!g_logFile) {
+        g_logPath = g_cfg.baseDir + "\\d3d12on11.log";
+        g_logFile = fopen(g_logPath.c_str(), "w");
+        if (!g_logFile) {
+            char tempPath[MAX_PATH] = {};
+            const DWORD length = GetTempPathA(ARRAYSIZE(tempPath), tempPath);
+            if (length && length < ARRAYSIZE(tempPath)) {
+                char fallbackPath[MAX_PATH] = {};
+                const int written = snprintf(fallbackPath, ARRAYSIZE(fallbackPath),
+                    "%sd3d12on11_%lu.log", tempPath, GetCurrentProcessId());
+                if (written > 0 && static_cast<size_t>(written) < ARRAYSIZE(fallbackPath)) {
+                    g_logPath = fallbackPath;
+                    g_logFile = fopen(g_logPath.c_str(), "w");
+                }
+            }
+        }
+        if (!g_logFile) {
+            if (!g_logOpenFailureReported) {
+                OutputDebugStringA("d3d12on11: unable to open log beside the proxy or in the temp directory\n");
+                g_logOpenFailureReported = true;
+            }
+            return;
+        }
+        if (g_cfg.diagnosticRenderTrace)
+            fprintf(g_logFile, "Log file: %s [tid=%lu]\n", g_logPath.c_str(), GetCurrentThreadId());
+        else
+            fprintf(g_logFile, "Log file: %s\n", g_logPath.c_str());
+    }
+    SYSTEMTIME t; GetLocalTime(&t);
+    fprintf(g_logFile, "[%02d:%02d:%02d.%03d] ", t.wHour, t.wMinute, t.wSecond, t.wMilliseconds);
+    if (g_cfg.diagnosticRenderTrace)
+        fprintf(g_logFile, "[tid=%lu] ", GetCurrentThreadId());
+    va_list ap; va_start(ap, fmt);
+    vfprintf(g_logFile, fmt, ap);
+    va_end(ap);
+    fputc('\n', g_logFile);
+    fflush(g_logFile);
+}
+
+void Unimpl(const char* name) {
+    static std::mutex m;
+    static std::set<std::string> seen;
+    std::lock_guard<std::mutex> l(m);
+    if (seen.insert(name).second) Log("UNIMPL %s", name);
+}
+
+// ------------------------------------------------------------------ utilita' varie
+UINT64 AlignUp(UINT64 v, UINT64 a) { return (v + a - 1) / a * a; }
+
+uint64_t Fnv1a64(const void* data, size_t len) {
+    const uint8_t* p = (const uint8_t*)data;
+    uint64_t h = 14695981039346656037ull;
+    for (size_t i = 0; i < len; ++i) { h ^= p[i]; h *= 1099511628211ull; }
+    return h;
+}
+std::string Hex64(uint64_t v) { char b[32]; snprintf(b, sizeof(b), "%016llx", (unsigned long long)v); return b; }
+
+bool Sha256Hex(const void* data, size_t size, std::string& result) {
+    result.clear();
+    if ((!data && size) || size > static_cast<size_t>(std::numeric_limits<ULONG>::max()))
+        return false;
+
+    BCRYPT_ALG_HANDLE algorithm = nullptr;
+    BCRYPT_HASH_HANDLE hash = nullptr;
+    DWORD objectSize = 0;
+    DWORD hashSize = 0;
+    DWORD bytesReturned = 0;
+    std::vector<uint8_t> hashObject;
+    std::array<uint8_t, 32> digest{};
+    NTSTATUS status = BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0);
+    if (!BCRYPT_SUCCESS(status)) return false;
+
+    status = BCryptGetProperty(algorithm, BCRYPT_OBJECT_LENGTH,
+        reinterpret_cast<PUCHAR>(&objectSize), sizeof(objectSize), &bytesReturned, 0);
+    if (BCRYPT_SUCCESS(status)) {
+        status = BCryptGetProperty(algorithm, BCRYPT_HASH_LENGTH,
+            reinterpret_cast<PUCHAR>(&hashSize), sizeof(hashSize), &bytesReturned, 0);
+    }
+    if (BCRYPT_SUCCESS(status) && hashSize == digest.size()) {
+        hashObject.resize(objectSize);
+        status = BCryptCreateHash(algorithm, &hash, hashObject.data(), objectSize, nullptr, 0, 0);
+    } else if (BCRYPT_SUCCESS(status)) {
+        status = STATUS_INVALID_PARAMETER;
+    }
+    if (BCRYPT_SUCCESS(status) && size) {
+        status = BCryptHashData(hash, const_cast<PUCHAR>(static_cast<const UCHAR*>(data)),
+            static_cast<ULONG>(size), 0);
+    }
+    if (BCRYPT_SUCCESS(status)) {
+        status = BCryptFinishHash(hash, digest.data(), static_cast<ULONG>(digest.size()), 0);
+    }
+    if (hash) BCryptDestroyHash(hash);
+    BCryptCloseAlgorithmProvider(algorithm, 0);
+    if (!BCRYPT_SUCCESS(status)) return false;
+
+    static constexpr char hex[] = "0123456789abcdef";
+    result.reserve(digest.size() * 2);
+    for (uint8_t byte : digest) {
+        result.push_back(hex[byte >> 4]);
+        result.push_back(hex[byte & 0x0f]);
+    }
+    return true;
+}
+
+void LogModuleFingerprint(const char* role, HMODULE module) {
+    if (!role || !module) {
+        Log("MODULE_FINGERPRINT_FAILED role=%s reason=invalid-module", role ? role : "(null)");
+        return;
+    }
+
+    char path[MAX_PATH] = {};
+    const DWORD pathLength = GetModuleFileNameA(module, path, ARRAYSIZE(path));
+    if (!pathLength || pathLength >= ARRAYSIZE(path)) {
+        Log("MODULE_FINGERPRINT_FAILED role=%s reason=module-path-error win32=%lu",
+            role, GetLastError());
+        return;
+    }
+
+    std::vector<uint8_t> image;
+    if (!ReadFileBytes(path, image)) {
+        Log("MODULE_FINGERPRINT_FAILED role=%s path=%s reason=read-failed win32=%lu",
+            role, path, GetLastError());
+        return;
+    }
+
+    std::string digest;
+    if (!Sha256Hex(image.data(), image.size(), digest)) {
+        Log("MODULE_FINGERPRINT_FAILED role=%s path=%s reason=sha256-failed bytes=%zu",
+            role, path, image.size());
+        return;
+    }
+    Log("MODULE_FINGERPRINT role=%s path=%s bytes=%zu sha256=%s",
+        role, path, image.size(), digest.c_str());
+}
+
+UINT MapRegister(char kind, UINT space, UINT reg) {
+    if (!space) return reg;
+    const std::string key = std::string(1, kind) + ":" + std::to_string(space) + ":" + std::to_string(reg);
+    auto it = Cfg().bindingMap.find(key);
+    if (it != Cfg().bindingMap.end()) return it->second;
+    Log("No binding-map entry for %s; using register %u (possible collision)", key.c_str(), reg);
+    return reg;
+}
+
+bool ReadFileBytes(const std::string& path, std::vector<uint8_t>& out) {
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) return false;
+    fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
+    if (n < 0) { fclose(f); return false; }
+    out.resize((size_t)n);
+    size_t rd = n ? fread(out.data(), 1, (size_t)n, f) : 0;
+    fclose(f);
+    return rd == (size_t)n;
+}
+void MakeDirs(const std::string& path) {
+    std::string cur;
+    for (size_t i = 0; i < path.size(); ++i) {
+        cur += path[i];
+        if ((path[i] == '\\' || path[i] == '/') && cur.size() > 3) _mkdir(cur.c_str());
+    }

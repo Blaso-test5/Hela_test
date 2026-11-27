@@ -1,0 +1,141 @@
+[
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/tools/LiveFrameMonitor/Get-HelaProxySnapshot.ps1",
+    "totalLineCount": 813,
+    "sourceByteCount": 39188,
+    "sha256": "68617431fe1e980d9c54eafb4ae75ba5a1e3b78d0e6c7a96368ffa34889aec9d",
+    "publishedSha256": "68617431fe1e980d9c54eafb4ae75ba5a1e3b78d0e6c7a96368ffa34889aec9d",
+    "publishedByteCount": 39188,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/Get-HelaProxySnapshot.ps1.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 184,
+        "byteCount": 7998,
+        "sha256": "437f95e49dc488b24877596cfe829584150c2afe3aa52539ba6805542505603a"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/Get-HelaProxySnapshot.ps1.part002.txt",
+        "lineStart": 185,
+        "lineEnd": 359,
+        "byteCount": 7938,
+        "sha256": "7607452cfc791c0d4d1fc4ad53d2943f1f81a268c5a34f29b8ae3135c03dcfb0"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/Get-HelaProxySnapshot.ps1.part003.txt",
+        "lineStart": 360,
+        "lineEnd": 516,
+        "byteCount": 7998,
+        "sha256": "929f04a0fec4f69de40502316c60cbf8709c4d4618eb55618a13a8cc31b1f1a0"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/Get-HelaProxySnapshot.ps1.part004.txt",
+        "lineStart": 517,
+        "lineEnd": 667,
+        "byteCount": 7990,
+        "sha256": "5b313f1d1723ef80c252f6060376371920b8c6a23a1b3311cc8e8b0bb0993ee7"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/Get-HelaProxySnapshot.ps1.part005.txt",
+        "lineStart": 668,
+        "lineEnd": 813,
+        "byteCount": 7264,
+        "sha256": "b09936f26e5624e88347493fda9179bc237b302f82299342fa7f895440b82751"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/tools/LiveFrameMonitor/ProxyManager.ps1",
+    "totalLineCount": 854,
+    "sourceByteCount": 37913,
+    "sha256": "5b20a95a538010f931cd99fd63d5bd20dd3d2f11e65dcca3bab1ccef956e2dcb",
+    "publishedSha256": "ff3a4290c522d650526f61a34ca33ec632f813172af95596defc0e960d9c211b",
+    "publishedByteCount": 37885,
+    "byteFaithful": false,
+    "redactions": [
+      {
+        "rule": "replaced machine-local Hela install root with <HELA_INSTALL_ROOT>",
+        "occurrences": 1
+      }
+    ],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/ProxyManager.ps1.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 210,
+        "byteCount": 7948,
+        "sha256": "6e69daaad9d5bceec235c3ce7d4718abb4f3e5f3ae6ed50aab719c4b023ea8f4"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/ProxyManager.ps1.part002.txt",
+        "lineStart": 211,
+        "lineEnd": 401,
+        "byteCount": 7983,
+        "sha256": "66e41e8950d1ff90b047aa8e71bdd2eba5caeb54a2112faf8414ce5e11ad47b2"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/ProxyManager.ps1.part003.txt",
+        "lineStart": 402,
+        "lineEnd": 583,
+        "byteCount": 7971,
+        "sha256": "8aca434e1023eb4243c73fc5dcdfa51138bcd47198d3d0a79bbb956d851cb5ef"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/ProxyManager.ps1.part004.txt",
+        "lineStart": 584,
+        "lineEnd": 745,
+        "byteCount": 7998,
+        "sha256": "0a91cffee7bb969d042247b9e5354e5c4634f3f4417690f05b78093183abe228"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/ProxyManager.ps1.part005.txt",
+        "lineStart": 746,
+        "lineEnd": 854,
+        "byteCount": 5985,
+        "sha256": "804a52dbdf0f2bdef88cce1310995fd308779ce53e69d59fbf5eb67e7cf0418b"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/tools/LiveFrameMonitor/README.md",
+    "totalLineCount": 162,
+    "sourceByteCount": 12245,
+    "sha256": "59e97099fb36f1984a204b9cb4e5f077d0475f43795d9d9f3a71e0207d76544e",
+    "publishedSha256": "effbd8e4b6cb344e2fa51b5112aa981604d5ccb46bc0d79fbc8ee5b97b312439",
+    "publishedByteCount": 12161,
+    "byteFaithful": false,
+    "redactions": [
+      {
+        "rule": "replaced machine-local Hela install root with <HELA_INSTALL_ROOT>",
+        "occurrences": 3
+      }
+    ],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/README.md.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 79,
+        "byteCount": 7960,
+        "sha256": "2097be5e858a08b32a4fac467a589d688f0a07e4c3d9f9d15bcfa22264b3466c"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/README.md.part002.txt",
+        "lineStart": 80,
+        "lineEnd": 162,
+        "byteCount": 4201,
+        "sha256": "da6587b5275c8cbc62de020ae78a0fa93d691ea704e5b43ec6e9172da000be96"
+      }
+    ]
+  }
+]

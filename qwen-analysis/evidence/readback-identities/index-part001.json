@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "path": "evidence/readback-identities/part0001.ndjson",
+      "recordStart": 1,
+      "recordEnd": 19,
+      "recordCount": 19,
+      "byteCount": 3563,
+      "sha256": "e2d9519baa5dd84f96a1f4bbd2f6b2cc7f1021719283a03a4feeb8aeb59a2dd7"
+    }
+  ]
+}

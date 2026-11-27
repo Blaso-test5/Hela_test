@@ -1,0 +1,15 @@
+{
+  "schema": "qwen.evidence.dataset-index",
+  "dataset": "shader-use-summary",
+  "recordCount": 18,
+  "byteCount": 5180,
+  "sha256": "a5d1d99869ebf98fe1719806f6938ce970cb11a534c78a1d879e80cf24e92819",
+  "indexParts": [
+    {
+      "path": "evidence/shader-use-summary/index-part001.json",
+      "itemCount": 1,
+      "byteCount": 274,
+      "sha256": "114f05c52c4a489f10b627cccca00c67de6ea78dc5c48d25cb50bd301988ab9e"
+    }
+  ]
+}

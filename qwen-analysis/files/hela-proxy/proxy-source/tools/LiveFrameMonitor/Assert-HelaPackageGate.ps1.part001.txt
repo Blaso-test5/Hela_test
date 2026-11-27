@@ -1,0 +1,198 @@
+[CmdletBinding()]
+param(
+    [string]$PackagePath = "",
+    [string]$RunManifestPath = "",
+    [switch]$SelfTest
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+function Get-Sha256File {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Required file not found: $Path"
+    }
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Read-JsonFile {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Required JSON file not found: $Path"
+    }
+    return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+}
+
+function Assert-HelaPackageGate {
+    param(
+        [Parameter(Mandatory = $true)][string]$PackagePath,
+        [Parameter(Mandatory = $true)][string]$RunManifestPath
+    )
+
+    $package = [IO.Path]::GetFullPath($PackagePath)
+    $manifest = Read-JsonFile -Path $RunManifestPath
+    if ($manifest.schema -ne "hela-run-manifest/v1") {
+        throw "Run manifest schema is not hela-run-manifest/v1"
+    }
+
+    $candidate = Read-JsonFile -Path (Join-Path $package "candidate-package.json")
+    if ($candidate.schemaVersion -ne 1) {
+        throw "Invalid candidate-package.json schema"
+    }
+    if ([string]$candidate.packageId -ne [string]$manifest.testVersion) {
+        throw "candidate-package packageId differs from run manifest testVersion"
+    }
+
+    foreach ($role in @("d3d12", "dxgi")) {
+        $relative = "runtime/$role.dll"
+        $entries = @($candidate.runtime | Where-Object { $_.path -eq $relative })
+        if ($entries.Count -ne 1) {
+            throw "candidate-package.runtime missing $relative"
+        }
+        $diskHash = Get-Sha256File -Path (Join-Path $package "runtime\$role.dll")
+        if ($diskHash -ne ([string]$entries[0].sha256).ToLowerInvariant()) {
+            throw "Runtime $role.dll disk hash differs from candidate-package"
+        }
+        if ($diskHash -ne ([string]$manifest.runtime.$role).ToLowerInvariant()) {
+            throw "Runtime $role.dll hash differs from run manifest"
+        }
+    }
+
+    $candidateByPath = @{}
+    foreach ($entry in @($candidate.overrides)) {
+        if ([string]$entry.path -notmatch '^overrides/[^/]+\.cso$') {
+            throw "Override path must be flat under overrides/: $($entry.path)"
+        }
+        $candidateByPath[[string]$entry.path] = $entry
+    }
+
+    $expectedNames = @(
+        $manifest.overrides.PSObject.Properties |
+        ForEach-Object { $_.Name } |
+        Sort-Object
+    )
+    $candidateNames = @(
+        $candidateByPath.Keys |
+        ForEach-Object { Split-Path -Leaf $_ } |
+        Sort-Object
+    )
+    if (Compare-Object -ReferenceObject $expectedNames -DifferenceObject $candidateNames) {
+        throw "candidate-package override set differs from run manifest"
+    }
+
+    foreach ($name in $expectedNames) {
+        $entry = $candidateByPath["overrides/$name"]
+        $diskHash = Get-Sha256File -Path (Join-Path $package "overrides\$name")
+        if ($diskHash -ne ([string]$entry.sha256).ToLowerInvariant()) {
+            throw "Override $name disk hash differs from candidate-package"
+        }
+        if ($diskHash -ne ([string]$manifest.overrides.PSObject.Properties[$name].Value).ToLowerInvariant()) {
+            throw "Override $name hash differs from run manifest"
+        }
+    }
+
+    $inventory = Read-JsonFile -Path (Join-Path $package "override-inventory.json")
+    if ($inventory.schemaVersion -ne 1 -or
+        [string]$inventory.packageId -ne [string]$candidate.packageId) {
+        throw "override-inventory.json schema/package mismatch"
+    }
+    if (@($inventory.overrides).Count -ne @($candidate.overrides).Count) {
+        throw "override-inventory entry count differs"
+    }
+
+    $inventoryByPath = @{}
+    foreach ($entry in @($inventory.overrides)) {
+        $key = [string]$entry.path
+        if ($inventoryByPath.ContainsKey($key)) {
+            throw "Duplicate inventory path: $key"
+        }
+        $inventoryByPath[$key] = $entry
+    }
+    foreach ($entry in @($candidate.overrides)) {
+        $key = [string]$entry.path
+        $inventoryEntry = $inventoryByPath[$key]
+        if ($null -eq $inventoryEntry) {
+            throw "Inventory missing entry: $key"
+        }
+        if ([string]$inventoryEntry.id -ne [string]$entry.id -or
+            ([string]$inventoryEntry.sha256).ToLowerInvariant() -ne ([string]$entry.sha256).ToLowerInvariant()) {
+            throw "Inventory entry mismatch: $key"
+        }
+        $diskPath = Join-Path $package ($key -replace "/", "\")
+        $diskBytes = (Get-Item -LiteralPath $diskPath).Length
+        if ([int64]$inventoryEntry.bytes -ne $diskBytes) {
+            throw "Inventory byte size mismatch: $key"
+        }
+    }
+
+    $report = Read-JsonFile -Path (Join-Path $package "package-report.json")
+    if ($report.ok -ne $true) {
+        throw "package-report.json gate failed"
+    }
+    if ($report.lifecycle -ne "staged-only" -or
+        $report.installed -ne $false -or
+        $report.networkUsed -ne $false) {
+        throw "package-report.json is not staged-only"
+    }
+
+    $candidateHash = Get-Sha256File -Path (Join-Path $package "candidate-package.json")
+    if ([string]$report.manifestSha256 -ne $candidateHash) {
+        throw "package-report manifestSha256 differs"
+    }
+
+    return [ordered]@{
+        schema = "hela-package-gate-bridge/v1"
+        package_path = $package
+        package_id = [string]$candidate.packageId
+        test_version = [string]$manifest.testVersion
+        override_count = $expectedNames.Count
+        lifecycle = "staged-only"
+        mutation_performed = $false
+    }
+}
+
+function Invoke-SelfTest {
+    $root = Join-Path ([IO.Path]::GetTempPath()) ("hela-gate-" + [Guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $root -Force | Out-Null
+    try {
+        $package = Join-Path $root "package"
+        New-Item -ItemType Directory -Path (Join-Path $package "runtime") -Force | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $package "overrides") -Force | Out-Null
+        [IO.File]::WriteAllBytes((Join-Path $package "runtime\d3d12.dll"), [Text.Encoding]::ASCII.GetBytes("fake-d3d12"))
+        [IO.File]::WriteAllBytes((Join-Path $package "runtime\dxgi.dll"), [Text.Encoding]::ASCII.GetBytes("fake-dxgi"))
+        [IO.File]::WriteAllBytes((Join-Path $package "overrides\a.cso"), [Text.Encoding]::ASCII.GetBytes("fake-cso"))
+
+        $d3d12Hash = Get-Sha256File -Path (Join-Path $package "runtime\d3d12.dll")
+        $dxgiHash = Get-Sha256File -Path (Join-Path $package "runtime\dxgi.dll")
+        $csoHash = Get-Sha256File -Path (Join-Path $package "overrides\a.cso")
+
+        $candidate = [ordered]@{
+            schemaVersion = 1
+            packageId = "T-selftest"
+            runtime = @(
+                [ordered]@{ path = "runtime/d3d12.dll"; sha256 = $d3d12Hash },
+                [ordered]@{ path = "runtime/dxgi.dll"; sha256 = $dxgiHash }
+            )
+            overrides = @(
+                [ordered]@{ id = "ov-a"; path = "overrides/a.cso"; sha256 = $csoHash }
+            )
+        }
+        $candidatePath = Join-Path $package "candidate-package.json"
+        $candidateJson = $candidate | ConvertTo-Json -Depth 6
+        Set-Content -LiteralPath $candidatePath -Value $candidateJson -Encoding UTF8
+        $candidateHash = Get-Sha256File -Path $candidatePath
+
+        $inventory = [ordered]@{
+            schemaVersion = 1
+            packageId = "T-selftest"
+            overrides = @(
+                [ordered]@{
+                    id = "ov-a"
+                    path = "overrides/a.cso"
+                    sha256 = $csoHash
+                    bytes = (Get-Item -LiteralPath (Join-Path $package "overrides\a.cso")).Length
+                }
+            )
+        }
+        $inventory | ConvertTo-Json -Depth 6 |

@@ -1,0 +1,190 @@
+            snapshot.clears = pair.second.clears;
+            snapshot.entries = pair.second.entries;
+            snapshots.push_back(std::move(snapshot));
+        }
+        g_backbufferSourceHistory.clear();
+    }
+
+    if (snapshots.empty()) {
+        Log("[BB_SOURCE_HISTORY] No CopyResource-to-backbuffer sources registered");
+        return;
+    }
+    for (const auto& snapshot : snapshots) {
+        const size_t total = static_cast<size_t>(snapshot.executedDraws +
+            snapshot.skippedDraws + snapshot.clears);
+        if (!total) {
+            Log("[BB_SOURCE_HISTORY] Resource %p has NO draw/clear history",
+                snapshot.resource);
+            continue;
+        }
+        Log("[BB_SOURCE_HISTORY] Resource %p operations=%llu draws=%llu skipped=%llu clears=%llu",
+            snapshot.resource, static_cast<unsigned long long>(total),
+            static_cast<unsigned long long>(snapshot.executedDraws),
+            static_cast<unsigned long long>(snapshot.skippedDraws),
+            static_cast<unsigned long long>(snapshot.clears));
+        for (const auto& entry : snapshot.entries)
+            Log("[BB_SOURCE_HISTORY]   %s", entry.c_str());
+        if (total > snapshot.entries.size())
+            Log("[BB_SOURCE_HISTORY]   ... and %llu more operations",
+                static_cast<unsigned long long>(total - snapshot.entries.size()));
+    }
+}
+
+void RecordDispatchExecution(ExecState& state, bool skipped,
+    uint64_t dispatchCount = 1) {
+    if (!Cfg().diagnosticRenderTrace) return;
+    if (!skipped)
+        TraceStats().dispatchExec.fetch_add(dispatchCount, std::memory_order_relaxed);
+    RecordComputeShaderUse(state.computeShaderHash,
+        state.computeMissingShaderStages, skipped, dispatchCount);
+}
+
+HRESULT WaitForQuery(Device* device, ID3D11Query* query, void* data, UINT dataSize) {
+    const ULONGLONG deadline = GetTickCount64() + 5000;
+    HRESULT result = S_FALSE;
+    while ((result = device->ctx->GetData(query, data, dataSize,
+            D3D11_ASYNC_GETDATA_DONOTFLUSH)) == S_FALSE) {
+        if (GetTickCount64() >= deadline)
+            return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+        SwitchToThread();
+    }
+    return result;
+}
+
+HRESULT GetDeviceTimestampFrequency(Device* device, UINT64* frequency) {
+    if (device->timestampFrequency) {
+        *frequency = device->timestampFrequency;
+        return S_OK;
+    }
+
+    D3D11_QUERY_DESC desc{D3D11_QUERY_TIMESTAMP_DISJOINT, 0};
+    Ptr<ID3D11Query> query;
+    HRESULT result = device->d11->CreateQuery(&desc, query.Put());
+    if (FAILED(result)) {
+        Log("GetTimestampFrequency could not create D3D11 disjoint query: hr=0x%08lx", result);
+        return result;
+    }
+
+    device->ctx->Begin(query.Get());
+    device->ctx->End(query.Get());
+    device->ctx->Flush();
+
+    D3D11_QUERY_DATA_TIMESTAMP_DISJOINT data{};
+    result = WaitForQuery(device, query.Get(), &data, sizeof(data));
+    if (FAILED(result)) {
+        Log("GetTimestampFrequency D3D11 disjoint query failed: hr=0x%08lx", result);
+        return result;
+    }
+    if (data.Disjoint || !data.Frequency) {
+        Log("GetTimestampFrequency received disjoint/zero-frequency timestamp data");
+        return E_FAIL;
+    }
+
+    device->timestampFrequency = data.Frequency;
+    *frequency = data.Frequency;
+    return S_OK;
+}
+
+Descriptor DescriptorAt(D3D12_CPU_DESCRIPTOR_HANDLE handle, DKind expected) {
+    UINT index = 0;
+    DescriptorHeap* heap = FindHeapByCpu(handle.ptr, &index);
+    if (!heap || heap->items[index].kind != expected) return {};
+    return heap->items[index];
+}
+
+Descriptor DescriptorAt(D3D12_GPU_DESCRIPTOR_HANDLE handle, DKind expected) {
+    UINT index = 0;
+    DescriptorHeap* heap = FindHeapByGpu(handle.ptr, &index);
+    if (!heap || heap->items[index].kind != expected) return {};
+    return heap->items[index];
+}
+
+struct FootprintCopyInfo {
+    UINT rows = 0;
+    UINT blocksPerRow = 0;
+    UINT64 rowBytes = 0;
+    UINT64 sliceBytes = 0;
+    UINT bytesPerBlock = 0;
+};
+
+bool ValidateFootprint(Resource* buffer, const D3D12_PLACED_SUBRESOURCE_FOOTPRINT& placed,
+                       FootprintCopyInfo& info) {
+    const auto& footprint = placed.Footprint;
+    const FormatInfo format = GetFormatInfo(footprint.Format);
+    if (!buffer || !buffer->IsBuffer() || !footprint.Width || !footprint.Height ||
+        !footprint.Depth || !format.bits || format.bits % 8 ||
+        !format.blockW || !format.blockH || !footprint.RowPitch ||
+        footprint.RowPitch % D3D12_TEXTURE_DATA_PITCH_ALIGNMENT ||
+        placed.Offset % D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT)
+        return false;
+    info.bytesPerBlock = format.bits / 8;
+    info.blocksPerRow = (footprint.Width + format.blockW - 1) / format.blockW;
+    info.rows = (footprint.Height + format.blockH - 1) / format.blockH;
+    info.rowBytes = static_cast<UINT64>(info.blocksPerRow) * info.bytesPerBlock;
+    if (footprint.RowPitch < info.rowBytes) return false;
+    info.sliceBytes = static_cast<UINT64>(footprint.RowPitch) * info.rows;
+    const UINT64 lastSlice = static_cast<UINT64>(footprint.Depth - 1) * info.sliceBytes;
+    const UINT64 lastRow = static_cast<UINT64>(info.rows - 1) * footprint.RowPitch;
+    if (placed.Offset > buffer->desc.Width || lastSlice > buffer->desc.Width - placed.Offset ||
+        lastRow > buffer->desc.Width - placed.Offset - lastSlice ||
+        info.rowBytes > buffer->desc.Width - placed.Offset - lastSlice - lastRow)
+        return false;
+    return true;
+}
+
+HRESULT CreateStagingTexture(Device* device, D3D12_RESOURCE_DIMENSION dimension,
+    const D3D12_SUBRESOURCE_FOOTPRINT& footprint, UINT cpuAccess, Ptr<ID3D11Resource>& out) {
+    auto logFailure = [&](const char* api, HRESULT result) {
+        if (Cfg().diagnosticRenderTrace) {
+            Log("[RENDER_TRACE] [STAGING_CREATE_FAIL] api=%s dimension=%u format=%u "
+                "width=%u height=%u depth=%u row-pitch=%u cpu-access=0x%x hr=0x%08lx",
+                api, static_cast<UINT>(dimension), static_cast<UINT>(footprint.Format),
+                footprint.Width, footprint.Height, footprint.Depth, footprint.RowPitch,
+                cpuAccess, result);
+        }
+        return result;
+    };
+    if (dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D) {
+        D3D11_TEXTURE1D_DESC desc{};
+        desc.Width = footprint.Width;
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+        desc.Format = footprint.Format;
+        desc.Usage = D3D11_USAGE_STAGING;
+        desc.CPUAccessFlags = cpuAccess;
+        Ptr<ID3D11Texture1D> texture;
+        const HRESULT result = device->d11->CreateTexture1D(&desc, nullptr, texture.Put());
+        if (FAILED(result)) return logFailure("CreateTexture1D", result);
+        if (SUCCEEDED(result)) {
+            ID3D11Resource* base = texture.Get();
+            base->AddRef();
+            out = Ptr<ID3D11Resource>::Attach(base);
+        }
+        return result;
+    }
+    if (dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D) {
+        if (footprint.Depth != 1) return logFailure("validation-depth-2D", E_INVALIDARG);
+        D3D11_TEXTURE2D_DESC desc{};
+        desc.Width = footprint.Width;
+        desc.Height = footprint.Height;
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+        desc.Format = footprint.Format;
+        desc.SampleDesc.Count = 1;
+        desc.Usage = D3D11_USAGE_STAGING;
+        desc.CPUAccessFlags = cpuAccess;
+        Ptr<ID3D11Texture2D> texture;
+        const HRESULT result = device->d11->CreateTexture2D(&desc, nullptr, texture.Put());
+        if (FAILED(result)) return logFailure("CreateTexture2D", result);
+        if (SUCCEEDED(result)) {
+            ID3D11Resource* base = texture.Get();
+            base->AddRef();
+            out = Ptr<ID3D11Resource>::Attach(base);
+        }
+        return result;
+    }
+    if (dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
+        D3D11_TEXTURE3D_DESC desc{};
+        desc.Width = footprint.Width;
+        desc.Height = footprint.Height;
+        desc.Depth = footprint.Depth;

@@ -1,0 +1,21 @@
+{
+  "name": "sm6-to-sm5-mcp",
+  "version": "0.1.0",
+  "description": "Server MCP per VS Code: analisi e conversione di shader HLSL SM6 -> SM5 (D3D12 -> D3D11)",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "node dist/test.js",
+    "test:hela-package": "node --test tools/hela-package/package-gate.test.mjs tools/hela-package/run-evidence.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

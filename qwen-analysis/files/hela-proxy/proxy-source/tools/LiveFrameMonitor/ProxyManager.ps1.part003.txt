@@ -1,0 +1,182 @@
+        if ($savedPresent -ne $expectedPresent) {
+            throw "Restore point presence mismatch for $name."
+        }
+        if ($expectedPresent -and (Get-Sha256 -Path $savedPath) -ne $expectedHash) {
+            throw "Restore point hash mismatch for $name."
+        }
+    }
+    $hasOverridesDirectoryProperty = $null -ne $manifest.PSObject.Properties["overrides_directory_present"]
+    $expectedOverridesDirectoryPresent = if ($hasOverridesDirectoryProperty) {
+        [bool]$manifest.overrides_directory_present
+    } else {
+        $true
+    }
+    $savedOverridesDirectoryPresent = Test-Path -LiteralPath (Join-Path $RestoreRoot "overrides") -PathType Container
+    if ($savedOverridesDirectoryPresent -ne $expectedOverridesDirectoryPresent) {
+        throw "Restore point override directory presence mismatch."
+    }
+    $expectedOverrides = @($manifest.overrides | ForEach-Object { $_.path } | Sort-Object)
+    $actualOverrides = @(Get-DirectoryInventory -Path (Join-Path $RestoreRoot "overrides") |
+        ForEach-Object { $_.path } | Sort-Object)
+    if (Compare-Object -ReferenceObject $expectedOverrides -DifferenceObject $actualOverrides) {
+        throw "Restore point override file set is incomplete or changed."
+    }
+    foreach ($entry in @($manifest.overrides)) {
+        if ([IO.Path]::IsPathRooted([string]$entry.path) -or
+            ([string]$entry.path -split '[\\/]') -contains "..") {
+            throw "Invalid relative path in restore point: $($entry.path)"
+        }
+        $path = Join-Path (Join-Path $RestoreRoot "overrides") $entry.path
+        if ((Get-Sha256 -Path $path) -ne [string]$entry.sha256) {
+            throw "Restore point override hash mismatch: $($entry.path)"
+        }
+    }
+    return $manifest
+}
+
+function Save-InstalledState {
+    param([Parameter(Mandatory = $true)][string]$RestoreRoot)
+    New-Item -ItemType Directory -Path $RestoreRoot -Force | Out-Null
+    foreach ($name in @("d3d12.dll", "dxgi.dll")) {
+        $source = Join-Path $GameDir $name
+        if (Test-Path -LiteralPath $source -PathType Leaf) {
+            Copy-Item -LiteralPath $source -Destination $RestoreRoot -Force
+        }
+    }
+    if (Test-Path -LiteralPath $InstalledOverridesDir -PathType Container) {
+        Copy-DirectoryContents -Source $InstalledOverridesDir `
+            -Destination (Join-Path $RestoreRoot "overrides")
+    }
+    Write-RestoreManifest -RestoreRoot $RestoreRoot
+    $null = Assert-RestorePoint -RestoreRoot $RestoreRoot
+}
+
+function Restore-InstalledState {
+    param([Parameter(Mandatory = $true)][string]$RestoreRoot)
+    Assert-GameStopped
+    $restoreManifest = Assert-RestorePoint -RestoreRoot $RestoreRoot
+    foreach ($name in @("d3d12.dll", "dxgi.dll")) {
+        $runtimeEntry = $restoreManifest.runtime.PSObject.Properties[$name].Value
+        $originallyPresent = if ($runtimeEntry -is [string]) {
+            $true
+        } else {
+            [bool]$runtimeEntry.present
+        }
+        $savedPath = Join-Path $RestoreRoot $name
+        $installedPath = Join-Path $GameDir $name
+        if ($originallyPresent) {
+            Copy-Item -LiteralPath $savedPath -Destination $GameDir -Force
+        } elseif (Test-Path -LiteralPath $installedPath -PathType Leaf) {
+            Remove-Item -LiteralPath $installedPath -Force
+        }
+    }
+    $hasOverridesDirectoryProperty = $null -ne $restoreManifest.PSObject.Properties["overrides_directory_present"]
+    $originalOverridesDirectoryPresent = if ($hasOverridesDirectoryProperty) {
+        [bool]$restoreManifest.overrides_directory_present
+    } else {
+        $true
+    }
+    if ($originalOverridesDirectoryPresent) {
+        Clear-DirectoryContents -Path $InstalledOverridesDir
+        Copy-DirectoryContents -Source (Join-Path $RestoreRoot "overrides") -Destination $InstalledOverridesDir
+    } elseif (Test-Path -LiteralPath $InstalledOverridesDir -PathType Container) {
+        Remove-Item -LiteralPath $InstalledOverridesDir -Recurse -Force
+    }
+
+    foreach ($name in @("d3d12.dll", "dxgi.dll")) {
+        $runtimeEntry = $restoreManifest.runtime.PSObject.Properties[$name].Value
+        $originallyPresent = if ($runtimeEntry -is [string]) {
+            $true
+        } else {
+            [bool]$runtimeEntry.present
+        }
+        $installedPath = Join-Path $GameDir $name
+        $installedPresent = Test-Path -LiteralPath $installedPath -PathType Leaf
+        if ($installedPresent -ne $originallyPresent) {
+            throw "Restored runtime presence verification failed for $name."
+        }
+        if ($originallyPresent) {
+            $expectedHash = if ($runtimeEntry -is [string]) {
+                $runtimeEntry
+            } else {
+                [string]$runtimeEntry.sha256
+            }
+            if ((Get-Sha256 -Path $installedPath) -ne $expectedHash) {
+                throw "Restored runtime verification failed for $name."
+            }
+        }
+    }
+    $expected = @(Get-DirectoryInventory -Path (Join-Path $RestoreRoot "overrides") |
+        ForEach-Object { "$($_.path)|$($_.sha256)" } | Sort-Object)
+    $actual = @(Get-DirectoryInventory -Path $InstalledOverridesDir |
+        ForEach-Object { "$($_.path)|$($_.sha256)" } | Sort-Object)
+    if (Compare-Object -ReferenceObject $expected -DifferenceObject $actual) {
+        throw "Restored shader override inventory does not match the saved state."
+    }
+}
+
+function Move-IfPresent {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Destination
+    )
+    if (Test-Path -LiteralPath $Path -PathType Leaf) {
+        $parent = Split-Path -Parent $Destination
+        if (-not (Test-Path -LiteralPath $parent -PathType Container)) {
+            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        }
+        Move-Item -LiteralPath $Path -Destination $Destination
+        return $true
+    }
+    return $false
+}
+
+function Get-RunCapturePaths {
+    param([Parameter(Mandatory = $true)][UInt32]$TargetPresent)
+    $paths = @()
+    foreach ($number in @(100, $TargetPresent | Select-Object -Unique)) {
+        foreach ($kind in @("source", "backbuffer")) {
+            $paths += "D:\HelaReadback_Present${number}_${kind}.bmp"
+        }
+    }
+    return @($paths | Select-Object -Unique)
+}
+
+function Assert-MonitorReport {
+    param(
+        [Parameter(Mandatory = $true)][string]$ReportPath,
+        [Parameter(Mandatory = $true)][UInt32]$TargetPresent,
+        [Parameter(Mandatory = $true)][string]$ExpectedVersion
+    )
+    if (-not (Test-Path -LiteralPath $ReportPath -PathType Leaf)) {
+        throw "Live monitor did not produce its report: $ReportPath"
+    }
+    $report = Get-Content -LiteralPath $ReportPath -Raw | ConvertFrom-Json
+    if ($report.run_identity.test_version -ne $ExpectedVersion -or
+        $report.run_identity.attestation_status -ne "verified") {
+        throw "Live monitor runtime attestation was not verified for $ExpectedVersion."
+    }
+    if ([UInt32]$report.capture_target.present -ne $TargetPresent -or
+        -not $report.capture_target.complete) {
+        throw "Live monitor did not complete source/backbuffer readbacks for Present #$TargetPresent."
+    }
+    foreach ($kind in @("source", "backbuffer")) {
+        if ($null -eq $report.bmp_verification.PSObject.Properties[$kind]) {
+            throw "Live monitor did not verify the Present #$TargetPresent $kind BMP."
+        }
+    }
+    return $report
+}
+
+switch ($Action) {
+    "Inventory" {
+        [ordered]@{
+            installed = Get-InstalledInventory
+            available_packages = Get-AvailablePackageInventory
+            game_running = (@(Get-Process -Name "Hela-Win64-Shipping" -ErrorAction SilentlyContinue |
+                Where-Object { $_.Path -and $_.Path -ieq [IO.Path]::GetFullPath($GameExePath) }).Count -gt 0)
+            run_root = if ([string]::IsNullOrWhiteSpace($RunRoot)) {
+                $null
+            } else {
+                $RunRoot
+            }

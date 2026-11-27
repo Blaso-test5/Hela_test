@@ -1,0 +1,171 @@
+[
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/tools/LiveFrameMonitor/Start-HelaLiveMonitor.ps1",
+    "totalLineCount": 538,
+    "sourceByteCount": 24205,
+    "sha256": "f4bcbb9c118a75dfc33a52b2d27a4b9c63a4c22682ac976f67f4b8c1b25dce12",
+    "publishedSha256": "2bb2af661f3513970ca1299d6877cf57ab444e80449099d7dc1c79acb89fe544",
+    "publishedByteCount": 24177,
+    "byteFaithful": false,
+    "redactions": [
+      {
+        "rule": "replaced machine-local Hela install root with <HELA_INSTALL_ROOT>",
+        "occurrences": 1
+      }
+    ],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/Start-HelaLiveMonitor.ps1.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 191,
+        "byteCount": 7945,
+        "sha256": "572df18fbb08389d3002bec2383c730687ca21bc707d47d5cc1fb50c6c3977e7"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/Start-HelaLiveMonitor.ps1.part002.txt",
+        "lineStart": 192,
+        "lineEnd": 384,
+        "byteCount": 7880,
+        "sha256": "90d52cef528ea159feb230e03540154aa505f8f37b2b232347d674794571efd8"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/Start-HelaLiveMonitor.ps1.part003.txt",
+        "lineStart": 385,
+        "lineEnd": 527,
+        "byteCount": 7967,
+        "sha256": "a2f93bf4874a2f5a2bc3e45c99c3beb1f539663c81c9a3ce6baf7df2be72bff1"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/Start-HelaLiveMonitor.ps1.part004.txt",
+        "lineStart": 528,
+        "lineEnd": 538,
+        "byteCount": 385,
+        "sha256": "f8abcb8105852d9f6694b362b483265cfe7337300529cdc5ec4d57f0fa047dd5"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/tools/LiveFrameMonitor/Tests/Get-HelaProxySnapshot.Tests.ps1",
+    "totalLineCount": 558,
+    "sourceByteCount": 29027,
+    "sha256": "54db475e1ca3b3dc0125f0c56e2c79aeb48112f88e4bc0eae21fa678dc4b84c6",
+    "publishedSha256": "54db475e1ca3b3dc0125f0c56e2c79aeb48112f88e4bc0eae21fa678dc4b84c6",
+    "publishedByteCount": 29027,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/Tests/Get-HelaProxySnapshot.Tests.ps1.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 200,
+        "byteCount": 7975,
+        "sha256": "f3448060eebe299e33956f44647ab73317cc4a86d4d482ecbd03af5a44987ce0"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/Tests/Get-HelaProxySnapshot.Tests.ps1.part002.txt",
+        "lineStart": 201,
+        "lineEnd": 334,
+        "byteCount": 7961,
+        "sha256": "0a3fd165b8b9774271b9b1b2dea31c2549c132777a67ceccab23c938981212e0"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/Tests/Get-HelaProxySnapshot.Tests.ps1.part003.txt",
+        "lineStart": 335,
+        "lineEnd": 471,
+        "byteCount": 7990,
+        "sha256": "003995a53880ac9055f793013b847d33138520ea8602308704d63721d2f3c75e"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/Tests/Get-HelaProxySnapshot.Tests.ps1.part004.txt",
+        "lineStart": 472,
+        "lineEnd": 558,
+        "byteCount": 5101,
+        "sha256": "79c8400fb0667a542d432a18725a7fd7988ccfbe3652f43c7b96bd3d122c505e"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/tools/LiveFrameMonitor/live_frame_monitor.py",
+    "totalLineCount": 1555,
+    "sourceByteCount": 65259,
+    "sha256": "daadfdccab4614a0eb8c0a887cb7b0df5ba2d8dfa4e4ee5cc262300239a82bcc",
+    "publishedSha256": "daadfdccab4614a0eb8c0a887cb7b0df5ba2d8dfa4e4ee5cc262300239a82bcc",
+    "publishedByteCount": 65259,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/live_frame_monitor.py.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 193,
+        "byteCount": 7924,
+        "sha256": "24820b8c64208418dd4f9c5f2fff842447962392a9762474c38b950c164535e1"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/live_frame_monitor.py.part002.txt",
+        "lineStart": 194,
+        "lineEnd": 402,
+        "byteCount": 7998,
+        "sha256": "6c9c525932cff52189a40f697d0a9b3f4c1ec9e5d7a1a4fc84c93c58aa58a166"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/live_frame_monitor.py.part003.txt",
+        "lineStart": 403,
+        "lineEnd": 586,
+        "byteCount": 7979,
+        "sha256": "94646205b263307ff4e44357c716bde93935a01fda25a4cb5cc0cb5792ccbdb2"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/live_frame_monitor.py.part004.txt",
+        "lineStart": 587,
+        "lineEnd": 759,
+        "byteCount": 7970,
+        "sha256": "7a4c61e9b117def4c737acb9fe2041a99ee562a1a68531df8ee6c9e7195b9439"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/live_frame_monitor.py.part005.txt",
+        "lineStart": 760,
+        "lineEnd": 955,
+        "byteCount": 8000,
+        "sha256": "41ad3a5dbbc391a8efb05ee55f5ef3f91eca198d1dcc26f475a522b03cf652bc"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/live_frame_monitor.py.part006.txt",
+        "lineStart": 956,
+        "lineEnd": 1101,
+        "byteCount": 7952,
+        "sha256": "ec6e45e16b0a4211fd3da07aa1e69b8cbbaadf448e406429d47117a2797cec13"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/live_frame_monitor.py.part007.txt",
+        "lineStart": 1102,
+        "lineEnd": 1303,
+        "byteCount": 7999,
+        "sha256": "d51ae969c570c7ca41f8be6e15e7cfe9575739e2e8a321ccbe8ced439a205766"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/live_frame_monitor.py.part008.txt",
+        "lineStart": 1304,
+        "lineEnd": 1515,
+        "byteCount": 7991,
+        "sha256": "ad04c97347731b67d22126c4fb637e1586d90d5294344080061cda3b3eb18053"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/live_frame_monitor.py.part009.txt",
+        "lineStart": 1516,
+        "lineEnd": 1555,
+        "byteCount": 1446,
+        "sha256": "bfd9e152e6e597c23f7ecc90209d502a16941737be194559623545e0308b1dca"
+      }
+    ]
+  }
+]

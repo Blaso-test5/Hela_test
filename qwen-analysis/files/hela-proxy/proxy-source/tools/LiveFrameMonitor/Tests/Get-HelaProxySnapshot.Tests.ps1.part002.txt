@@ -1,0 +1,134 @@
+    [void][System.IO.Directory]::CreateDirectory((Join-P $game $Ov))
+    $m = Join-P $sb 'run.json'
+    New-RunManifest $m (Get-TextSha 'D3D12-PAYLOAD' -Upper) (Get-TextSha 'DXGI-PAYLOAD' -Upper)
+    $before = Get-Tree $game
+    $r = Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $m; OverridesDirectoryName = $Ov }
+    Assert-Equal $r.ExitCode 0 'exit code'
+    Assert-Equal $r.Json.summary.verdict 'Match' 'verdict'
+    Assert-Status $r 'runtime' 'd3d12.dll' 'Match'
+    Assert-Status $r 'runtime' 'dxgi.dll' 'Match'
+    Assert-Equal $r.Json.summary.counts.Match 2 'match count'
+    Assert-Equal $r.Json.reference.format 'run-manifest' 'format'
+    Assert-Equal (Get-Tree $game) $before 'install tree unchanged (read-only)'
+}
+
+Test-Case 'run no-override: absent overrides dir is also a Match (empty set == empty set)' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    New-Install $game @{ 'd3d12.dll' = 'A'; 'dxgi.dll' = 'B' }
+    $m = Join-P $sb 'run.json'
+    New-RunManifest $m (Get-TextSha 'A' -Upper) (Get-TextSha 'B' -Upper)
+    $r = Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $m; OverridesDirectoryName = $Ov }
+    Assert-Equal $r.ExitCode 0 'exit code'
+    Assert-Equal $r.Json.summary.verdict 'Match' 'verdict'
+}
+
+Test-Case 'run: without -OverridesDirectoryName the result is Inconclusive, never a false Match' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    New-Install $game @{ 'd3d12.dll' = 'A'; 'dxgi.dll' = 'B' }
+    $m = Join-P $sb 'run.json'
+    New-RunManifest $m (Get-TextSha 'A' -Upper) (Get-TextSha 'B' -Upper)
+    $r = Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $m }
+    Assert-Equal $r.ExitCode 3 'exit code'
+    Assert-Equal $r.Json.summary.verdict 'Inconclusive' 'verdict'
+    Assert-Status $r 'overrides' '(set)' 'NotAttestable'
+}
+
+Test-Case 'run: the real no-override example manifest is accepted (mismatch against a fake install)' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    New-Install $game @{ 'd3d12.dll' = 'not the real dll'; 'dxgi.dll' = 'not the real dll either' }
+    $m = Join-P $sb 'real-run.json'
+    [System.IO.File]::WriteAllText($m, $RealNoOverrideRun, $Utf8)
+    $r = Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $m; OverridesDirectoryName = $Ov }
+    Assert-Equal $r.ExitCode 1 'exit code'
+    Assert-Equal $r.Json.reference.testVersion '950m-v015-no-shader-override-srv-diagnostics-20261111' 'testVersion'
+    Assert-Status $r 'runtime' 'd3d12.dll' 'Mismatch'
+    Assert-Status $r 'runtime' 'dxgi.dll' 'Mismatch'
+    Assert-Equal (Find-Finding $r 'runtime' 'd3d12.dll').expected.sha256 '0b986b326848cde6148f86e7f7ba8d17795293115f51f17dec2593758484a605' 'expected hash is normalised'
+}
+
+Test-Case 'run: DLL hash mismatch and DLL absent' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    New-Install $game @{ 'd3d12.dll' = 'TAMPERED' }
+    $m = Join-P $sb 'run.json'
+    New-RunManifest $m (Get-TextSha 'D3D12-ORIGINAL' -Upper) (Get-TextSha 'DXGI-ORIGINAL' -Upper)
+    $r = Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $m; OverridesDirectoryName = $Ov }
+    Assert-Equal $r.ExitCode 1 'exit code'
+    Assert-Equal $r.Json.summary.verdict 'Mismatch' 'verdict'
+    Assert-Status $r 'runtime' 'd3d12.dll' 'Mismatch'
+    Assert-Status $r 'runtime' 'dxgi.dll' 'Missing'
+    Assert-Equal (Find-Finding $r 'runtime' 'd3d12.dll').actual.sha256 (Get-TextSha 'TAMPERED') 'live hash reported'
+    Assert-Equal (Find-Finding $r 'runtime' 'dxgi.dll').actual.kind 'absent' 'absent kind'
+}
+
+Test-Case 'run: override missing / extra / hash mismatch / match (required flag reported), install untouched' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    New-Install $game @{
+        'd3d12.dll' = 'A'; 'dxgi.dll' = 'B'
+        "$Ov\a.cso" = 'AAA'; "$Ov\b.cso" = 'b-changed'; "$Ov\d.cso" = 'DDD'; "$Ov\ignore.txt" = 'not a cso'
+    }
+    $m = Join-P $sb 'run.json'
+    New-RunManifest $m (Get-TextSha 'A' -Upper) (Get-TextSha 'B' -Upper) `
+        @{ 'a.cso' = (Get-TextSha 'AAA' -Upper); 'b.cso' = (Get-TextSha 'b-original' -Upper); 'c.cso' = (Get-TextSha 'CCC' -Upper) } `
+        @('a.cso', 'c.cso')
+    $before = Get-Tree $game
+    $r = Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $m; OverridesDirectoryName = $Ov }
+    Assert-Equal $r.ExitCode 1 'exit code'
+    Assert-Status $r 'override' 'a.cso' 'Match'
+    Assert-Status $r 'override' 'b.cso' 'Mismatch'
+    Assert-Status $r 'override' 'c.cso' 'Missing'
+    Assert-Status $r 'override' 'd.cso' 'Extra'
+    Assert-Equal (Find-Finding $r 'override' 'c.cso').required $true 'c.cso required'
+    Assert-Equal (Find-Finding $r 'override' 'b.cso').required $false 'b.cso not required'
+    Assert-Equal (Find-Finding $r 'override' 'd.cso').actual.sha256 (Get-TextSha 'DDD') 'extra file is hashed'
+    Assert-True (@($r.Json.items | Where-Object { $_.name -eq 'ignore.txt' }).Count -eq 0) 'non-.cso files are ignored'
+    Assert-Equal (Get-Tree $game) $before 'install tree unchanged (read-only)'
+}
+
+Test-Case 'run: overrides dir absent while the manifest lists overrides -> Missing' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    New-Install $game @{ 'd3d12.dll' = 'A'; 'dxgi.dll' = 'B' }
+    $m = Join-P $sb 'run.json'
+    New-RunManifest $m (Get-TextSha 'A') (Get-TextSha 'B') @{ 'a.cso' = (Get-TextSha 'AAA') } @('a.cso')
+    $r = Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $m; OverridesDirectoryName = $Ov }
+    Assert-Equal $r.ExitCode 1 'exit code'
+    Assert-Status $r 'override' 'a.cso' 'Missing'
+}
+
+Test-Case 'input validation: bad manifests and bad paths are errors (exit 2, no JSON), never successes' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    New-Install $game @{ 'd3d12.dll' = 'A'; 'dxgi.dll' = 'B' }
+    $h = Get-TextSha 'x'
+    $cases = @(
+        @{ Name = 'traversal key';       Ovr = @{ '..\evil.cso' = $h } }
+        @{ Name = 'nested traversal';    Ovr = @{ 'sub\..\..\evil.cso' = $h } }
+        @{ Name = 'absolute key';        Ovr = @{ 'C:\evil.cso' = $h } }
+        @{ Name = 'rooted key';          Ovr = @{ '\evil.cso' = $h } }
+        @{ Name = 'non-cso key';         Ovr = @{ 'a.txt' = $h } }
+        @{ Name = 'bad override hash';   Ovr = @{ 'a.cso' = 'xyz' } }
+        @{ Name = 'required not listed'; Ovr = @{ 'a.cso' = $h }; Req = @('b.cso') }
+        @{ Name = 'wrong schema';        Ovr = @{}; Schema = 'hela-run-manifest/v2' }
+        @{ Name = 'wrong attestation';   Ovr = @{}; Att = 'module-only' }
+    )
+    foreach ($c in $cases) {
+        $m = Join-P $sb 'bad.json'
+        if (Test-Path -LiteralPath $m) { Remove-Item -LiteralPath $m -Force }
+        $p = @{ Path = $m; D3d12 = $h; Dxgi = $h; Overrides = $c.Ovr }
+        if ($c.ContainsKey('Req')) { $p.Required = $c.Req }
+        if ($c.ContainsKey('Schema')) { $p.Schema = $c.Schema }
+        if ($c.ContainsKey('Att')) { $p.Attestation = $c.Att }
+        New-RunManifest @p
+        $r = Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $m; OverridesDirectoryName = $Ov }
+        Assert-Rejected $r $c.Name
+    }
+    # malformed JSON, missing manifest, missing game dir, bad overrides dir name
+    $bad = Join-P $sb 'malformed.json'
+    [System.IO.File]::WriteAllText($bad, '{ not json', $Utf8)
+    Assert-Rejected (Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $bad }) 'malformed json'
+    Assert-Rejected (Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = (Join-P $sb 'nope.json') }) 'missing manifest'
+    $ok = Join-P $sb 'ok.json'
+    New-RunManifest $ok $h $h
+    Assert-Rejected (Invoke-Snapshot @{ GameDirectory = (Join-P $sb 'no-game'); RunManifestPath = $ok }) 'missing game dir'
+    Assert-Rejected (Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $ok; OverridesDirectoryName = '..\x' }) 'traversal overrides dir name'
+    Assert-Rejected (Invoke-Snapshot @{ GameDirectory = $game; RunManifestPath = $ok; OverridesDirectoryName = 'C:\x' }) 'absolute overrides dir name'
+}
+

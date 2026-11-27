@@ -1,0 +1,9 @@
+{"type":"root_descriptor_not_resolved","count":0,"firstLine":null,"lastLine":null}
+{"type":"invalid_root_constant_write","count":0,"firstLine":null,"lastLine":null}
+{"type":"resource_barrier_ignored","count":1,"firstLine":926,"lastLine":926}
+{"type":"execute_bundle_unimplemented","count":0,"firstLine":null,"lastLine":null}
+{"type":"stream_output_unimplemented","count":0,"firstLine":null,"lastLine":null}
+{"type":"create_reserved_resource_unavailable","count":0,"firstLine":null,"lastLine":null}
+{"type":"ignored_invalid_or_open_command_list","count":0,"firstLine":null,"lastLine":null}
+{"type":"shader_d3d11_create_failed","count":0,"firstLine":null,"lastLine":null}
+{"type":"input_layout_failed","count":0,"firstLine":null,"lastLine":null}

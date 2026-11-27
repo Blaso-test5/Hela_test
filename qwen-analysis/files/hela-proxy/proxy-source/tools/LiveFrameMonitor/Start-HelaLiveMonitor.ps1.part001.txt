@@ -1,0 +1,191 @@
+<#
+.SYNOPSIS
+    Starts LiveFrameMonitor alongside a direct Hela-Win64-Shipping.exe diagnostic run (or in
+    standalone monitor/fixture mode) without modifying any DLLs, INIs, or game configuration files.
+
+.DESCRIPTION
+    - Manages diagnostic environment variables strictly within the current PowerShell process scope
+      and restores their exact prior values in a `finally` block (even on Ctrl-C or errors).
+    - Properly quotes Win32 command-line arguments containing spaces (such as `D:\Ghidra MCP\...`
+      and `Hela Demo`) when invoking `Start-Process`.
+    - Starts `live_frame_monitor.py` before launching `Hela-Win64-Shipping.exe` directly (no Steam)
+      with `-graphicsadapter=0 -windowed -ResX=1280 -ResY=720`.
+    - Guarantees monitor process teardown when the game exits or when interrupted by the user.
+#>
+[CmdletBinding()]
+param(
+    [string]$GameExePath = "<HELA_INSTALL_ROOT>\Binaries\Win64\Hela-Win64-Shipping.exe",
+    [string]$LogPath = "",
+    [string]$JsonOutPath = "",
+    [string]$ProcessStatusPath = "",
+    [string]$SourceBmpPath = "",
+    [string]$BackbufferBmpPath = "",
+    [string]$RunManifestPath = "",
+    [string]$LaunchEnvironmentProfileName = "",
+    [string]$LaunchEnvironmentProfileSha256 = "",
+    [hashtable]$LaunchEnvironment = @{},
+    [string[]]$LaunchArguments = @(),
+    [UInt32]$MonitorMaxWaitSeconds = 0,
+    [switch]$LaunchGame,
+    [switch]$EnableCrashDiagnostics = $false,
+    [switch]$EnableReadback = $true,
+    [switch]$EnableFullBmpReadback = $false,
+    [UInt32]$FullBmpPresent = 100,
+    [UInt32]$StopAfterPresent = 0,
+    [switch]$StopAfterPresent100 = $false,
+    [switch]$StopGameAfterMonitor = $false,
+    [switch]$Once = $false,
+    [switch]$PrintCommandLineOnly = $false
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+if ($FullBmpPresent -lt 100 -or $FullBmpPresent % 100 -ne 0) {
+    throw "-FullBmpPresent must be a positive multiple of 100."
+}
+if ($StopAfterPresent -ne 0 -and
+    ($StopAfterPresent -lt 100 -or $StopAfterPresent % 100 -ne 0)) {
+    throw "-StopAfterPresent must be zero or a positive multiple of 100."
+}
+if ($StopAfterPresent100 -and $StopAfterPresent -ne 0 -and $StopAfterPresent -ne 100) {
+    throw "-StopAfterPresent100 conflicts with -StopAfterPresent."
+}
+
+function ConvertTo-QuotedWin32Arg {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Arg)
+    if ($Arg.Length -eq 0) {
+        return '""'
+    }
+    if ($Arg -notmatch '[\s"]') {
+        return $Arg
+    }
+    # Escape backslashes preceding a quote, escape internal quotes, and escape trailing backslashes
+    $escaped = [regex]::Replace($Arg, '(\\*)"', '$1$1\"')
+    $escaped = [regex]::Replace($escaped, '(\\+)$', '$1$1')
+    return '"' + $escaped + '"'
+}
+
+function Join-Win32CommandLine {
+    param([Parameter(Mandatory = $true)][string[]]$ArgsList)
+    $quoted = foreach ($item in $ArgsList) {
+        ConvertTo-QuotedWin32Arg -Arg $item
+    }
+    return ($quoted -join ' ')
+}
+
+function Get-RunManifest {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Run manifest not found: $Path"
+    }
+    $manifest = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    if ($manifest.schema -ne "hela-run-manifest/v1" -or
+        [string]::IsNullOrWhiteSpace($manifest.testVersion) -or
+        $manifest.runtimeAttestation -ne "module-and-shader-sha256" -or
+        $null -eq $manifest.runtime -or $null -eq $manifest.overrides -or
+        $null -eq $manifest.requiredOverrides) {
+        throw "Invalid Hela run manifest: $Path"
+    }
+    return $manifest
+}
+
+function Get-LaunchEnvironmentSha256 {
+    param([Parameter(Mandatory = $true)]$Environment)
+
+    $lines = foreach ($property in @($Environment.PSObject.Properties | Sort-Object Name)) {
+        "$($property.Name)=$([string]$property.Value)"
+    }
+    $canonical = (($lines -join "`n") + "`n")
+    $bytes = [Text.Encoding]::UTF8.GetBytes($canonical)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace("-", "").ToLowerInvariant()
+    } finally {
+        $sha.Dispose()
+    }
+}
+
+function Assert-LaunchProfileMatchesManifest {
+    param([Parameter(Mandatory = $true)]$Manifest)
+
+    $profileProperty = $Manifest.PSObject.Properties["launchProfile"]
+    if ($null -eq $profileProperty) {
+        if (-not [string]::IsNullOrWhiteSpace($LaunchEnvironmentProfileName) -or
+            -not [string]::IsNullOrWhiteSpace($LaunchEnvironmentProfileSha256) -or
+            $LaunchEnvironment.Count -gt 0 -or $LaunchArguments.Count -gt 0) {
+            throw "Launch environment was supplied for a manifest without launchProfile."
+        }
+        return
+    }
+
+    $profile = $profileProperty.Value
+    if ($LaunchEnvironmentProfileName -cne [string]$profile.name -or
+        $LaunchEnvironmentProfileSha256 -cne [string]$profile.sha256) {
+        throw "Launch profile identity does not match the run manifest."
+    }
+    if ((Get-LaunchEnvironmentSha256 -Environment $profile.environment) -ne
+        [string]$profile.sha256) {
+        throw "Launch profile environment fingerprint does not match the run manifest."
+    }
+    $profileEnvironment = @($profile.environment.PSObject.Properties)
+    if ($LaunchEnvironment.Count -ne $profileEnvironment.Count) {
+        throw "Resolved child environment does not match the run manifest launch profile."
+    }
+    $runDirectory = Split-Path -Parent ([IO.Path]::GetFullPath($RunManifestPath))
+    foreach ($property in $LaunchEnvironment.GetEnumerator()) {
+        if ($property.Key -notmatch '^D3D12ON11_[A-Z0-9_]+$' -or
+            $property.Value -isnot [string] -or
+            [string]$property.Value -match '[\r\n]') {
+            throw "Invalid child launch environment entry: $($property.Key)"
+        }
+    }
+    foreach ($property in $profileEnvironment) {
+        $actualProperty = $LaunchEnvironment.GetEnumerator() |
+            Where-Object { $_.Key -ceq $property.Name } |
+            Select-Object -First 1
+        if ($null -eq $actualProperty) {
+            throw "Resolved child environment is missing $($property.Name)."
+        }
+        $expectedValue = [string]$property.Value
+        if ($expectedValue -ceq "@RUN_OVERRIDES@") {
+            $expectedValue = Join-Path $runDirectory "launch-profile\overrides"
+        } elseif ($expectedValue -ceq "@RUN_DUMP@") {
+            $expectedValue = Join-Path $runDirectory "launch-profile\dump"
+        }
+        $matchesExpected = if ($property.Value -ceq "@RUN_OVERRIDES@" -or
+            $property.Value -ceq "@RUN_DUMP@") {
+            [string]$actualProperty.Value -ieq $expectedValue
+        } else {
+            [string]$actualProperty.Value -ceq $expectedValue
+        }
+        if (-not $matchesExpected) {
+            throw "Resolved child environment value does not match the launch profile for $($property.Name)."
+        }
+    }
+    if ($LaunchArguments.Count -ne @($profile.arguments).Count) {
+        throw "Launch arguments do not match the run manifest launch profile."
+    }
+    for ($index = 0; $index -lt $LaunchArguments.Count; $index++) {
+        if ($LaunchArguments[$index] -cne [string]$profile.arguments[$index]) {
+            throw "Launch argument $index does not match the run manifest launch profile."
+        }
+    }
+}
+
+function Assert-ExpectedHash {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$ExpectedHash,
+        [Parameter(Mandatory = $true)][string]$Role
+    )
+
+    if ($ExpectedHash -notmatch '^[0-9a-fA-F]{64}$') {
+        throw "Invalid SHA-256 in run manifest for $Role"
+    }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Required $Role file not found: $Path"
+    }
+    $actualHash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+    if ($actualHash -ine $ExpectedHash) {

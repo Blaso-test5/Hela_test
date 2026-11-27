@@ -1,0 +1,170 @@
+    const HRESULT result = d11->CreateUnorderedAccessView(nativeResource, &desc, descriptor.uav.Put());
+    Log("CreateUnorderedAccessView result=0x%08lx", result);
+    if (FAILED(result)) {
+        Log("CreateUnorderedAccessView device-removed-reason=0x%08lx",
+            d11->GetDeviceRemovedReason());
+        Store(handle, std::move(descriptor));
+        return;
+    }
+    descriptor.kind = DKind::UAV;
+    descriptor.uavWrite = true;
+    RememberResource(descriptor, resource);
+    Store(handle, std::move(descriptor));
+}
+
+void STDMETHODCALLTYPE Device::CreateRenderTargetView(ID3D12Resource* sourceResource,
+    const D3D12_RENDER_TARGET_VIEW_DESC* source, D3D12_CPU_DESCRIPTOR_HANDLE handle) {
+    Descriptor descriptor{};
+    Resource* resource = AsResource(sourceResource);
+    if (!resource || resource->IsBuffer()) {
+        Store(handle, std::move(descriptor));
+        return;
+    }
+    D3D11_RENDER_TARGET_VIEW_DESC desc{};
+    if (source) {
+        desc.Format = source->Format;
+        switch (source->ViewDimension) {
+        case D3D12_RTV_DIMENSION_TEXTURE1D:
+            desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE1D;
+            desc.Texture1D.MipSlice = source->Texture1D.MipSlice;
+            break;
+        case D3D12_RTV_DIMENSION_TEXTURE1DARRAY:
+            desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE1DARRAY;
+            desc.Texture1DArray.MipSlice = source->Texture1DArray.MipSlice;
+            desc.Texture1DArray.FirstArraySlice = source->Texture1DArray.FirstArraySlice;
+            desc.Texture1DArray.ArraySize = source->Texture1DArray.ArraySize;
+            break;
+        case D3D12_RTV_DIMENSION_TEXTURE2D:
+            if (source->Texture2D.PlaneSlice) {
+                Log("Plane-slice RTVs are not supported");
+                Store(handle, std::move(descriptor));
+                return;
+            }
+            desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+            desc.Texture2D.MipSlice = source->Texture2D.MipSlice;
+            break;
+        case D3D12_RTV_DIMENSION_TEXTURE2DARRAY:
+            if (source->Texture2DArray.PlaneSlice) {
+                Log("Plane-slice RTVs are not supported");
+                Store(handle, std::move(descriptor));
+                return;
+            }
+            desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
+            desc.Texture2DArray.MipSlice = source->Texture2DArray.MipSlice;
+            desc.Texture2DArray.FirstArraySlice = source->Texture2DArray.FirstArraySlice;
+            desc.Texture2DArray.ArraySize = source->Texture2DArray.ArraySize;
+            break;
+        case D3D12_RTV_DIMENSION_TEXTURE2DMS:
+            desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DMS;
+            break;
+        case D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY:
+            desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY;
+            desc.Texture2DMSArray.FirstArraySlice = source->Texture2DMSArray.FirstArraySlice;
+            desc.Texture2DMSArray.ArraySize = source->Texture2DMSArray.ArraySize;
+            break;
+        case D3D12_RTV_DIMENSION_TEXTURE3D:
+            desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE3D;
+            desc.Texture3D.MipSlice = source->Texture3D.MipSlice;
+            desc.Texture3D.FirstWSlice = source->Texture3D.FirstWSlice;
+            desc.Texture3D.WSize = source->Texture3D.WSize;
+            break;
+        default:
+            Log("Unsupported RTV view dimension %u", source->ViewDimension);
+            Store(handle, std::move(descriptor));
+            return;
+        }
+    }
+    const HRESULT result = d11->CreateRenderTargetView(resource->Raw(), source ? &desc : nullptr, descriptor.rtv.Put());
+    if (FAILED(result)) {
+        Log("CreateRenderTargetView failed: 0x%08lx", result);
+        Store(handle, std::move(descriptor));
+        return;
+    }
+    descriptor.kind = DKind::RTV;
+    RememberResource(descriptor, resource);
+    Store(handle, std::move(descriptor));
+}
+
+void STDMETHODCALLTYPE Device::CreateDepthStencilView(ID3D12Resource* sourceResource,
+    const D3D12_DEPTH_STENCIL_VIEW_DESC* source, D3D12_CPU_DESCRIPTOR_HANDLE handle) {
+    Descriptor descriptor{};
+    Resource* resource = AsResource(sourceResource);
+    if (!resource || resource->IsBuffer()) {
+        Store(handle, std::move(descriptor));
+        return;
+    }
+    D3D11_DEPTH_STENCIL_VIEW_DESC desc{};
+    if (source) {
+        desc.Format = source->Format;
+        desc.Flags = 0;
+        if (source->Flags & D3D12_DSV_FLAG_READ_ONLY_DEPTH) desc.Flags |= D3D11_DSV_READ_ONLY_DEPTH;
+        if (source->Flags & D3D12_DSV_FLAG_READ_ONLY_STENCIL) desc.Flags |= D3D11_DSV_READ_ONLY_STENCIL;
+        switch (source->ViewDimension) {
+        case D3D12_DSV_DIMENSION_TEXTURE1D:
+            desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE1D;
+            desc.Texture1D.MipSlice = source->Texture1D.MipSlice;
+            break;
+        case D3D12_DSV_DIMENSION_TEXTURE1DARRAY:
+            desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE1DARRAY;
+            desc.Texture1DArray.MipSlice = source->Texture1DArray.MipSlice;
+            desc.Texture1DArray.FirstArraySlice = source->Texture1DArray.FirstArraySlice;
+            desc.Texture1DArray.ArraySize = source->Texture1DArray.ArraySize;
+            break;
+        case D3D12_DSV_DIMENSION_TEXTURE2D:
+            desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+            desc.Texture2D.MipSlice = source->Texture2D.MipSlice;
+            break;
+        case D3D12_DSV_DIMENSION_TEXTURE2DARRAY:
+            desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
+            desc.Texture2DArray.MipSlice = source->Texture2DArray.MipSlice;
+            desc.Texture2DArray.FirstArraySlice = source->Texture2DArray.FirstArraySlice;
+            desc.Texture2DArray.ArraySize = source->Texture2DArray.ArraySize;
+            break;
+        case D3D12_DSV_DIMENSION_TEXTURE2DMS:
+            desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS;
+            break;
+        case D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY:
+            desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY;
+            desc.Texture2DMSArray.FirstArraySlice = source->Texture2DMSArray.FirstArraySlice;
+            desc.Texture2DMSArray.ArraySize = source->Texture2DMSArray.ArraySize;
+            break;
+        default:
+            Log("Unsupported DSV view dimension %u", source->ViewDimension);
+            Store(handle, std::move(descriptor));
+            return;
+        }
+    }
+    const HRESULT result = d11->CreateDepthStencilView(resource->Raw(), source ? &desc : nullptr, descriptor.dsv.Put());
+    if (FAILED(result)) {
+        Log("CreateDepthStencilView failed: 0x%08lx", result);
+        Store(handle, std::move(descriptor));
+        return;
+    }
+    descriptor.kind = DKind::DSV;
+    RememberResource(descriptor, resource);
+    Store(handle, std::move(descriptor));
+}
+
+void STDMETHODCALLTYPE Device::CreateSampler(const D3D12_SAMPLER_DESC* source, D3D12_CPU_DESCRIPTOR_HANDLE handle) {
+    Descriptor descriptor{};
+    if (!source) {
+        Store(handle, std::move(descriptor));
+        return;
+    }
+    D3D11_SAMPLER_DESC desc{};
+    desc.Filter = static_cast<D3D11_FILTER>(source->Filter);
+    desc.AddressU = static_cast<D3D11_TEXTURE_ADDRESS_MODE>(source->AddressU);
+    desc.AddressV = static_cast<D3D11_TEXTURE_ADDRESS_MODE>(source->AddressV);
+    desc.AddressW = static_cast<D3D11_TEXTURE_ADDRESS_MODE>(source->AddressW);
+    desc.MipLODBias = source->MipLODBias;
+    desc.MaxAnisotropy = source->MaxAnisotropy;
+    desc.ComparisonFunc = static_cast<D3D11_COMPARISON_FUNC>(source->ComparisonFunc);
+    memcpy(desc.BorderColor, source->BorderColor, sizeof(desc.BorderColor));
+    desc.MinLOD = source->MinLOD;
+    desc.MaxLOD = source->MaxLOD;
+    const HRESULT result = d11->CreateSamplerState(&desc, descriptor.smp.Put());
+    if (FAILED(result)) {
+        Log("CreateSamplerState failed: 0x%08lx", result);
+        Store(handle, std::move(descriptor));
+        return;
+    }

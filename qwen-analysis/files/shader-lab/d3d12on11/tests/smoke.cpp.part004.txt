@@ -1,0 +1,191 @@
+                        x, y, row[x], expected);
+                    result = E_FAIL;
+                    break;
+                }
+            }
+        }
+        readback->Unmap(0, &readRange);
+    }
+    if (FAILED(result)) std::fprintf(stderr, "Texture footprint upload/readback failed: 0x%08lx\n", result);
+    if (event) CloseHandle(event);
+    if (fence) fence->Release();
+    if (queue) queue->Release();
+    if (list) list->Release();
+    if (allocator) allocator->Release();
+    if (readback) readback->Release();
+    if (upload) upload->Release();
+    if (texture) texture->Release();
+    return FAILED(result) ? 21 : 0;
+}
+
+static int RunTiledResourceSmoke(ID3D12Device* device) {
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Width = 1;
+    desc.Height = 1;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_64KB_UNDEFINED_SWIZZLE;
+    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+    ID3D12Resource* resource = nullptr;
+    HRESULT result = device->CreateReservedResource(&desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        nullptr, __uuidof(ID3D12Resource), reinterpret_cast<void**>(&resource));
+    if (FAILED(result)) {
+        std::fprintf(stderr, "CreateReservedResource failed: 0x%08lx\n", result);
+        return 22;
+    }
+
+    UINT tileCount = 0;
+    D3D12_PACKED_MIP_INFO packedMips{};
+    D3D12_TILE_SHAPE tileShape{};
+    UINT subresourceCount = 1;
+    D3D12_SUBRESOURCE_TILING subresourceTiling{};
+    device->GetResourceTiling(resource, &tileCount, &packedMips, &tileShape,
+        &subresourceCount, 0, &subresourceTiling);
+    if (tileCount != 1 || packedMips.NumPackedMips > desc.MipLevels ||
+        subresourceCount != 1) {
+        std::fprintf(stderr, "Unexpected tiled-resource layout: tiles=%u packed-mips=%u subresources=%u\n",
+            tileCount, packedMips.NumPackedMips, subresourceCount);
+        resource->Release();
+        return 23;
+    }
+    D3D12_HEAP_PROPERTIES reservedHeapProperties{};
+    D3D12_HEAP_FLAGS reservedHeapFlags{};
+    if (resource->GetHeapProperties(&reservedHeapProperties, &reservedHeapFlags) != E_INVALIDARG) {
+        std::fprintf(stderr, "Reserved resource unexpectedly reported committed heap properties\n");
+        resource->Release();
+        return 24;
+    }
+
+    D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc{};
+    descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    descriptorHeapDesc.NumDescriptors = 1;
+    ID3D12DescriptorHeap* descriptorHeap = nullptr;
+    result = device->CreateDescriptorHeap(&descriptorHeapDesc, __uuidof(ID3D12DescriptorHeap),
+        reinterpret_cast<void**>(&descriptorHeap));
+    if (FAILED(result)) {
+        std::fprintf(stderr, "Descriptor heap for tiled UAV failed: 0x%08lx\n", result);
+        resource->Release();
+        return 25;
+    }
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
+    uavDesc.Format = desc.Format;
+    uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+    device->CreateUnorderedAccessView(resource, nullptr, &uavDesc,
+        descriptorHeap->GetCPUDescriptorHandleForHeapStart());
+    descriptorHeap->Release();
+
+    D3D12_HEAP_DESC heapDesc{};
+    heapDesc.SizeInBytes = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+    heapDesc.Properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+    heapDesc.Properties.CreationNodeMask = heapDesc.Properties.VisibleNodeMask = 1;
+    ID3D12Heap* tilePool = nullptr;
+    result = device->CreateHeap(&heapDesc, __uuidof(ID3D12Heap),
+        reinterpret_cast<void**>(&tilePool));
+    if (FAILED(result)) {
+        std::fprintf(stderr, "CreateHeap for tile pool failed: 0x%08lx\n", result);
+        resource->Release();
+        return 26;
+    }
+
+    D3D12_COMMAND_QUEUE_DESC queueDesc{};
+    queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    ID3D12CommandQueue* queue = nullptr;
+    result = device->CreateCommandQueue(&queueDesc, __uuidof(ID3D12CommandQueue),
+        reinterpret_cast<void**>(&queue));
+    if (FAILED(result)) {
+        std::fprintf(stderr, "CreateCommandQueue for tiled-resource smoke failed: 0x%08lx\n", result);
+        tilePool->Release();
+        resource->Release();
+        return 27;
+    }
+
+    D3D12_TILED_RESOURCE_COORDINATE coordinate{};
+    D3D12_TILE_REGION_SIZE region{};
+    region.NumTiles = 1;
+    const D3D12_TILE_RANGE_FLAGS rangeFlag = D3D12_TILE_RANGE_FLAG_NONE;
+    const UINT heapOffset = 0;
+    const UINT rangeTileCount = 1;
+    queue->UpdateTileMappings(resource, 1, &coordinate, &region, tilePool, 1,
+        &rangeFlag, &heapOffset, &rangeTileCount, D3D12_TILE_MAPPING_FLAG_NONE);
+    queue->CopyTileMappings(resource, &coordinate, resource, &coordinate, &region,
+        D3D12_TILE_MAPPING_FLAG_NONE);
+
+    D3D12_HEAP_PROPERTIES defaultHeap{};
+    defaultHeap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    defaultHeap.CreationNodeMask = defaultHeap.VisibleNodeMask = 1;
+    D3D12_RESOURCE_DESC tileBufferDesc{};
+    tileBufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    tileBufferDesc.Width = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+    tileBufferDesc.Height = 1;
+    tileBufferDesc.DepthOrArraySize = 1;
+    tileBufferDesc.MipLevels = 1;
+    tileBufferDesc.SampleDesc.Count = 1;
+    tileBufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    ID3D12Resource* tileBuffer = nullptr;
+    result = device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE,
+        &tileBufferDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+        __uuidof(ID3D12Resource), reinterpret_cast<void**>(&tileBuffer));
+    if (FAILED(result)) {
+        std::fprintf(stderr, "Tile-copy buffer creation failed: 0x%08lx\n", result);
+        queue->Release();
+        tilePool->Release();
+        resource->Release();
+        return 28;
+    }
+
+    ID3D12CommandAllocator* allocator = nullptr;
+    result = device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+        __uuidof(ID3D12CommandAllocator), reinterpret_cast<void**>(&allocator));
+    ID3D12GraphicsCommandList* list = nullptr;
+    if (SUCCEEDED(result))
+        result = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+            allocator, nullptr, __uuidof(ID3D12GraphicsCommandList),
+            reinterpret_cast<void**>(&list));
+    if (SUCCEEDED(result)) {
+        list->CopyTiles(resource, &coordinate, &region, tileBuffer, 0,
+            D3D12_TILE_COPY_FLAG_SWIZZLED_TILED_RESOURCE_TO_LINEAR_BUFFER);
+        list->CopyTiles(resource, &coordinate, &region, tileBuffer, 0,
+            D3D12_TILE_COPY_FLAG_LINEAR_BUFFER_TO_SWIZZLED_TILED_RESOURCE);
+        result = list->Close();
+    }
+    if (SUCCEEDED(result)) {
+        ID3D12CommandList* lists[] = {list};
+        queue->ExecuteCommandLists(1, lists);
+    }
+    if (FAILED(result)) {
+        std::fprintf(stderr, "Tile-copy command recording failed: 0x%08lx\n", result);
+        if (list) list->Release();
+        if (allocator) allocator->Release();
+        tileBuffer->Release();
+        queue->Release();
+        tilePool->Release();
+        resource->Release();
+        return 29;
+    }
+
+    list->Release();
+    allocator->Release();
+    tileBuffer->Release();
+    queue->Release();
+    tilePool->Release();
+    resource->Release();
+    return 0;
+}
+
+static int RunPlacedResourceSmoke(ID3D12Device* device) {
+    D3D12_HEAP_DESC heapDesc{};
+    heapDesc.SizeInBytes = 2 * D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+    heapDesc.Properties.Type = D3D12_HEAP_TYPE_UPLOAD;
+    heapDesc.Properties.CreationNodeMask = heapDesc.Properties.VisibleNodeMask = 1;
+    heapDesc.Flags = D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES |
+        D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES;
+
+    ID3D12Heap* heap = nullptr;
+    HRESULT result = device->CreateHeap(&heapDesc, __uuidof(ID3D12Heap),
+        reinterpret_cast<void**>(&heap));
+    if (FAILED(result)) {
+        std::fprintf(stderr, "CreateHeap for placed-resource smoke failed: 0x%08lx\n", result);

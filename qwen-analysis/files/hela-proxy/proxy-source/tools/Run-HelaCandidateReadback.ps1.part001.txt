@@ -1,0 +1,199 @@
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$GameDirectory,
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$RunDirectory,
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$ExternalReadbackDirectory,
+    [ValidateRange(100, 100000)]
+    [int]$TargetPresent = 1400,
+    [ValidateRange(0, 100000000)]
+    [int]$TargetDrawIndex = 0,
+    [ValidateRange(60, 300)]
+    [int]$TimeoutSeconds = 120,
+    [ValidateRange(0, 120)]
+    [int]$ObserveAfterReadbackSeconds = 0,
+    [string[]]$AdditionalCandidateHashes = @(),
+    [switch]$PreflightOnly
+)
+
+$ErrorActionPreference = 'Stop'
+
+$runRoot = [System.IO.Path]::GetFullPath($RunDirectory)
+$diagnosticName = 'powershell-error-' + [System.DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '.json'
+$diagnosticPath = Join-Path $runRoot $diagnosticName
+$diagnosticStage = 'initialization'
+try {
+$gameRoot = [System.IO.Path]::GetFullPath($GameDirectory)
+$externalReadbackRoot = [System.IO.Path]::GetFullPath($ExternalReadbackDirectory)
+$proxyReadbackRoot = [System.IO.Path]::GetPathRoot('D:\')
+$proxySourceRoot = Split-Path -Parent $PSScriptRoot
+$packageRoot = Split-Path -Parent $proxySourceRoot
+$gameBin = Join-Path $gameRoot 'Binaries\Win64'
+$gameExe = Join-Path $gameBin 'Hela-Win64-Shipping.exe'
+$crashpadExe = Join-Path $gameRoot 'Plugins\Sentry\Binaries\Win64\crashpad_handler.exe'
+$blockScript = Join-Path $PSScriptRoot 'Block-HelaEgress.ps1'
+$watchScript = Join-Path $PSScriptRoot 'Watch-HelaTcp.ps1'
+$overrides = Join-Path $runRoot 'baseline\overrides'
+$dumpDirectory = Join-Path $runRoot 'baseline\dump'
+$gameLog = Join-Path $gameBin 'd3d12on11.log'
+$networkLog = Join-Path $runRoot 'network-observations.jsonl'
+$runEvidenceModule = Join-Path $PSScriptRoot 'HelaRunEvidence.psm1'
+$preState = Join-Path $runRoot 'pre-state'
+$externalReadbackNames = @(
+    'HelaReadback_Present100_source.bmp',
+    'HelaReadback_Present100_backbuffer.bmp',
+    "HelaReadback_Present$TargetPresent`_source.bmp",
+    "HelaReadback_Present$TargetPresent`_backbuffer.bmp"
+)
+$baselineRun = Join-Path $packageRoot 'evidence\GTX_1050TI\runs\20261116\placed-resource-overlap-runtime-20261116-132423\baseline\overrides'
+$candidateRun = Join-Path $packageRoot 'evidence\GTX_1050TI\runs\20261116\placed-resource-overlap-monitored-20261116-132140\analysis\local-cs-sm5-candidates'
+$additionalCandidateRun = Join-Path $packageRoot 'shaders\overrides'
+$expectedDllHashes = @{
+    'd3d12.dll' = '17B8FDEA0485E1C0BD5F1F1332E607051D3A1204A19B369812A0BBA2C2466E35'
+    'dxgi.dll' = '0801EA3B1A28B345A8166AA98A0ABD3B7A10D01504D0EBAF2D254A9F330AE996'
+}
+
+function Get-ProcessPaths {
+    return @(
+        Get-CimInstance -ClassName Win32_Process `
+            -Filter "Name='Hela-Win64-Shipping.exe' OR Name='crashpad_handler.exe'" |
+            Where-Object {
+                $_.ExecutablePath -and
+                $_.ExecutablePath.StartsWith(
+                    $gameRoot,
+                    [System.StringComparison]::OrdinalIgnoreCase)
+            }
+    )
+}
+
+function Get-OverrideManifest {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+
+    if (-not [System.IO.Directory]::Exists($Directory)) {
+        return @()
+    }
+
+    return @(
+        Get-ChildItem -LiteralPath $Directory -File -Filter '*.cso' |
+            Sort-Object Name |
+            ForEach-Object {
+                [pscustomobject]@{
+                    name = $_.Name
+                    sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+                }
+            }
+    )
+}
+
+function Get-QuotedArgument {
+    param([Parameter(Mandatory = $true)][string]$Value)
+
+    return '"' + $Value.Replace('"', '\"') + '"'
+}
+
+function Get-SanitizedLogText {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$Text
+    )
+
+    $safeText = [regex]::Replace($Text, '(?i)(https?://)[^/@\s]+@', '$1[REDACTED]@')
+    $safeText = [regex]::Replace($safeText, '(?i)(sentry[_-]?key\s*[=:]\s*)[^\s&]+', '$1[REDACTED]')
+    $safeText = [regex]::Replace($safeText, '(?i)(dsn\s*[=:]\s*)[^\s,;]+', '$1[REDACTED]')
+    $safeText = [regex]::Replace($safeText, '(?i)(authorization:\s*(?:bearer|basic)\s+)[^\s]+', '$1[REDACTED]')
+    return $safeText
+}
+
+if (-not [System.IO.File]::Exists($gameExe) -or
+    -not [System.IO.File]::Exists($crashpadExe) -or
+    -not [System.IO.File]::Exists($blockScript) -or
+    -not [System.IO.File]::Exists($watchScript) -or
+    -not [System.IO.File]::Exists($runEvidenceModule)) {
+    throw 'Required Hela executable or safety tool is missing.'
+}
+$diagnosticStage = 'module-load'
+Import-Module -Name $runEvidenceModule -Force
+$diagnosticStage = 'run-directory-validation'
+if (-not [System.IO.Directory]::Exists($RunDirectory) -or
+    -not [System.IO.Directory]::Exists($overrides) -or
+    -not [System.IO.Directory]::Exists($dumpDirectory)) {
+    throw "Prepared run directories are missing: $RunDirectory"
+}
+if (-not [System.IO.Directory]::Exists($externalReadbackRoot)) {
+    throw "External readback directory does not exist: $externalReadbackRoot"
+}
+if (-not [System.String]::Equals(
+        $externalReadbackRoot,
+        $proxyReadbackRoot,
+        [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "The current proxy writes full-frame readbacks to $proxyReadbackRoot."
+}
+if ($TargetPresent -lt 100 -or ($TargetPresent % 100) -ne 0) {
+    throw 'TargetPresent must be a positive multiple of 100.'
+}
+
+$diagnosticStage = 'firewall-verification'
+$powershellExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+$previousErrorActionPreference = $ErrorActionPreference
+try {
+    $ErrorActionPreference = 'Continue'
+    $blockOutput = @(
+        & $powershellExe -NoProfile -ExecutionPolicy Bypass -File $blockScript `
+            -GameDirectory $gameRoot 2>&1
+    )
+    $blockExitCode = $LASTEXITCODE
+}
+finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+}
+$blockOutput | ForEach-Object { Write-Output $_ }
+if ($blockExitCode -ne 0) {
+    $helperError = ($blockOutput | ForEach-Object { [string]$_ }) -join [System.Environment]::NewLine
+    throw "The effective firewall block did not verify in this PowerShell context (helper exit code $blockExitCode); Hela was not started. $helperError"
+}
+$blockVerification = $null
+$verificationPrefix = 'HELA_EGRESS_VERIFICATION '
+foreach ($line in $blockOutput) {
+    $text = [string]$line
+    if ($text.StartsWith($verificationPrefix, [System.StringComparison]::Ordinal)) {
+        $blockVerification = ConvertFrom-Json -InputObject $text.Substring($verificationPrefix.Length) -ErrorAction Stop
+        break
+    }
+}
+if (-not (Test-HelaFirewallVerification `
+            -Verification $blockVerification `
+            -ExpectedPrograms @($gameExe, $crashpadExe))) {
+    throw 'The firewall helper did not confirm both expected executable rules in ActiveStore; Hela was not started.'
+}
+
+$diagnosticStage = 'gpu-verification'
+$gpu = @(
+    Get-CimInstance Win32_VideoController |
+        Where-Object { $_.Name -eq 'NVIDIA GeForce GTX 1050 Ti' }
+)
+if ($gpu.Count -eq 0) {
+    throw 'GTX 1050 Ti was not found; refusing to write evidence under the wrong GPU directory.'
+}
+
+$diagnosticStage = 'override-validation'
+$requiredCandidateHashes = @(
+    'bb592abf5ce2bad1',
+    'c71574a8f462e2c1',
+    'df79d6ce6e6eaa48',
+    '5e8318486d1b2a98'
+)
+$additionalHashes = @(
+    $AdditionalCandidateHashes |
+        ForEach-Object { ([string]$_).ToLowerInvariant() }
+)
+if (@($additionalHashes | Where-Object { $_ -notmatch '^[0-9a-f]{16}$' }).Count -gt 0 -or
+    @($additionalHashes | Sort-Object -Unique).Count -ne $additionalHashes.Count -or
+    @($additionalHashes | Where-Object { $requiredCandidateHashes -contains $_ }).Count -gt 0) {
+    throw 'AdditionalCandidateHashes must contain unique 16-digit shader hashes not already in the required candidate set.'
+}

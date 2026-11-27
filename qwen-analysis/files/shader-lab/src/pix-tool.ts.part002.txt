@@ -1,0 +1,25 @@
+      queueId: z.number().int().min(0).describe("Queue ID numerico della stessa riga event list"),
+      queueLabel: z.string().optional().describe("Etichetta opzionale copiata dalla UI PIX, non verificata dal CSV"),
+      eventListPath: z.string().optional().describe("Event list CSV/TSV esportata da PIX; se omessa il tool prova l'export locale con pixtool"),
+      outputDir: z.string().describe("Cartella locale per il PNG; un file esistente non viene sovrascritto"),
+      rtvIndex: z.number().int().min(0).max(7).default(0),
+      pixToolPath: z.string().optional().describe("Override locale di pixtool.exe"),
+    },
+  }, async ({ pixPath, globalId, queueId, queueLabel, eventListPath, outputDir, rtvIndex, pixToolPath }) => {
+    try {
+      const report = await exportPixDrawResource({
+        pixPath: path.resolve(pixPath),
+        globalId,
+        queueId,
+        queueLabel,
+        eventListPath: eventListPath ? path.resolve(eventListPath) : undefined,
+        outputDir: path.resolve(outputDir),
+        rtvIndex,
+        pixToolPath,
+      });
+      return { content: [{ type: "text" as const, text: JSON.stringify(report, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text" as const, text: "export_pix_draw_resource: " + String(e) }] };
+    }
+  });
+}

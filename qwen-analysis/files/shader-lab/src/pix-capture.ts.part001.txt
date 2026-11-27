@@ -1,0 +1,208 @@
+/**
+ * PIX capture inspector (.wpix) — SOLA LETTURA, a blocchi, con limiti espliciti.
+ *
+ * COSA FA (fatti verificabili sui byte):
+ *  - dimensione file (stat) e dump dei primi N byte (default 64);
+ *  - ricerca dei marker ASCII osservati nell'header (GFXA / GFXB / GFXC) nell'header;
+ *  - scansione a blocchi dei primi `maxScanBytes` byte alla ricerca dei pattern byte
+ *    GFXA/GFXB/GFXC e "DXBC" (conteggio + primi offset), con overlap tra blocchi;
+ *  - entropia di Shannon del primo blocco (indicatore numerico, interpretazione = ipotesi).
+ *
+ * COSA NON FA:
+ *  - NON decodifica il formato .wpix (non è documentato: nessuna struttura è assunta);
+ *  - NON estrae PSO, shader, eventi o risorse; i pattern trovati NON sono chunk verificati;
+ *  - NON esegue pixtool.exe (ne rileva solo la presenza);
+ *  - NON legge mai il file intero: vietato readFile / readFileSync / createReadStream.
+ */
+import * as fs from "node:fs";
+import * as path from "node:path";
+
+export const KNOWN_MARKERS = ["GFXA", "GFXB", "GFXC"] as const;
+/** Pattern DXBC: magic del container documentato D3D; qui è solo un pattern byte NON validato. */
+export const DXBC_MAGIC = "DXBC";
+
+const MiB = 1024 * 1024;
+
+export const DEFAULT_LIMITS = {
+  headerBytes: 64,
+  blockBytes: 1 * MiB,
+  maxScanBytes: 64 * MiB,
+  maxOffsetsPerPattern: 16,
+} as const;
+
+export const HARD_LIMITS = {
+  minHeaderBytes: 16,
+  maxHeaderBytes: 4096,
+  minBlockBytes: 16,
+  maxBlockBytes: 16 * MiB,
+  maxScanBytes: 256 * MiB,
+} as const;
+
+/** Sorgente di byte astratta: permette di simulare file enormi nei test senza allocarli. */
+export interface ByteSource {
+  readonly size: number;
+  read(position: number, length: number): Promise<Buffer>;
+}
+
+export interface PixScanOptions {
+  headerBytes?: number;
+  blockBytes?: number;
+  maxScanBytes?: number;
+  /** undefined = autodetect pixtool; null = non cercare (test). */
+  pixtoolPath?: string | null;
+}
+
+export interface PatternHits {
+  pattern: string;
+  kind: "marker" | "dxbc-pattern";
+  count: number;
+  offsets: number[];
+  offsetsTruncated: boolean;
+}
+
+export type PixStatus = "empty" | "truncated_header" | "unrecognized_header" | "known_markers_in_header";
+
+export interface PixCaptureReport {
+  file: string;
+  extensionOk: boolean;
+  sizeBytes: number;
+  status: PixStatus;
+  /** Sempre false: questo tool non decodifica .wpix. */
+  decoded: false;
+  limits: { headerBytes: number; blockBytes: number; maxScanBytes: number };
+  header: {
+    bytesRead: number;
+    hexDump: string;
+    asciiPreview: string;
+    leadingTag: string | null;
+    knownMarkers: { marker: string; offset: number }[];
+  };
+  scan: {
+    bytesScanned: number;
+    blocksRead: number;
+    complete: boolean;
+    firstBlockEntropyBitsPerByte: number | null;
+    hits: PatternHits[];
+  };
+  pixtool: { found: boolean; path: string | null };
+  warnings: string[];
+  nextInputs: string[];
+}
+
+function clampInt(v: number | undefined, min: number, max: number, def: number): number {
+  if (typeof v !== "number" || !Number.isFinite(v)) return def;
+  return Math.min(max, Math.max(min, Math.floor(v)));
+}
+
+export function resolveLimits(o: PixScanOptions = {}) {
+  return {
+    headerBytes: clampInt(o.headerBytes, HARD_LIMITS.minHeaderBytes, HARD_LIMITS.maxHeaderBytes, DEFAULT_LIMITS.headerBytes),
+    blockBytes: clampInt(o.blockBytes, HARD_LIMITS.minBlockBytes, HARD_LIMITS.maxBlockBytes, DEFAULT_LIMITS.blockBytes),
+    maxScanBytes: clampInt(o.maxScanBytes, 1, HARD_LIMITS.maxScanBytes, DEFAULT_LIMITS.maxScanBytes),
+  };
+}
+
+export function shannonEntropy(buf: Buffer): number {
+  if (buf.length === 0) return 0;
+  const counts = new Array<number>(256).fill(0);
+  for (const b of buf) counts[b]++;
+  let h = 0;
+  for (const c of counts) {
+    if (!c) continue;
+    const p = c / buf.length;
+    h -= p * Math.log2(p);
+  }
+  return h;
+}
+
+function hexDump(buf: Buffer): string {
+  const lines: string[] = [];
+  for (let i = 0; i < buf.length; i += 16) {
+    const row = buf.subarray(i, i + 16);
+    const hex = Array.from(row, (b) => b.toString(16).padStart(2, "0")).join(" ");
+    lines.push(`${i.toString(16).padStart(8, "0")}  ${hex}`);
+  }
+  return lines.join("\n");
+}
+
+function asciiPreview(buf: Buffer): string {
+  return Array.from(buf, (b) => (b >= 0x20 && b <= 0x7e ? String.fromCharCode(b) : ".")).join("");
+}
+
+/** Rileva pixtool.exe; l'esecuzione è demandata alla modalità completa PIX. */
+export function findPixTool(env: NodeJS.ProcessEnv = process.env): string | null {
+  const explicit = env.PIXTOOL_PATH;
+  if (explicit && fs.existsSync(explicit) && fs.statSync(explicit).isFile()) return explicit;
+
+  for (const programFiles of [env.ProgramFiles, env["ProgramFiles(x86)"]]) {
+    if (!programFiles) continue;
+    const root = path.join(programFiles, "Microsoft PIX");
+    try {
+      const dirs = fs.readdirSync(root, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name)
+        .sort()
+        .reverse();
+      for (const dir of dirs) {
+        const candidate = path.join(root, dir, "pixtool.exe");
+        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+      }
+    } catch { /* PIX non installato in questa directory */ }
+  }
+
+  for (const directory of (env.PATH || "").split(path.delimiter)) {
+    if (!directory) continue;
+    const candidate = path.join(directory, "pixtool.exe");
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+  }
+  return null;
+}
+
+/** Apre un file in sola lettura. Nessuna lettura integrale. */
+export async function openFileSource(filePath: string): Promise<ByteSource & { close(): Promise<void> }> {
+  const st = await fs.promises.stat(filePath);
+  if (!st.isFile()) throw new Error(`Non è un file: ${filePath}`);
+  const handle = await fs.promises.open(filePath, "r");
+  return {
+    size: st.size,
+    async read(position: number, length: number) {
+      const buf = Buffer.alloc(length);
+      const { bytesRead } = await handle.read(buf, 0, length, position);
+      return bytesRead === length ? buf : buf.subarray(0, bytesRead);
+    },
+    close: () => handle.close(),
+  };
+}
+
+function nextInputs(file: string): string[] {
+  return [
+    "Con PIX installato, esporta l'event list in CSV usando il flusso documentato dalla versione PIX in uso; questo tool non avvia PIX né pixtool.",
+    "Per immagini o risorse, usa manualmente le funzioni documentate della versione PIX in uso; questo tool non avvia export e non modifica la cattura.",
+    "In alternativa, fornisci un event-list CSV esportato dalla UI di PIX.",
+    "Per gli shader: fornisci singoli .dxil e/o i disassemblati DXC (.txt) e usa il tool `analyze_dxil` (dxilPath / disasmPath / dir).",
+    `Nota: un CSV event list di un'altra cattura non conteneva descrizioni PSO/bytecode; non assumere lo stesso contenuto per "${file}" senza verificarlo.`,
+  ];
+}
+
+export async function analyzeSource(source: ByteSource, fileLabel: string, options: PixScanOptions = {}): Promise<PixCaptureReport> {
+  const limits = resolveLimits(options);
+  const warnings: string[] = [];
+  const extensionOk = fileLabel.toLowerCase().endsWith(".wpix");
+  if (!extensionOk) warnings.push("L'estensione non è .wpix.");
+
+  const pixtoolPath = options.pixtoolPath === undefined ? findPixTool() : options.pixtoolPath;
+
+  // ---- header (una sola lettura, al massimo headerBytes)
+  const headerLen = Math.min(limits.headerBytes, source.size);
+  const head = headerLen > 0 ? await source.read(0, headerLen) : Buffer.alloc(0);
+  const leading = head.length >= 4 ? head.subarray(0, 4) : null;
+  const leadingTag = leading && leading.every((b) => b >= 0x20 && b <= 0x7e) ? leading.toString("latin1") : null;
+
+  const knownMarkers: { marker: string; offset: number }[] = [];
+  for (const m of KNOWN_MARKERS) {
+    const needle = Buffer.from(m, "latin1");
+    let i = head.indexOf(needle);
+    while (i !== -1) {
+      knownMarkers.push({ marker: m, offset: i });
+      i = head.indexOf(needle, i + 1);
+    }

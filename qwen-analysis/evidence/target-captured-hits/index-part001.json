@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "path": "evidence/target-captured-hits/part0001.ndjson",
+      "recordStart": 1,
+      "recordEnd": 6,
+      "recordCount": 6,
+      "byteCount": 6382,
+      "sha256": "5c18d48e748866ece3b5d11301371619ce056db7ee32a3ea6f864145dfb39f77"
+    }
+  ]
+}

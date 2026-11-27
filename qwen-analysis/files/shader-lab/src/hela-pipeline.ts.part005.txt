@@ -1,0 +1,203 @@
+            continue;
+          }
+
+          if (pairedVsHashes.length === 0) {
+            status = "compiled-unpaired";
+            includeInManifest = !requirePairValidationForPs;
+            detailMessage = requirePairValidationForPs
+              ? "PS compilato ma escluso dal manifest: nessun VS abbinato noto nel log."
+              : "PS compilato senza coppia VS nota (validazione firma non eseguita).";
+          } else if (
+            baseEntry.missingPairedVsDisasm.length > 0 ||
+            baseEntry.missingPairedVsCso.length > 0 ||
+            validatedAgainstVs.length < pairedVsHashes.length
+          ) {
+            // Regola rigorosa: se manca firma o bytecode di QUALUNQUE VS abbinato, NON dichiarare la coppia validata!
+            status = "pair-incomplete";
+            includeInManifest = !requirePairValidationForPs;
+            detailMessage =
+              `Coppia PS incompleta (condiviso=${baseEntry.sharedByMultipleVs}): validati ${validatedAgainstVs.length}/${pairedVsHashes.length} VS` +
+              (baseEntry.missingPairedVsDisasm.length ? `; disasm mancanti: ${baseEntry.missingPairedVsDisasm.join(", ")}` : "") +
+              (baseEntry.missingPairedVsCso.length ? `; .cso mancanti: ${baseEntry.missingPairedVsCso.join(", ")}` : "") +
+              ". Non dichiarato pair-validated.";
+          } else {
+            status = "pair-validated";
+            includeInManifest = true;
+            detailMessage = baseEntry.sharedByMultipleVs
+              ? `Compilato SM5 e validato contro tutti i ${validatedAgainstVs.length} VS abbinati (${validatedAgainstVs.join(", ")}).`
+              : `Compilato SM5 e validato contro VS ${validatedAgainstVs[0]}.`;
+          }
+        }
+
+        const destDir = includeInManifest ? overridesDir : rejectedDir;
+        const finalCsoPath = path.join(destDir, csoFileName);
+        fs.copyFileSync(tempCso, finalCsoPath);
+        if (includeInManifest) {
+          compiledCsoByHash.set(item.hash, finalCsoPath);
+        }
+
+        entries.push({
+          ...baseEntry,
+          status,
+          includedInManifest: includeInManifest,
+          csoPath: finalCsoPath,
+          csoSha256: compiledSha256,
+          validatedAgainstVs,
+          warnings: [...baseEntry.warnings, ...converted.post.warnings],
+          message: detailMessage,
+        });
+      } finally {
+        if (fs.existsSync(tempCso)) fs.unlinkSync(tempCso);
+      }
+    } catch (err) {
+      entries.push({
+        ...baseEntry,
+        status: "failed",
+        includedInManifest: false,
+        message: messageOf(err),
+      });
+    }
+  }
+
+  // Genera run-manifest.candidate.json preservando 100% degli hash e requiredOverrides del baseline
+  let manifestPath: string | undefined;
+  let baselineOverridesPreserved = 0;
+  let newCandidatesIncluded = 0;
+  let packageGateReport: HelaPackageGateReport | undefined;
+
+  if (baselineManifest) {
+    const manifestOverrides: Record<string, string> = {};
+    const requiredSet = new Set<string>(baselineManifest.requiredOverrides);
+
+    for (const [k, v] of Object.entries(baselineManifest.overrides)) {
+      manifestOverrides[k] = v.toLowerCase();
+      baselineOverridesPreserved++;
+    }
+
+    if (options.baselineOverridesDir && fs.existsSync(path.resolve(options.baselineOverridesDir))) {
+      for (const name of Object.keys(baselineManifest.overrides)) {
+        const src = path.join(path.resolve(options.baselineOverridesDir), name);
+        const dst = path.join(overridesDir, name);
+        if (fs.existsSync(src) && !fs.existsSync(dst)) {
+          fs.copyFileSync(src, dst);
+        }
+      }
+    }
+
+    for (const e of entries) {
+      if (e.includedInManifest && e.csoSha256) {
+        const name = `${e.hash}.cso`;
+        if (!manifestOverrides[name]) {
+          manifestOverrides[name] = e.csoSha256;
+          newCandidatesIncluded++;
+          if (options.addNewCandidatesToRequiredOverrides) {
+            requiredSet.add(name);
+          }
+        }
+      }
+    }
+
+    const sortedOverrides: Record<string, string> = {};
+    for (const k of Object.keys(manifestOverrides).sort()) {
+      sortedOverrides[k] = manifestOverrides[k];
+    }
+
+    let launchProfile = baselineManifest.launchProfile
+      ? {
+          ...baselineManifest.launchProfile,
+          environment: { ...baselineManifest.launchProfile.environment },
+          arguments: [...baselineManifest.launchProfile.arguments],
+          attestation: { ...baselineManifest.launchProfile.attestation },
+        }
+      : undefined;
+
+    if (launchProfile && options.enableDumpInCandidateManifest) {
+      launchProfile.environment.D3D12ON11_DUMP_SHADERS = "1";
+      launchProfile.sha256 = computeLaunchEnvironmentSha256(launchProfile.environment);
+    }
+
+    const candidateManifest: HelaRunManifestV1 = {
+      schema: "hela-run-manifest/v1",
+      runtimeAttestation: "module-and-shader-sha256",
+      testVersion: options.testVersion ?? `${baselineManifest.testVersion}-staged`,
+      runtime: { ...baselineManifest.runtime },
+      overrides: sortedOverrides,
+      requiredOverrides: [...requiredSet].sort(),
+      ...(launchProfile ? { launchProfile } : {}),
+    };
+
+    const runtimeEntries: Array<{ path: string; sha256: string; bytes: number }> = [];
+    if (options.runtimeDir) {
+      const runtimeDir = path.resolve(options.runtimeDir);
+      assertNotProtectedGamePath(runtimeDir, "runtimeDir");
+      if (!fs.existsSync(runtimeDir) || !fs.statSync(runtimeDir).isDirectory()) {
+        throw new Error(`runtimeDir non valida: ${runtimeDir}`);
+      }
+
+      const runtimeOutputDir = path.join(stagingDir, "runtime");
+      fs.mkdirSync(runtimeOutputDir, { recursive: true });
+      for (const name of ["d3d12.dll", "dxgi.dll"]) {
+        const source = path.join(runtimeDir, name);
+        if (!fs.existsSync(source) || !fs.statSync(source).isFile()) {
+          throw new Error(`Runtime DLL mancante in runtimeDir: ${source}`);
+        }
+        const bytes = fs.readFileSync(source);
+        const digest = sha256Buffer(bytes);
+        const manifestRole = name === "d3d12.dll" ? "d3d12" : "dxgi";
+        candidateManifest.runtime[manifestRole] = digest;
+        fs.copyFileSync(source, path.join(runtimeOutputDir, name));
+        runtimeEntries.push({ path: `runtime/${name}`, sha256: digest, bytes: bytes.length });
+      }
+    }
+
+    manifestPath = path.join(stagingDir, "run-manifest.candidate.json");
+    fs.writeFileSync(manifestPath, JSON.stringify(candidateManifest, null, 2) + "\n", "utf8");
+
+    if (options.runtimeDir) {
+      const overrideEntries = Object.entries(sortedOverrides).map(([name, digest], index) => ({
+        id: `override-${index}-${name.replace(/\.cso$/i, "")}`,
+        path: `overrides/${name}`,
+        sha256: digest,
+      }));
+      const candidatePackage = {
+        schemaVersion: 1,
+        packageId: candidateManifest.testVersion,
+        runtime: runtimeEntries,
+        overrides: overrideEntries,
+      };
+      fs.writeFileSync(
+        path.join(stagingDir, "candidate-package.json"),
+        JSON.stringify(candidatePackage, null, 2) + "\n",
+        "utf8",
+      );
+
+      const packageGate = deps.packageGate ?? defaultHelaPackageGate;
+      packageGateReport = await packageGate(stagingDir, { mode: "build" });
+    }
+  } else {
+    newCandidatesIncluded = entries.filter((e) => e.includedInManifest).length;
+  }
+
+  const counts: Record<ShaderStageOutcome, number> = {
+    "pair-validated": 0,
+    "compiled-candidate": 0,
+    "compiled-unpaired": 0,
+    "pair-incomplete": 0,
+    "pair-conflict": 0,
+    "pair-failed": 0,
+    "input-layout-failed": 0,
+    blocked: 0,
+    failed: 0,
+    skipped: 0,
+  };
+  for (const e of entries) counts[e.status]++;
+
+  const reportJsonPath = path.join(stagingDir, "hela-pipeline-report.json");
+  const reportMarkdownPath = path.join(stagingDir, "hela-pipeline-report.md");
+
+  const result: BuildHelaStageReport = {
+    stagingDir,
+    overridesDir,
+    manifestPath,
+    reportJsonPath,
+    reportMarkdownPath,

@@ -1,0 +1,149 @@
+void STDMETHODCALLTYPE CommandList::SetGraphicsRootUnorderedAccessView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) { SetRootAddress(gfx, i, a, 4); }
+
+void STDMETHODCALLTYPE CommandList::IASetIndexBuffer(const D3D12_INDEX_BUFFER_VIEW* view) {
+    TraceApi("CommandList::IASetIndexBuffer");
+    if (!view) return;
+    UINT64 offset = 0;
+    Resource* resource = ResolveVA(view->BufferLocation, &offset);
+    if (!resource || offset > UINT_MAX) return;
+    Ptr<ID3D11Buffer> buffer(resource->GpuBuffer());
+    Ptr<ID3D12Resource> resourceRef(resource);
+    const UINT nativeOffset = static_cast<UINT>(offset);
+    const DXGI_FORMAT format = view->Format;
+    const UINT viewSize = view->SizeInBytes;
+    Add([buffer, resourceRef, nativeOffset, format, viewSize](ExecState& state) {
+        auto* uploadResource = dynamic_cast<Resource*>(resourceRef.Get());
+        if (uploadResource && uploadResource->heap == D3D12_HEAP_TYPE_UPLOAD)
+            uploadResource->SyncToGpu(nativeOffset, viewSize);
+        state.c->IASetIndexBuffer(buffer.Get(), format, nativeOffset);
+        state.hasIndexBuffer = buffer.Get() != nullptr;
+        state.indexBufferResource = resourceRef;
+        state.indexBufferViewSize = viewSize;
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::IASetVertexBuffers(UINT startSlot, UINT count, const D3D12_VERTEX_BUFFER_VIEW* views) {
+    TraceApi("CommandList::IASetVertexBuffers");
+    if (!views || startSlot + count > D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT) return;
+    std::vector<Ptr<ID3D11Buffer>> buffers(count);
+    std::vector<Ptr<ID3D12Resource>> resources(count);
+    std::vector<UINT> strides(count), offsets(count);
+    std::vector<UINT64> resourceOffsets(count), sizes(count);
+    for (UINT i = 0; i < count; ++i) {
+        UINT64 offset = 0;
+        Resource* resource = ResolveVA(views[i].BufferLocation, &offset);
+        if (!resource || offset > UINT_MAX) return;
+        buffers[i] = Ptr<ID3D11Buffer>(resource->GpuBuffer());
+        resources[i] = Ptr<ID3D12Resource>(resource);
+        strides[i] = views[i].StrideInBytes;
+        offsets[i] = static_cast<UINT>(offset);
+        resourceOffsets[i] = offset;
+        sizes[i] = views[i].SizeInBytes;
+    }
+    Add([startSlot, buffers = std::move(buffers), resources = std::move(resources),
+        strides = std::move(strides), offsets = std::move(offsets),
+        resourceOffsets = std::move(resourceOffsets), sizes = std::move(sizes)](ExecState& state) {
+        std::vector<ID3D11Buffer*> raw;
+        raw.reserve(buffers.size());
+        for (size_t i = 0; i < buffers.size(); ++i) {
+            auto* uploadResource = dynamic_cast<Resource*>(resources[i].Get());
+            if (uploadResource && uploadResource->heap == D3D12_HEAP_TYPE_UPLOAD)
+                uploadResource->SyncToGpu(resourceOffsets[i], sizes[i]);
+            raw.push_back(buffers[i].Get());
+            state.vertexBuffers[startSlot + static_cast<UINT>(i)] = buffers[i].Get() != nullptr;
+        }
+        state.hasVertexBuffer = std::any_of(state.vertexBuffers.begin(), state.vertexBuffers.end(),
+            [](bool bound) { return bound; });
+        state.c->IASetVertexBuffers(startSlot, static_cast<UINT>(raw.size()), raw.data(), strides.data(), offsets.data());
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::OMSetRenderTargets(UINT count, const D3D12_CPU_DESCRIPTOR_HANDLE* handles,
+    BOOL single, const D3D12_CPU_DESCRIPTOR_HANDLE* depthHandle) {
+    TraceApi("CommandList::OMSetRenderTargets");
+    if (count > 8 || (count && !handles)) return;
+    std::vector<Ptr<ID3D11RenderTargetView>> views(count);
+    std::vector<Ptr<ID3D11Resource>> resources(count);
+    std::vector<bool> backbuffers(count, false);
+    for (UINT i = 0; i < count; ++i) {
+        auto handle = handles[i];
+        if (single) handle.ptr += static_cast<SIZE_T>(i) * kDescStride;
+        Descriptor descriptor = DescriptorAt(handle, DKind::RTV);
+        views[i] = descriptor.rtv;
+        if (descriptor.res && descriptor.res->tex)
+            resources[i] = Ptr<ID3D11Resource>(descriptor.res->tex.Get());
+        backbuffers[i] = descriptor.res && descriptor.res->backbuffer;
+    }
+    Ptr<ID3D11DepthStencilView> depth;
+    if (depthHandle) depth = DescriptorAt(*depthHandle, DKind::DSV).dsv;
+    Add([views = std::move(views), resources = std::move(resources),
+        backbuffers = std::move(backbuffers), depth](ExecState& state) {
+        std::vector<ID3D11RenderTargetView*> raw;
+        raw.reserve(views.size());
+        for (const auto& view : views) raw.push_back(view.Get());
+        state.c->OMSetRenderTargets(static_cast<UINT>(raw.size()), raw.data(), depth.Get());
+        for (UINT i = 0; i < ARRAYSIZE(state.rtvs); ++i) {
+            state.rtvs[i].Reset();
+            state.rtvResources[i].Reset();
+        }
+        state.numRtv = static_cast<UINT>(views.size());
+        state.dsv = depth;
+        state.rtvBackbuffer = false;
+        for (UINT i = 0; i < views.size() && i < 8; ++i) {
+            state.rtvs[i] = views[i];
+            state.rtvResources[i] = resources[i];
+        }
+        for (size_t i = 0; i < backbuffers.size(); ++i)
+            state.rtvBackbuffer = state.rtvBackbuffer || backbuffers[i];
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::ClearDepthStencilView(D3D12_CPU_DESCRIPTOR_HANDLE handle,
+    D3D12_CLEAR_FLAGS flags, FLOAT depth, UINT8 stencil, UINT rectCount, const D3D12_RECT*) {
+    if (rectCount) Unimpl("ID3D12GraphicsCommandList::ClearDepthStencilView rectangles");
+    Descriptor descriptor = DescriptorAt(handle, DKind::DSV);
+    if (!descriptor.dsv) return;
+    UINT nativeFlags = 0;
+    if (flags & D3D12_CLEAR_FLAG_DEPTH) nativeFlags |= D3D11_CLEAR_DEPTH;
+    if (flags & D3D12_CLEAR_FLAG_STENCIL) nativeFlags |= D3D11_CLEAR_STENCIL;
+    Add([descriptor, nativeFlags, depth, stencil](ExecState& state) {
+        state.c->ClearDepthStencilView(descriptor.dsv.Get(), nativeFlags, depth, stencil);
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::ClearRenderTargetView(D3D12_CPU_DESCRIPTOR_HANDLE handle,
+    const FLOAT color[4], UINT rectCount, const D3D12_RECT*) {
+    if (rectCount) Unimpl("ID3D12GraphicsCommandList::ClearRenderTargetView rectangles");
+    if (!color) return;
+    Descriptor descriptor = DescriptorAt(handle, DKind::RTV);
+    if (!descriptor.rtv) return;
+    float copy[4] = {color[0], color[1], color[2], color[3]};
+    Ptr<ID3D11Resource> target;
+    if (descriptor.res && descriptor.res->tex)
+        target = Ptr<ID3D11Resource>(descriptor.res->tex.Get());
+    Add([descriptor, copy, target](ExecState& state) {
+        state.c->ClearRenderTargetView(descriptor.rtv.Get(), copy);
+        char context[128]{};
+        snprintf(context, sizeof(context), "ClearRenderTargetView color=(%.3f,%.3f,%.3f,%.3f)",
+            copy[0], copy[1], copy[2], copy[3]);
+        TrackTargetOperation(target.Get(), context, TargetHistoryKind::Clear);
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::ClearUnorderedAccessViewUint(D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle,
+    D3D12_CPU_DESCRIPTOR_HANDLE, ID3D12Resource*, const UINT values[4], UINT rectCount, const D3D12_RECT*) {
+    if (rectCount) Unimpl("ID3D12GraphicsCommandList::ClearUnorderedAccessViewUint rectangles");
+    if (!values) return;
+    Descriptor descriptor = DescriptorAt(gpuHandle, DKind::UAV);
+    if (!descriptor.uav) return;
+    UINT copy[4] = {values[0], values[1], values[2], values[3]};
+    Add([descriptor, copy](ExecState& state) { state.c->ClearUnorderedAccessViewUint(descriptor.uav.Get(), copy); });
+}
+
+void STDMETHODCALLTYPE CommandList::ClearUnorderedAccessViewFloat(D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle,
+    D3D12_CPU_DESCRIPTOR_HANDLE, ID3D12Resource*, const FLOAT values[4], UINT rectCount, const D3D12_RECT*) {
+    if (rectCount) Unimpl("ID3D12GraphicsCommandList::ClearUnorderedAccessViewFloat rectangles");
+    if (!values) return;
+    Descriptor descriptor = DescriptorAt(gpuHandle, DKind::UAV);
+    if (!descriptor.uav) return;
+    float copy[4] = {values[0], values[1], values[2], values[3]};

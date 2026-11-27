@@ -1,0 +1,15 @@
+  description: "Controlla se fxc, dxil-spirv e spirv-cross sono raggiungibili.",
+  inputSchema: {},
+}, async () => {
+  const checks: [string, string, string[]][] = [
+    ["fxc", findFxc(), ["/?"]], ["dxil-spirv", dxilSpirvPath(), ["--help"]], ["spirv-cross", spirvCrossPath(), ["--help"]],
+  ];
+  const lines: string[] = [];
+  for (const [n, cmd, a] of checks) { const r = await run(cmd, a, 15_000); lines.push(`${r.missing ? "✖" : "✔"} ${n}  (${cmd})`); }
+  return ok(lines.join("\n"));
+});
+
+registerPixTool(server);
+registerHelaPipelineTools(server);
+
+await server.connect(new StdioServerTransport());

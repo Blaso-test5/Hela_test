@@ -1,0 +1,202 @@
+                "heartbeats": list(self.heartbeats),
+                "dispatch_clue_total": self.dispatch_clue_total,
+                "dispatch_clues_retained": list(self.dispatch_clues),
+            },
+            "bmp_verification": {k: dataclasses.asdict(v) for k, v in self.bmp_results.items()},
+            "verified_facts": verified_facts,
+            "hypotheses_and_open_questions": hypotheses,
+        }
+
+
+class LogFileTailer:
+    """
+    Incremental, rotation/truncation-safe file tailer that buffers partial lines
+    until a newline arrives.
+    """
+
+    def __init__(self, log_path: Path, state: LiveMonitorState, start_at_end: bool = False) -> None:
+        self.log_path = log_path
+        self.state = state
+        self.offset: int = 0
+        self.partial_buffer: str = ""
+        self.file_id: Optional[Tuple[int, int]] = None
+        self.initialized: bool = False
+        self.start_at_end = start_at_end
+
+    def poll(self) -> int:
+        """
+        Reads any newly appended complete lines from `self.log_path`.
+        Detects file creation, truncation (`size < offset`), or file replacement.
+        Returns the number of complete lines fed in this poll cycle.
+        """
+        if not self.log_path.is_file():
+            return 0
+
+        try:
+            st = self.log_path.stat()
+        except OSError:
+            return 0
+
+        current_id = (st.st_dev, st.st_ino)
+        current_size = st.st_size
+
+        if not self.initialized:
+            self.initialized = True
+            self.file_id = current_id
+            if self.start_at_end:
+                self.offset = current_size
+                return 0
+        else:
+            if current_size < self.offset:
+                self.offset = 0
+                self.partial_buffer = ""
+                self.file_id = current_id
+                self.state.on_log_truncated_or_rotated(
+                    f"file size shrank to {current_size} bytes"
+                )
+            elif self.file_id is not None and current_id != (0, 0) and current_id != self.file_id and current_size == 0:
+                self.offset = 0
+                self.partial_buffer = ""
+                self.file_id = current_id
+                self.state.on_log_truncated_or_rotated("file recreated")
+
+        if current_size <= self.offset:
+            return 0
+
+        lines_fed = 0
+        try:
+            with self.log_path.open("rb") as f:
+                f.seek(self.offset)
+                # Read in 64 KB chunks to keep memory strictly bounded even on 30+ MB files
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk:
+                        break
+                    self.offset += len(chunk)
+                    text = self.partial_buffer + chunk.decode("utf-8", errors="replace")
+                    parts = text.split("\n")
+                    self.partial_buffer = parts.pop()  # Remainder after last '\n'
+                    for line in parts:
+                        self.state.feed_line(line.rstrip("\r"))
+                        lines_fed += 1
+        except OSError:
+            pass
+
+        return lines_fed
+
+    def flush_partial(self) -> int:
+        """Flushes any trailing non-newline-terminated line on shutdown/EOF."""
+        if self.partial_buffer.strip():
+            line = self.partial_buffer.rstrip("\r")
+            self.partial_buffer = ""
+            self.state.feed_line(line)
+            return 1
+        return 0
+
+
+def format_human_summary(report: Dict[str, Any]) -> str:
+    meta = report["monitor_metadata"]
+    p100 = report["present_100"]
+    shaders = report["shaders"]
+    clues = report["runtime_clues"]
+    bmps = report["bmp_verification"]
+
+    out: List[str] = []
+    out.append("=" * 78)
+    out.append(f"HELA LIVE FRAME MONITOR SUMMARY ({report['schema']} v{report['schema_version']})")
+    out.append("=" * 78)
+    out.append(
+        f"Log Path   : {meta['log_path']} (gen={meta['generation']}, "
+        f"truncations={meta['truncation_count']}, lines={meta['lines_processed_in_generation']:,})"
+    )
+    run_identity = report["run_identity"]
+    out.append(
+        f"Run Version: {run_identity['test_version'] or '<untracked>'} "
+        f"(module fingerprints={run_identity['attestation_status']})"
+    )
+    out.append(
+        f"Capture    : Present #{report['capture_target']['present']} "
+        f"complete={report['capture_target']['complete']}"
+    )
+    out.append("")
+    if run_identity["expected_modules"]:
+        out.append("[0] RUNTIME PATCH IDENTITY")
+        out.append("-" * 78)
+        for role in ("d3d12", "dxgi"):
+            expected = run_identity["expected_modules"].get(role, "<not pinned>")
+            observed = run_identity["observed_modules"].get(role, "<not observed>")
+            out.append(f"  {role:10}: expected={expected} observed={observed}")
+        out.append("")
+    out.append("[1] PRESENT #100 SOURCE HISTORY & READBACK CORRELATION")
+    out.append("-" * 78)
+    rb_src = p100["source_readback"]
+    rb_bb = p100["backbuffer_readback"]
+    matched = p100["matched_source_history"]
+
+    if rb_src:
+        out.append(
+            f"  READBACK_SRC : Present #{rb_src['present']} | source={rb_src['source']} | "
+            f"{rb_src['width']}x{rb_src['height']} fmt={rb_src['format']} seq={rb_src['sequence']}"
+        )
+        out.append(
+            f"                 Non-black={rb_src['non_black_count']}/{rb_src['total_sampled']} "
+            f"({rb_src['non_black_pct']}%) | samples={rb_src['sample_pixels_rgba']}"
+        )
+    else:
+        out.append("  READBACK_SRC : <not observed>")
+
+    if rb_bb:
+        out.append(
+            f"  READBACK_BB  : Present #{rb_bb['present']} | buffer={rb_bb['buffer']} | "
+            f"{rb_bb['width']}x{rb_bb['height']} fmt={rb_bb['format']}"
+        )
+        out.append(
+            f"                 Non-black={rb_bb['non_black_count']}/{rb_bb['total_sampled']} "
+            f"({rb_bb['non_black_pct']}%) | samples={rb_bb['sample_pixels_rgba']}"
+        )
+    else:
+        out.append("  READBACK_BB  : <not observed>")
+
+    if matched:
+        out.append(
+            f"  MATCHED RTV  : Resource {matched['resource']} "
+            f"(operations={matched['operations']} draws={matched['draws']} "
+            f"skipped={matched['skipped']} clears={matched['clears']})"
+        )
+        out.append(
+            f"                 VS={matched['unique_vs']} PS={matched['unique_ps']} "
+            f"viewport={matched['unique_viewports']}"
+        )
+    elif p100["all_source_histories"]:
+        out.append(f"  RTV HISTORY  : {len(p100['all_source_histories'])} resource(s) tracked:")
+        for ptr, h in p100["all_source_histories"].items():
+            out.append(
+                f"                 - {ptr}: ops={h['operations']} draws={h['draws']} "
+                f"skipped={h['skipped']} clears={h['clears']}"
+            )
+    else:
+        out.append("  RTV HISTORY  : <none observed>")
+
+    if bmps:
+        out.append("  BMP CHECKS   :")
+        for label, b in bmps.items():
+            out.append(
+                f"                 - [{label}] {b['path']}: {b['width']}x{b['height']} "
+                f"({b['bits_per_pixel']}bpp) non-black={b['non_black_pixels']}/{b['total_pixels']}"
+            )
+    capture = report["capture_target"]
+    if capture["present"] != 100:
+        out.append(f"  CAPTURE #{capture['present']} complete={capture['complete']}")
+        for label in ("source_readback", "backbuffer_readback"):
+            record = capture[label]
+            if record is None:
+                out.append(f"                 - {label}: <not observed>")
+            else:
+                out.append(
+                    f"                 - {label}: {record['width']}x{record['height']} "
+                    f"non-black={record['non_black_count']}/{record['total_sampled']}"
+                )
+    out.append("")
+
+    out.append("[2] SHADER READINESS & COMPUTE PLACEHOLDERS")
+    out.append("-" * 78)

@@ -1,0 +1,168 @@
+        const auto* values = static_cast<const UINT*>(data);
+        if (values[0] != 0x1234ABCD || values[1] != 0xAABBCCDD) {
+            std::fprintf(stderr, "Unexpected compute results: 0x%08x, 0x%08x\n", values[0], values[1]);
+            result = E_FAIL;
+        }
+    }
+    if (FAILED(result)) std::fprintf(stderr, "Root signature/PSO/dispatch/readback failed: 0x%08lx\n", result);
+    if (data) readback->Unmap(0, &readRange);
+    if (fence) fence->Release();
+    if (list) list->Release();
+    if (queue) queue->Release();
+    if (allocator) allocator->Release();
+    if (readback) readback->Release();
+    textureCopy->Release();
+    textureSource->Release();
+    descriptorHeap->Release();
+    constantInput->Release();
+    input->Release();
+    output->Release();
+    pipeline->Release();
+    rootSignature->Release();
+    return FAILED(result) ? 16 : 0;
+}
+
+static int RunTextureFootprintSmoke(ID3D12Device* device, DXGI_FORMAT format) {
+    D3D12_RESOURCE_DESC textureDesc{};
+    textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    textureDesc.Width = 8;
+    textureDesc.Height = 4;
+    textureDesc.DepthOrArraySize = 1;
+    textureDesc.MipLevels = 1;
+    textureDesc.Format = format;
+    textureDesc.SampleDesc.Count = 1;
+    textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
+    UINT rows = 0;
+    UINT64 rowSize = 0;
+    UINT64 totalBytes = 0;
+    device->GetCopyableFootprints(&textureDesc, 0, 1, 0, &footprint, &rows, &rowSize, &totalBytes);
+    if (!totalBytes || rows != textureDesc.Height || rowSize != textureDesc.Width * sizeof(UINT))
+        return 20;
+
+    D3D12_HEAP_PROPERTIES defaultHeap{};
+    defaultHeap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    defaultHeap.CreationNodeMask = defaultHeap.VisibleNodeMask = 1;
+    D3D12_HEAP_PROPERTIES uploadHeap{};
+    uploadHeap.Type = D3D12_HEAP_TYPE_UPLOAD;
+    uploadHeap.CreationNodeMask = uploadHeap.VisibleNodeMask = 1;
+    D3D12_HEAP_PROPERTIES readbackHeap{};
+    readbackHeap.Type = D3D12_HEAP_TYPE_READBACK;
+    readbackHeap.CreationNodeMask = readbackHeap.VisibleNodeMask = 1;
+    D3D12_RESOURCE_DESC bufferDesc{};
+    bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    bufferDesc.Width = totalBytes;
+    bufferDesc.Height = 1;
+    bufferDesc.DepthOrArraySize = 1;
+    bufferDesc.MipLevels = 1;
+    bufferDesc.SampleDesc.Count = 1;
+    bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+    ID3D12Resource* texture = nullptr;
+    ID3D12Resource* upload = nullptr;
+    ID3D12Resource* readback = nullptr;
+    ID3D12CommandAllocator* allocator = nullptr;
+    ID3D12GraphicsCommandList* list = nullptr;
+    ID3D12CommandQueue* queue = nullptr;
+    ID3D12Fence* fence = nullptr;
+    HANDLE event = nullptr;
+    HRESULT result = device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE,
+        &textureDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, __uuidof(ID3D12Resource),
+        reinterpret_cast<void**>(&texture));
+    if (SUCCEEDED(result))
+        result = device->CreateCommittedResource(&uploadHeap, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, __uuidof(ID3D12Resource),
+            reinterpret_cast<void**>(&upload));
+    if (SUCCEEDED(result))
+        result = device->CreateCommittedResource(&readbackHeap, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+            D3D12_RESOURCE_STATE_COPY_DEST, nullptr, __uuidof(ID3D12Resource),
+            reinterpret_cast<void**>(&readback));
+    void* uploadData = nullptr;
+    D3D12_RANGE noRead{0, 0};
+    if (SUCCEEDED(result)) result = upload->Map(0, &noRead, &uploadData);
+    if (SUCCEEDED(result) && uploadData) {
+        auto* bytes = static_cast<uint8_t*>(uploadData);
+        for (UINT y = 0; y < textureDesc.Height; ++y) {
+            auto* row = reinterpret_cast<UINT*>(bytes + footprint.Offset +
+                static_cast<UINT64>(y) * footprint.Footprint.RowPitch);
+            for (UINT x = 0; x < textureDesc.Width; ++x)
+                row[x] = 0xA5000000u | (y << 8) | x;
+        }
+        D3D12_RANGE written{0, static_cast<SIZE_T>(totalBytes)};
+        upload->Unmap(0, &written);
+    } else if (uploadData) {
+        upload->Unmap(0, &noRead);
+    }
+
+    D3D12_COMMAND_QUEUE_DESC queueDesc{};
+    queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    if (SUCCEEDED(result))
+        result = device->CreateCommandQueue(&queueDesc, __uuidof(ID3D12CommandQueue),
+            reinterpret_cast<void**>(&queue));
+    if (SUCCEEDED(result))
+        result = device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+            __uuidof(ID3D12CommandAllocator), reinterpret_cast<void**>(&allocator));
+    if (SUCCEEDED(result))
+        result = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator,
+            nullptr, __uuidof(ID3D12GraphicsCommandList), reinterpret_cast<void**>(&list));
+    if (SUCCEEDED(result)) {
+        D3D12_TEXTURE_COPY_LOCATION textureLocation{};
+        textureLocation.pResource = texture;
+        textureLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        textureLocation.SubresourceIndex = 0;
+        D3D12_TEXTURE_COPY_LOCATION uploadLocation{};
+        uploadLocation.pResource = upload;
+        uploadLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        uploadLocation.PlacedFootprint = footprint;
+        list->CopyTextureRegion(&textureLocation, 0, 0, 0, &uploadLocation, nullptr);
+
+        const D3D12_BOX partialBox{2, 1, 0, 6, 3, 1};
+        list->CopyTextureRegion(&textureLocation, 1, 1, 0, &uploadLocation, &partialBox);
+
+        D3D12_TEXTURE_COPY_LOCATION readbackLocation{};
+        readbackLocation.pResource = readback;
+        readbackLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        readbackLocation.PlacedFootprint = footprint;
+        list->CopyTextureRegion(&readbackLocation, 0, 0, 0, &textureLocation, nullptr);
+        const D3D12_BOX readbackBox{0, 0, 0, 4, 2, 1};
+        list->CopyTextureRegion(&readbackLocation, 4, 2, 0, &textureLocation, &readbackBox);
+        result = list->Close();
+    }
+    if (SUCCEEDED(result))
+        result = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence),
+            reinterpret_cast<void**>(&fence));
+    if (SUCCEEDED(result)) {
+        ID3D12CommandList* lists[] = {list};
+        queue->ExecuteCommandLists(1, lists);
+        result = queue->Signal(fence, 1);
+    }
+    if (SUCCEEDED(result) && fence->GetCompletedValue() < 1) {
+        event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        if (!event) result = HRESULT_FROM_WIN32(GetLastError());
+        else {
+            result = fence->SetEventOnCompletion(1, event);
+            if (SUCCEEDED(result) && WaitForSingleObject(event, INFINITE) != WAIT_OBJECT_0)
+                result = HRESULT_FROM_WIN32(GetLastError());
+        }
+    }
+
+    void* readbackData = nullptr;
+    D3D12_RANGE readRange{0, static_cast<SIZE_T>(totalBytes)};
+    if (SUCCEEDED(result)) result = readback->Map(0, &readRange, &readbackData);
+    if (SUCCEEDED(result) && readbackData) {
+        const auto* bytes = static_cast<const uint8_t*>(readbackData);
+        const auto textureValue = [](UINT x, UINT y) {
+            const UINT sourceX = y >= 1 && y < 3 && x >= 1 && x < 5 ? x + 1 : x;
+            return 0xA5000000u | (y << 8) | sourceX;
+        };
+        for (UINT y = 0; y < textureDesc.Height && SUCCEEDED(result); ++y) {
+            const auto* row = reinterpret_cast<const UINT*>(bytes + footprint.Offset +
+                static_cast<UINT64>(y) * footprint.Footprint.RowPitch);
+            for (UINT x = 0; x < textureDesc.Width; ++x) {
+                const bool readbackRegion = y >= 2 && x >= 4;
+                const UINT expected = readbackRegion
+                    ? textureValue(x - 4, y - 2)
+                    : textureValue(x, y);
+                if (row[x] != expected) {
+                    std::fprintf(stderr, "Texture footprint mismatch at (%u,%u): 0x%08x != 0x%08x\n",

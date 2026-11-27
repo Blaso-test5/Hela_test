@@ -1,0 +1,193 @@
+    logAnalyzed: Boolean(logReport),
+    counts,
+    baselineOverridesPreserved,
+    newCandidatesIncluded,
+    unmappedRegisterSpaces,
+    entries,
+    ...(packageGateReport ? { packageGate: packageGateReport } : {}),
+    disclaimer: CANDIDATE_DISCLAIMER,
+  };
+
+  fs.writeFileSync(reportJsonPath, JSON.stringify(result, null, 2) + "\n", "utf8");
+  fs.writeFileSync(reportMarkdownPath, formatStageMarkdown(result), "utf8");
+  if (packageGateReport && !packageGateReport.ok) {
+    throw new Error(
+      `Package gate Hela fallito (staged-only): ${packageGateReport.issues
+        .map((issue) => issue.code)
+        .join(", ")}`,
+    );
+  }
+  return result;
+}
+
+/**
+ * Produce un nuovo manifest candidato in un percorso separato preservando 100% di
+ * `overrides` e `requiredOverrides` del baseline. Rifiuta qualsiasi percorso che possa
+ * sovrascrivere il baseline, file esistenti o directory del gioco/staging input.
+ */
+export function planHelaManifestPatch(options: PlanManifestPatchOptions): PlanManifestPatchResult {
+  const baselinePath = path.resolve(options.baselineManifestPath);
+  const stagingOverridesDir = path.resolve(options.stagingOverridesDir);
+  const outPath = path.resolve(options.outManifestPath);
+
+  assertNotProtectedGamePath(outPath, "outManifestPath");
+  if (!outPath.toLowerCase().endsWith(".json")) {
+    throw new Error(`outManifestPath deve terminare in .json: ${outPath}`);
+  }
+  if (outPath.toLowerCase() === baselinePath.toLowerCase()) {
+    throw new Error("Rifiutato: outManifestPath coincide con baselineManifestPath (non sovrascrivere il manifest originale).");
+  }
+  if (isWithin(path.dirname(baselinePath), outPath)) {
+    throw new Error("Rifiutato: outManifestPath non può essere scritto nella stessa cartella del manifest baseline/storico.");
+  }
+  if (isWithin(stagingOverridesDir, outPath)) {
+    throw new Error("Rifiutato: outManifestPath non può risiedere dentro stagingOverridesDir.");
+  }
+  if (fs.existsSync(outPath)) {
+    throw new Error(`Rifiutato: outManifestPath esiste già (${outPath}); specificare un nuovo percorso candidato.`);
+  }
+  if (!fs.existsSync(stagingOverridesDir) || !fs.statSync(stagingOverridesDir).isDirectory()) {
+    throw new Error(`stagingOverridesDir non valida: ${stagingOverridesDir}`);
+  }
+
+  const baseline = readAndValidateManifest(baselinePath);
+  const mergedOverrides: Record<string, string> = {};
+  for (const [name, hash] of Object.entries(baseline.overrides)) {
+    mergedOverrides[name] = hash.toLowerCase();
+  }
+  const requiredSet = new Set<string>(baseline.requiredOverrides);
+
+  const files = fs
+    .readdirSync(stagingOverridesDir)
+    .filter((f) => f.toLowerCase().endsWith(".cso"))
+    .sort();
+
+  const addedOverrides: string[] = [];
+  for (const file of files) {
+    if (!CSO_NAME.test(file)) {
+      throw new Error(`Nome file .cso non valido in staging: ${file}`);
+    }
+    const bytes = fs.readFileSync(path.join(stagingOverridesDir, file));
+    const container = dxilAnalyzer.parseContainer(bytes);
+    if (!container?.hasLegacy || container.hasDxil) {
+      throw new Error(`File in staging non è un container DXBC SM5 valido: ${file}`);
+    }
+    const digest = sha256Buffer(bytes);
+    const baselineDigest = mergedOverrides[file];
+    if (baselineDigest) {
+      if (baselineDigest !== digest) {
+        throw new Error(
+          `Conflitto hash sul file baseline '${file}': baseline=${baselineDigest}, staging=${digest}. ` +
+          "Rifiutato per preservare l'integrità del baseline.",
+        );
+      }
+      continue;
+    }
+    mergedOverrides[file] = digest;
+    addedOverrides.push(file);
+    if (options.addNewCandidatesToRequiredOverrides) {
+      requiredSet.add(file);
+    }
+  }
+
+  const sortedOverrides: Record<string, string> = {};
+  for (const key of Object.keys(mergedOverrides).sort()) {
+    sortedOverrides[key] = mergedOverrides[key];
+  }
+
+  let launchProfile = baseline.launchProfile
+    ? {
+        ...baseline.launchProfile,
+        environment: { ...baseline.launchProfile.environment },
+        arguments: [...baseline.launchProfile.arguments],
+        attestation: { ...baseline.launchProfile.attestation },
+      }
+    : undefined;
+  if (launchProfile && options.dumpShaders !== undefined) {
+    launchProfile.environment.D3D12ON11_DUMP_SHADERS = options.dumpShaders ? "1" : "0";
+    launchProfile.sha256 = computeLaunchEnvironmentSha256(launchProfile.environment);
+  }
+
+  const candidateManifest: HelaRunManifestV1 = {
+    schema: "hela-run-manifest/v1",
+    runtimeAttestation: "module-and-shader-sha256",
+    testVersion: options.testVersion,
+    runtime: { ...baseline.runtime },
+    overrides: sortedOverrides,
+    requiredOverrides: [...requiredSet].sort(),
+    ...(launchProfile ? { launchProfile } : {}),
+  };
+
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
+  fs.writeFileSync(outPath, JSON.stringify(candidateManifest, null, 2) + "\n", "utf8");
+
+  return {
+    written: outPath,
+    testVersion: options.testVersion,
+    baselineOverrideCount: Object.keys(baseline.overrides).length,
+    totalOverrides: Object.keys(sortedOverrides).length,
+    addedOverrides,
+    unchangedBaselineOverrides: Object.keys(baseline.overrides).length,
+    requiredOverridesCount: candidateManifest.requiredOverrides.length,
+    launchProfileSha256: launchProfile?.sha256,
+    disclaimer: CANDIDATE_DISCLAIMER,
+  };
+}
+
+function formatStageMarkdown(report: BuildHelaStageReport): string {
+  const lines: string[] = [
+    "# Shader Lab — Hela Staging Pipeline Report (v2)",
+    "",
+    `> **Limite di validazione**: ${report.disclaimer}`,
+    "",
+    `- **Staging dir**: \`${report.stagingDir}\``,
+    `- **Overrides dir**: \`${report.overridesDir}\``,
+    `- **Manifest candidato**: ${report.manifestPath ? `\`${report.manifestPath}\`` : "(non generato)"}`,
+    `- **Package gate**: ${report.packageGate ? (report.packageGate.ok ? "PASS (staged-only)" : "FAIL (staged-only)") : "non richiesto"}`,
+    `- **Override baseline preservati**: ${report.baselineOverridesPreserved}`,
+    `- **Nuovi candidati inclusi**: ${report.newCandidatesIncluded}`,
+    "",
+    "## Riepilogo stati",
+    "",
+    "| Stato | Conteggio |",
+    "|---|---|",
+    ...Object.entries(report.counts).map(([k, v]) => `| \`${k}\` | ${v} |`),
+    "",
+    "## Dettaglio shader",
+    "",
+    "| Hash FNV-1a64 | Stage | Multi-VS | Stato | In manifest | Dettagli |",
+    "|---|---|---|---|---|---|",
+    ...report.entries.map(
+      (e) =>
+        `| \`${e.hash}\` | \`${e.stage}\` | ${e.sharedByMultipleVs ? "sì" : "no"} | \`${e.status}\` | ${e.includedInManifest ? "sì" : "no"} | ${e.message.replace(/\|/g, "/")} |`,
+    ),
+  ];
+  return lines.join("\n") + "\n";
+}
+
+/**
+ * Verifica post-run read-only di una cartella prodotta da `ProxyManager.ps1`.
+ * Distingue esplicitamente:
+ * 1. Attestazione moduli/profilo/override
+ * 2. Present raggiunto (`maxObservedPresent > 0`, eventuale `targetPresent`)
+ * 3. Stato BMP readback (`missing` | `invalid` | `black-readback` | `nonzero-pixels-observed`)
+ * 4. `menuValidated: false` (pixel non neri osservati NON equivalgono a menu validato).
+ */
+export function verifyHelaRun(options: VerifyHelaRunOptions): VerifyHelaRunReport {
+  const runDir = path.resolve(options.runDir);
+  const logPath = path.resolve(options.logPath ?? path.join(runDir, "d3d12on11.log"));
+  const manifestPath = path.resolve(options.manifestPath ?? path.join(runDir, "run-manifest.json"));
+
+  const logReport = parseHelaProxyLogFile(logPath);
+  const manifest = readAndValidateManifest(manifestPath);
+
+  const attestationFailures: string[] = [];
+  const missingRequiredOverrides: string[] = [];
+
+  const expectedD3d12 = manifest.runtime.d3d12.toLowerCase();
+  const expectedDxgi = manifest.runtime.dxgi.toLowerCase();
+  if (logReport.attestation.modules.d3d12 !== expectedD3d12) {
+    attestationFailures.push(
+      `d3d12.dll fingerprint mismatch: atteso ${expectedD3d12}, loggato ${logReport.attestation.modules.d3d12 ?? "assente"}`,
+    );
+  }

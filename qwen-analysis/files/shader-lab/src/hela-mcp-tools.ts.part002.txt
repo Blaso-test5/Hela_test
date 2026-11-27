@@ -1,0 +1,34 @@
+      onlyHashes: z.array(z.string()).optional().describe("Subset opzionale di hash FNV-1a64"),
+      dxcPath: z.string().optional().describe("Override locale di dxc.exe"),
+    },
+  }, async (args) => {
+    try {
+      const report = await buildHelaOverrideStage(args);
+      return { content: [{ type: "text" as const, text: JSON.stringify(report, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text" as const, text: "build_hela_override_stage: " + String(e) }] };
+    }
+  });
+
+  server.registerTool("plan_hela_manifest_patch", {
+    title: "Pianifica manifest candidato hela-run-manifest/v1",
+    description:
+      "Produce un manifest candidato in un nuovo percorso separato (outManifestPath), preservando tutti gli hash e requiredOverrides " +
+      "del baseline e rifiutando percorsi che sovrascriverebbero il baseline, file esistenti, staging input o directory del gioco.",
+    inputSchema: {
+      baselineManifestPath: z.string().min(1).describe("Manifest baseline hela-run-manifest/v1 (sola lettura)"),
+      stagingOverridesDir: z.string().min(1).describe("Cartella overrides/ di staging contenente i candidati .cso"),
+      outManifestPath: z.string().min(1).describe("Nuovo percorso .json separato per il manifest candidato (non deve esistere)"),
+      testVersion: z.string().min(1).describe("Nuovo testVersion"),
+      dumpShaders: z.boolean().optional().describe("Se indicato, imposta D3D12ON11_DUMP_SHADERS=1/0 e aggiorna launchProfile.sha256"),
+      addNewCandidatesToRequiredOverrides: z.boolean().default(false).describe("Aggiunge i nuovi candidati a requiredOverrides preservando il baseline"),
+    },
+  }, async (args) => {
+    try {
+      const res = planHelaManifestPatch(args);
+      return { content: [{ type: "text" as const, text: JSON.stringify(res, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text" as const, text: "plan_hela_manifest_patch: " + String(e) }] };
+    }
+  });
+}

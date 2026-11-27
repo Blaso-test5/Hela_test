@@ -1,0 +1,211 @@
+#include "types.h"
+
+namespace {
+
+D3D12_TILED_RESOURCES_TIER EffectiveTiledResourcesTier(
+    D3D11_TILED_RESOURCES_TIER nativeTier, bool hasDevice2, bool hasContext2) {
+    wchar_t overrideValue[32] = {};
+    const DWORD length = GetEnvironmentVariableW(L"D3D12ON11_TILED_RESOURCES_TIER",
+        overrideValue, ARRAYSIZE(overrideValue));
+    if (length > 0 && length < ARRAYSIZE(overrideValue)) {
+        wchar_t* end = nullptr;
+        const unsigned long parsed = wcstoul(overrideValue, &end, 0);
+        if (end != overrideValue && *end == L'\0' && parsed <= 3)
+            return static_cast<D3D12_TILED_RESOURCES_TIER>(parsed);
+    }
+    if (Cfg().diagnosticCapabilities)
+        return D3D12_TILED_RESOURCES_TIER_3;
+    return nativeTier >= D3D11_TILED_RESOURCES_TIER_2 && hasDevice2 && hasContext2
+        ? D3D12_TILED_RESOURCES_TIER_1
+        : D3D12_TILED_RESOURCES_TIER_NOT_SUPPORTED;
+}
+
+}
+
+void DeviceAddRef(Device* device) {
+    if (device) device->AddRef();
+}
+
+void DeviceRelease(Device* device) {
+    if (device) device->Release();
+}
+
+HRESULT STDMETHODCALLTYPE Device::QueryInterface(REFIID riid, void** out) {
+    D3D12ON11_TRACE_CALLER("Device::QueryInterface");
+    if (!out) return E_POINTER;
+    *out = nullptr;
+
+    const char* interfaceName = nullptr;
+    if (riid == __uuidof(IUnknown) || riid == __uuidof(ID3D12Object) ||
+        riid == __uuidof(ID3D12Device2)) {
+        *out = static_cast<ID3D12Device2*>(this);
+        interfaceName = "ID3D12Device2";
+    } else if (riid == __uuidof(ID3D12Device1)) {
+        *out = static_cast<ID3D12Device1*>(this);
+        interfaceName = "ID3D12Device1";
+    } else if (riid == __uuidof(ID3D12Device)) {
+        *out = static_cast<ID3D12Device*>(this);
+        interfaceName = "ID3D12Device";
+    }
+
+    if (!interfaceName) {
+        Log("Device QueryInterface unsupported iid=%08lx-%04x-%04x",
+            riid.Data1, riid.Data2, riid.Data3);
+        return E_NOINTERFACE;
+    }
+
+    Log("Device QueryInterface %s result=0x%08lx", interfaceName, S_OK);
+    AddRef();
+    return S_OK;
+}
+
+HRESULT DeviceQuery(Device* device, REFIID riid, void** out) {
+    if (!device) {
+        if (out) *out = nullptr;
+        return E_POINTER;
+    }
+    return device->QueryInterface(riid, out);
+}
+
+Device::~Device() {
+    Log("Device destroyed");
+    stopPoll = true;
+    pollCv.notify_all();
+    if (poller.joinable()) poller.join();
+    ReleaseBackbufferViews();
+}
+
+HRESULT Device::Init(D3D_FEATURE_LEVEL minFeatureLevel) {
+    if (minFeatureLevel > D3D_FEATURE_LEVEL_12_0) {
+        Log("Requested minimum feature level 0x%04x exceeds the proxy limit 0x%04x",
+            static_cast<UINT>(minFeatureLevel), static_cast<UINT>(D3D_FEATURE_LEVEL_12_0));
+        return DXGI_ERROR_UNSUPPORTED;
+    }
+    if (minFeatureLevel > D3D_FEATURE_LEVEL_11_1) {
+        Log("Accepting D3D12 minimum feature level 0x%04x on the D3D11 translation backend",
+            static_cast<UINT>(minFeatureLevel));
+    }
+    const D3D_FEATURE_LEVEL featureLevels[] = {
+        D3D_FEATURE_LEVEL_11_1,
+        D3D_FEATURE_LEVEL_11_0
+    };
+    UINT flags = Cfg().debugLayer ? D3D11_CREATE_DEVICE_DEBUG : 0;
+    HRESULT result = D3D11CreateDevice(
+        adapter.Get(),
+        adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE,
+        nullptr,
+        flags,
+        featureLevels,
+        ARRAYSIZE(featureLevels),
+        D3D11_SDK_VERSION,
+        d11.Put(),
+        &fl,
+        ctx.Put());
+    if (result == E_INVALIDARG) {
+        result = D3D11CreateDevice(
+            adapter.Get(),
+            adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE,
+            nullptr,
+            flags,
+            featureLevels + 1,
+            1,
+            D3D11_SDK_VERSION,
+            d11.Put(),
+            &fl,
+            ctx.Put());
+    }
+    if (FAILED(result) && (flags & D3D11_CREATE_DEVICE_DEBUG)) {
+        Log("D3D11 debug layer unavailable (0x%08lx); retrying without it", result);
+        result = D3D11CreateDevice(
+            adapter.Get(),
+            adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE,
+            nullptr,
+            0,
+            featureLevels + 1,
+            1,
+            D3D11_SDK_VERSION,
+            d11.Put(),
+            &fl,
+            ctx.Put());
+    }
+    if (FAILED(result)) {
+        Log("D3D11CreateDevice failed (0x%08lx)", result);
+        return result;
+    }
+    if (fl < D3D_FEATURE_LEVEL_11_0) {
+        Log("D3D11 feature level %04x is below the proxy backend minimum %04x",
+            static_cast<UINT>(fl), static_cast<UINT>(D3D_FEATURE_LEVEL_11_0));
+        return DXGI_ERROR_UNSUPPORTED;
+    }
+    d11->QueryInterface(__uuidof(ID3D11Device1), reinterpret_cast<void**>(d11_1.Put()));
+    d11->QueryInterface(__uuidof(ID3D11Device2), reinterpret_cast<void**>(d11_2.Put()));
+    ctx->QueryInterface(__uuidof(ID3D11DeviceContext2), reinterpret_cast<void**>(ctx2.Put()));
+    D3D11_FEATURE_DATA_D3D11_OPTIONS1 options1{};
+    const HRESULT tiledResult = d11->CheckFeatureSupport(
+        D3D11_FEATURE_D3D11_OPTIONS1, &options1, sizeof(options1));
+    if (SUCCEEDED(tiledResult)) tiledTier = options1.TiledResourcesTier;
+    Log("Created D3D11 device at feature level %04x", fl);
+    Log("D3D11 tiled resources tier=%u feature-query=0x%08lx device2=%u context2=%u",
+        tiledTier, tiledResult, d11_2 ? 1u : 0u, ctx2 ? 1u : 0u);
+    return S_OK;
+}
+
+void Device::PollFences() {}
+void Device::AddPending(PendingSignal&& signal) {
+    std::lock_guard<std::mutex> lock(pendLock);
+    pending.emplace_back(std::move(signal));
+    pollCv.notify_all();
+}
+void Device::ReleaseBackbufferViews() {
+    {
+        std::lock_guard<std::recursive_mutex> lock(ctxLock);
+        if (ctx) {
+            ctx->ClearState();
+            ctx->Flush();
+        }
+    }
+    ClearBackbufferDescriptors(this);
+}
+
+HRESULT STDMETHODCALLTYPE Device::CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE type, REFIID riid, void** out) {
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    if (type > D3D12_COMMAND_LIST_TYPE_COPY) return E_INVALIDARG;
+    auto* allocator = new (std::nothrow) CommandAllocator(this);
+    if (!allocator) return E_OUTOFMEMORY;
+    const HRESULT result = allocator->QueryInterface(riid, out);
+    allocator->Release();
+    return result;
+}
+
+HRESULT STDMETHODCALLTYPE Device::CheckFeatureSupport(D3D12_FEATURE feature, void* data, UINT size) {
+    D3D12ON11_TRACE_CALLER("Device::CheckFeatureSupport");
+    const char* featureName = "unknown";
+    switch (feature) {
+    case D3D12_FEATURE_D3D12_OPTIONS: featureName = "D3D12_OPTIONS"; break;
+    case D3D12_FEATURE_ARCHITECTURE: featureName = "ARCHITECTURE"; break;
+    case D3D12_FEATURE_FEATURE_LEVELS: featureName = "FEATURE_LEVELS"; break;
+    case D3D12_FEATURE_FORMAT_SUPPORT: featureName = "FORMAT_SUPPORT"; break;
+    case D3D12_FEATURE_SHADER_MODEL: featureName = "SHADER_MODEL"; break;
+    case D3D12_FEATURE_D3D12_OPTIONS1: featureName = "D3D12_OPTIONS1"; break;
+    case D3D12_FEATURE_D3D12_OPTIONS9: featureName = "D3D12_OPTIONS9"; break;
+    default: break;
+    }
+    Log("CheckFeatureSupport begin feature=%s(%u) size=%u data=%s",
+        featureName, static_cast<UINT>(feature), size, data ? "present" : "null");
+    if (!data) {
+        Log("CheckFeatureSupport end feature=%s result=0x%08lx reason=null-data",
+            featureName, E_INVALIDARG);
+        return E_INVALIDARG;
+    }
+    switch (feature) {
+    case D3D12_FEATURE_FORMAT_SUPPORT: {
+        if (size < sizeof(D3D12_FEATURE_DATA_FORMAT_SUPPORT)) {
+            Log("CheckFeatureSupport end feature=%s result=0x%08lx reason=short-buffer required=%zu",
+                featureName, E_INVALIDARG, sizeof(D3D12_FEATURE_DATA_FORMAT_SUPPORT));
+            return E_INVALIDARG;
+        }
+        auto* info = static_cast<D3D12_FEATURE_DATA_FORMAT_SUPPORT*>(data);
+        if (info->Format == DXGI_FORMAT_UNKNOWN) {
+            info->Support1 = D3D12_FORMAT_SUPPORT1_NONE;
+            info->Support2 = D3D12_FORMAT_SUPPORT2_NONE;

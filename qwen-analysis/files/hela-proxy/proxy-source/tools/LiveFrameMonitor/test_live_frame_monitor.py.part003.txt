@@ -1,0 +1,177 @@
+                        "requiredOverrides": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            manifest = lfm.load_run_manifest(manifest_path)
+            state = lfm.LiveMonitorState(run_manifest=manifest)
+            self.assertEqual(state.run_identity_report()["attestation_status"], "pending")
+
+            state.feed_line(f"MODULE_FINGERPRINT role=d3d12 sha256={expected_d3d12.lower()}")
+            state.feed_line(f"MODULE_FINGERPRINT role=dxgi_proxy sha256={expected_dxgi.lower()}")
+            self.assertEqual(state.run_identity_report()["attestation_status"], "verified")
+
+            state.feed_line(f"MODULE_FINGERPRINT role=d3d12 sha256={'c' * 64}")
+            self.assertEqual(state.run_identity_report()["attestation_status"], "mismatch")
+
+            state.feed_line("MODULE_FINGERPRINT_FAILED role=dxgi_proxy reason=read-failed")
+            identity = state.run_identity_report()
+            self.assertEqual(identity["attestation_status"], "failed")
+            self.assertEqual(identity["module_fingerprint_failures"]["dxgi"], "read-failed")
+
+            empty_manifest_state = lfm.LiveMonitorState(
+                run_manifest={
+                    "test_version": "invalid-empty-pins",
+                    "manifest_path": str(manifest_path),
+                    "expected_modules": {},
+                }
+            )
+            self.assertEqual(
+                empty_manifest_state.run_identity_report()["attestation_status"],
+                "pending",
+            )
+
+    def test_configurable_present_target_isolated_from_present100(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = Path(tmpdir) / "present400.log"
+            log_path.write_text(
+                "\n".join(
+                    [
+                        "[READBACK_SRC] Present #400 CopyResource source=0000024096331C38 width=1280 height=720 format=24 sequence=400",
+                        "  Top-left: RGBA=(1, 0, 0, 255)",
+                        "  Top-right: RGBA=(1, 0, 0, 255)",
+                        "  Center: RGBA=(1, 0, 0, 255)",
+                        "  Bottom-left: RGBA=(1, 0, 0, 255)",
+                        "  Bottom-right: RGBA=(1, 0, 0, 255)",
+                        "[READBACK] Present #400 size=1280x720 format=24 buffer=0",
+                        "  Top-left: RGBA=(1, 0, 0, 255)",
+                        "  Top-right: RGBA=(1, 0, 0, 255)",
+                        "  Center: RGBA=(1, 0, 0, 255)",
+                        "  Bottom-left: RGBA=(1, 0, 0, 255)",
+                        "  Bottom-right: RGBA=(1, 0, 0, 255)",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            rc, report = lfm.run_monitor(
+                log_path=log_path,
+                poll_interval_sec=0.01,
+                stop_after_present_num=400,
+                max_wait_sec=2.0,
+                quiet_events=True,
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(report["capture_target"]["complete"])
+        self.assertEqual(report["capture_target"]["present"], 400)
+        self.assertEqual(report["capture_target"]["source_readback"]["present"], 400)
+        self.assertEqual(report["capture_target"]["source_readback"]["non_black_count"], 5)
+        self.assertIsNone(report["present_100"]["source_readback"])
+
+    def test_stop_after_present100_terminates_promptly_with_bounded_missing_bmp_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            log_path = tmp_path / "live_v001.log"
+            missing_bmp = tmp_path / "never_written_source.bmp"
+
+            log_path.write_text(
+                "\n".join(
+                    [
+                        "[READBACK_SRC] Present #100 CopyResource source=0000024096331C38 width=1280 height=720 format=24 sequence=100",
+                        "  Top-left: RGBA=(0, 0, 0, 0)",
+                        "  Top-right: RGBA=(0, 0, 0, 0)",
+                        "  Center: RGBA=(0, 0, 0, 0)",
+                        "  Bottom-left: RGBA=(0, 0, 0, 0)",
+                        "  Bottom-right: RGBA=(0, 0, 0, 0)",
+                        "[READBACK] Present #100 size=1280x720 format=24 buffer=0",
+                        "  Top-left: RGBA=(0, 0, 0, 0)",
+                        "  Top-right: RGBA=(0, 0, 0, 0)",
+                        "  Center: RGBA=(0, 0, 0, 0)",
+                        "  Bottom-left: RGBA=(0, 0, 0, 0)",
+                        "  Bottom-right: RGBA=(0, 0, 0, 0)",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            t0 = time.monotonic()
+            rc, report = lfm.run_monitor(
+                log_path=log_path,
+                poll_interval_sec=0.02,
+                once=False,
+                stop_after_present100=True,
+                max_wait_sec=5.0,
+                source_bmp_path=missing_bmp,
+                bmp_wait_timeout_sec=0.10,
+                quiet_events=True,
+            )
+            elapsed = time.monotonic() - t0
+            self.assertEqual(rc, 0)
+            self.assertLess(elapsed, 1.5)
+            self.assertEqual(report["present_100"]["source_readback"]["present"], 100)
+            self.assertEqual(report["present_100"]["backbuffer_readback"]["present"], 100)
+
+    def test_powershell_launcher_argument_quoting_with_spaces(self) -> None:
+        pwsh = shutil.which("powershell") or shutil.which("pwsh")
+        if not pwsh or not LAUNCHER_PS1.is_file():
+            self.skipTest("PowerShell not available in test environment")
+
+        spaced_log = r"<game-root>\d3d12on11.log"
+        spaced_json = r"D:\Ghidra MCP\Hela-Export\tools\LiveFrameMonitor\out\report with spaces.json"
+        spaced_bmp = r"D:\Ghidra MCP\Hela-Export\tools\LiveFrameMonitor\out\src 100.bmp"
+        spaced_manifest = r"D:\Ghidra MCP\Hela-Export\evidence\run manifest.json"
+
+        proc = subprocess.run(
+            [
+                pwsh,
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(LAUNCHER_PS1),
+                "-LogPath",
+                spaced_log,
+                "-JsonOutPath",
+                spaced_json,
+                "-SourceBmpPath",
+                spaced_bmp,
+                "-RunManifestPath",
+                spaced_manifest,
+                "-StopAfterPresent",
+                "400",
+                "-EnableCrashDiagnostics",
+                "-MonitorMaxWaitSeconds",
+                "180",
+                "-PrintCommandLineOnly",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        cmd_line = proc.stdout.strip()
+        self.assertIn(f'"{spaced_log}"', cmd_line)
+        self.assertIn(f'"{spaced_json}"', cmd_line)
+        self.assertIn(f'"{spaced_bmp}"', cmd_line)
+        self.assertIn(f'"{spaced_manifest}"', cmd_line)
+        self.assertIn("--stop-after-present 400", cmd_line)
+        self.assertIn("--max-wait 180", cmd_line)
+        self.assertIn("--run-manifest", cmd_line)
+
+    def test_proxy_manager_restores_missing_and_legacy_runtime_files(self) -> None:
+        powershell = shutil.which("powershell") or shutil.which("pwsh")
+        if not powershell or not PROXY_MANAGER_PS1.is_file():
+            self.skipTest("PowerShell or ProxyManager.ps1 not available in test environment")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            game_dir = root / "game"
+            patch_dir = game_dir / "D3D12On11Patch"
+            installed_overrides = patch_dir / "overrides"
+            restore_run = root / "run-no-proxy"
+            restore_root = restore_run / "restore-point"
+            game_dir.mkdir(parents=True)
+            restore_root.mkdir(parents=True)

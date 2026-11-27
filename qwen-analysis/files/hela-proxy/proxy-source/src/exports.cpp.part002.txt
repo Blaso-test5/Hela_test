@@ -1,0 +1,9 @@
+        OutputDebugStringA("d3d12on11: could not initialize present tracing configuration\n");
+        return;
+    }
+    if (Cfg().diagnosticRenderTrace) {
+        TraceStats().presentCount.fetch_add(1, std::memory_order_relaxed);
+        Log("[RENDER_TRACE] [tid=%lu] %s hr=0x%08lx",
+            GetCurrentThreadId(), api ? api : "DXGI Present", result);
+    }
+}

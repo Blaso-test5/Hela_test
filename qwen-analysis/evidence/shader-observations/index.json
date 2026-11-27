@@ -1,0 +1,81 @@
+{
+  "schema": "qwen.evidence.dataset-index",
+  "dataset": "shader-observations",
+  "recordCount": 4880,
+  "byteCount": 2769427,
+  "sha256": "287582009d14cb1efa26690987561cf1c072ea1c8d8542d0d776f2b95f23dcf3",
+  "indexParts": [
+    {
+      "path": "evidence/shader-observations/index-part001.json",
+      "itemCount": 30,
+      "byteCount": 7744,
+      "sha256": "1ac19f3e002dbe24ffe77821c4da8bdd9a298105567e7311633d143c85059909"
+    },
+    {
+      "path": "evidence/shader-observations/index-part002.json",
+      "itemCount": 30,
+      "byteCount": 7760,
+      "sha256": "7f31e152d148a4f5f83b1ce29f36915e1faf04239fccb7d7d6573fab7c6fafb3"
+    },
+    {
+      "path": "evidence/shader-observations/index-part003.json",
+      "itemCount": 30,
+      "byteCount": 7797,
+      "sha256": "bcd6cd9de4b5b65983248988605aa865a6337cfcb834735270c1cfa85a49fe60"
+    },
+    {
+      "path": "evidence/shader-observations/index-part004.json",
+      "itemCount": 30,
+      "byteCount": 7820,
+      "sha256": "5f7e47712efcac1baf122f0298605d7bd2f3a314b0fdf931eb247bcc4f3a7cf0"
+    },
+    {
+      "path": "evidence/shader-observations/index-part005.json",
+      "itemCount": 30,
+      "byteCount": 7820,
+      "sha256": "145b1678fcd71abf92ad98d07cac546a60eafda3e34e8706a06d463bacf8de3d"
+    },
+    {
+      "path": "evidence/shader-observations/index-part006.json",
+      "itemCount": 30,
+      "byteCount": 7820,
+      "sha256": "7ccc9666665c3dc01d7122b91c3de404f21dd264700f2299dcec0e3f8da3856c"
+    },
+    {
+      "path": "evidence/shader-observations/index-part007.json",
+      "itemCount": 30,
+      "byteCount": 7820,
+      "sha256": "9384c5afdb88dc89d8230b7be2eebbd8adfe38e1559f31bcb3ee26c985136d61"
+    },
+    {
+      "path": "evidence/shader-observations/index-part008.json",
+      "itemCount": 30,
+      "byteCount": 7820,
+      "sha256": "87d7c92da131e9ee3bdd6163d4e86c58ca986b320cb914566289e1fdc7d21c2d"
+    },
+    {
+      "path": "evidence/shader-observations/index-part009.json",
+      "itemCount": 30,
+      "byteCount": 7820,
+      "sha256": "3b6983dc9bfb44d870e0005708b1991856bb433e15432e00d792bfc89ac33095"
+    },
+    {
+      "path": "evidence/shader-observations/index-part010.json",
+      "itemCount": 30,
+      "byteCount": 7820,
+      "sha256": "e4eec70116c9f4b5e6a490b120a6494541da7b8d6b6ea63441f5361e37c3c8ee"
+    },
+    {
+      "path": "evidence/shader-observations/index-part011.json",
+      "itemCount": 30,
+      "byteCount": 7820,
+      "sha256": "2f25784c46b672c69b7e46bdd8859f6c00f9c14773fb95ade224efa4d5d81596"
+    },
+    {
+      "path": "evidence/shader-observations/index-part012.json",
+      "itemCount": 19,
+      "byteCount": 4959,
+      "sha256": "c919023878ce6f730d655bbc45e065e760e97b042ad69d7c816b24df0f4cc10f"
+    }
+  ]
+}

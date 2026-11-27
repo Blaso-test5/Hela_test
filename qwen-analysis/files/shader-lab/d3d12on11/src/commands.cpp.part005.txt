@@ -1,0 +1,162 @@
+    return fence ? dynamic_cast<Fence*>(fence) : nullptr;
+}
+
+HRESULT WaitForContext(Device* device) {
+    TraceApi("WaitForContext");
+    const bool trace = Cfg().diagnosticRenderTrace;
+    const ULONGLONG start = trace ? GetTickCount64() : 0;
+    UINT64 spins = 0;
+    if (trace) TraceStats().waitCtxCalls.fetch_add(1, std::memory_order_relaxed);
+    D3D11_QUERY_DESC desc{D3D11_QUERY_EVENT, 0};
+    Ptr<ID3D11Query> query;
+    HRESULT result = device->d11->CreateQuery(&desc, query.Put());
+    if (FAILED(result)) {
+        if (trace) {
+            TraceStats().waitCtxFail.fetch_add(1, std::memory_order_relaxed);
+            Log("[RENDER_TRACE] [tid=%lu] WaitForContext CreateQuery failed hr=0x%08lx",
+                GetCurrentThreadId(), result);
+        }
+        return result;
+    }
+    device->ctx->End(query.Get());
+    device->ctx->Flush();
+    while ((result = device->ctx->GetData(query.Get(), nullptr, 0, 0)) == S_FALSE) {
+        ++spins;
+        SwitchToThread();
+    }
+    if (trace) {
+        auto& stats = TraceStats();
+        UINT64 observed = stats.waitCtxMaxSpins.load(std::memory_order_relaxed);
+        while (observed < spins &&
+            !stats.waitCtxMaxSpins.compare_exchange_weak(observed, spins, std::memory_order_relaxed)) {}
+        const ULONGLONG elapsed = GetTickCount64() - start;
+        if (FAILED(result)) stats.waitCtxFail.fetch_add(1, std::memory_order_relaxed);
+        if (elapsed > 200 || FAILED(result))
+            Log("[RENDER_TRACE] [tid=%lu] WaitForContext %s elapsed=%llums spins=%llu hr=0x%08lx",
+                GetCurrentThreadId(), FAILED(result) ? "failed" : "slow",
+                static_cast<unsigned long long>(elapsed),
+                static_cast<unsigned long long>(spins), result);
+    }
+    return result;
+}
+
+void RecordDrawExecution(ExecState& state, bool indexed, const char* operation,
+    UINT elementCount, UINT instanceCount, bool indirect = false) {
+    if (!Cfg().diagnosticRenderTrace) return;
+    auto& stats = TraceStats();
+    const uint64_t drawIndex = stats.drawExec.fetch_add(1, std::memory_order_relaxed) + 1;
+    ++state.drawsExecuted;
+    RecordDrawShaderUse(state.graphicsShaderHash, state.graphicsPixelShaderHash,
+        state.graphicsGeometryShaderHash, state.graphicsHullShaderHash,
+        state.graphicsDomainShaderHash, state.graphicsMissingShaderStages,
+        state.hasGraphicsPipeline, false, state.rtvBackbuffer);
+    bool hasRtv = false;
+    for (UINT i = 0; i < state.numRtv && i < ARRAYSIZE(state.rtvs); ++i)
+        hasRtv = hasRtv || static_cast<bool>(state.rtvs[i]);
+    char viewport[128] = "unset";
+    if (state.numViewports) {
+        const D3D12_VIEWPORT& first = state.viewports[0];
+        snprintf(viewport, sizeof(viewport), "(%.1f,%.1f,%.1f,%.1f)",
+            first.TopLeftX, first.TopLeftY, first.Width, first.Height);
+    }
+    char elements[32]{};
+    char instances[32]{};
+    if (indirect) {
+        snprintf(elements, sizeof(elements), "indirect");
+        snprintf(instances, sizeof(instances), "indirect");
+    } else {
+        snprintf(elements, sizeof(elements), "%u", elementCount);
+        snprintf(instances, sizeof(instances), "%u", instanceCount);
+    }
+    for (UINT i = 0; i < state.numRtv && i < ARRAYSIZE(state.rtvs); ++i) {
+        ID3D11Resource* resource = state.rtvResources[i].Get();
+        if (!resource) continue;
+        char context[512]{};
+        snprintf(context, sizeof(context),
+            "Draw #%llu api=%s indexed=%u rtv_slot=%u pso=%p vs_hash=%016llx "
+            "ps_hash=%016llx elements=%s instances=%s viewport=%s",
+            static_cast<unsigned long long>(drawIndex), operation,
+            indexed ? 1u : 0u, i,
+            reinterpret_cast<void*>(state.graphicsPipelineIdentity),
+            static_cast<unsigned long long>(state.graphicsShaderHash),
+            static_cast<unsigned long long>(state.graphicsPixelShaderHash),
+            elements, instances, viewport);
+        TrackTargetOperation(resource, context, TargetHistoryKind::ExecutedDraw);
+    }
+    if (hasRtv) {
+        stats.drawWithRtv.fetch_add(1, std::memory_order_relaxed);
+        ++state.rtvBound;
+        if (state.rtvBackbuffer) {
+            stats.drawWithBackbuffer.fetch_add(1, std::memory_order_relaxed);
+            ++state.backbufferDraws;
+            Log("[BACKBUFFER] Draw to backbuffer detected! api=%s vs-hash=%016llx ps-hash=%016llx",
+                indexed ? "DrawIndexed" : "Draw",
+                static_cast<unsigned long long>(state.graphicsShaderHash),
+                static_cast<unsigned long long>(state.graphicsPixelShaderHash));
+        }
+    } else {
+        stats.drawNullRtv.fetch_add(1, std::memory_order_relaxed);
+    }
+    if (!state.hasVertexBuffer) stats.drawMissingVb.fetch_add(1, std::memory_order_relaxed);
+    if (indexed && !state.hasIndexBuffer) stats.drawMissingIb.fetch_add(1, std::memory_order_relaxed);
+}
+
+void LogBackbufferCopy(const char* operation, const Resource* destination,
+    const Resource* source) {
+    if (!Cfg().diagnosticRenderTrace || !destination || !destination->backbuffer) return;
+    Log("[BACKBUFFER] Copy to backbuffer detected! api=%s dst=%p src=%p",
+        operation, destination, source);
+}
+
+void LogSkippedDraw(ExecState& state, const char* operation,
+    UINT arg0, UINT arg1, uint64_t skippedDrawCount = 1) {
+    if (!Cfg().diagnosticRenderTrace) return;
+    ++state.drawsSkipped;
+    RecordDrawShaderUse(state.graphicsShaderHash, state.graphicsPixelShaderHash,
+        state.graphicsGeometryShaderHash, state.graphicsHullShaderHash,
+        state.graphicsDomainShaderHash, state.graphicsMissingShaderStages,
+        state.hasGraphicsPipeline, true, state.rtvBackbuffer, skippedDrawCount);
+    for (UINT i = 0; i < state.numRtv && i < ARRAYSIZE(state.rtvs); ++i) {
+        ID3D11Resource* resource = state.rtvResources[i].Get();
+        if (!resource) continue;
+        char context[512]{};
+        snprintf(context, sizeof(context),
+            "Skipped %s rtv_slot=%u pso=%p vs_hash=%016llx ps_hash=%016llx "
+            "missing_vs=%u missing_shader=%u missing_stage_mask=0x%02x arg0=%u arg1=%u",
+            operation, i, reinterpret_cast<void*>(state.graphicsPipelineIdentity),
+            static_cast<unsigned long long>(state.graphicsShaderHash),
+            static_cast<unsigned long long>(state.graphicsPixelShaderHash),
+            state.graphicsPlaceholderVs ? 1u : 0u, state.skipDraws ? 1u : 0u,
+            state.graphicsMissingShaderStages,
+            arg0, arg1);
+        TrackTargetOperation(resource, context, TargetHistoryKind::SkippedDraw);
+    }
+    Log("[RENDER_TRACE] [DRAW_SKIPPED] api=%s pipeline=%p vs-hash=%016llx ps-hash=%016llx "
+        "missing-vs=%u missing-shader=%u missing-stage-mask=0x%02x "
+        "reason=missing-sm5-override arg0=%u arg1=%u rtvs=%u backbuffer=%u",
+        operation, reinterpret_cast<void*>(state.graphicsPipelineIdentity),
+        static_cast<unsigned long long>(state.graphicsShaderHash),
+        static_cast<unsigned long long>(state.graphicsPixelShaderHash),
+        state.graphicsPlaceholderVs ? 1u : 0u, state.skipDraws ? 1u : 0u,
+        state.graphicsMissingShaderStages,
+        arg0, arg1, state.numRtv, state.rtvBackbuffer ? 1u : 0u);
+}
+
+void DumpBackbufferSourceHistoryImpl() {
+    struct Snapshot {
+        ID3D11Resource* resource = nullptr;
+        uint64_t executedDraws = 0;
+        uint64_t skippedDraws = 0;
+        uint64_t clears = 0;
+        std::vector<std::string> entries;
+    };
+    std::vector<Snapshot> snapshots;
+    {
+        std::lock_guard<std::mutex> lock(g_resourceDrawMutex);
+        g_backbufferSourceHistoryDumped = true;
+        snapshots.reserve(g_backbufferSourceHistory.size());
+        for (const auto& pair : g_backbufferSourceHistory) {
+            Snapshot snapshot{};
+            snapshot.resource = pair.first;
+            snapshot.executedDraws = pair.second.executedDraws;
+            snapshot.skippedDraws = pair.second.skippedDraws;

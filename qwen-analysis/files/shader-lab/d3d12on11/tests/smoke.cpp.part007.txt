@@ -1,0 +1,172 @@
+        &readbackHeap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COPY_DEST,
+        nullptr, __uuidof(ID3D12Resource), reinterpret_cast<void**>(&readback));
+    if (FAILED(result)) {
+        std::fprintf(stderr, "Readback buffer creation failed: 0x%08lx\n", result);
+        resource->Release();
+        device->Release();
+        return 5;
+    }
+
+    ID3D12CommandAllocator* allocator = nullptr;
+    result = device->CreateCommandAllocator(
+        D3D12_COMMAND_LIST_TYPE_COPY, __uuidof(ID3D12CommandAllocator),
+        reinterpret_cast<void**>(&allocator));
+    D3D12_COMMAND_QUEUE_DESC queueDesc{};
+    queueDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
+    ID3D12CommandQueue* queue = nullptr;
+    if (SUCCEEDED(result))
+        result = device->CreateCommandQueue(&queueDesc, __uuidof(ID3D12CommandQueue),
+                                            reinterpret_cast<void**>(&queue));
+    ID3D12GraphicsCommandList* commandList = nullptr;
+    if (SUCCEEDED(result))
+        result = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, allocator, nullptr,
+                                           __uuidof(ID3D12GraphicsCommandList),
+                                           reinterpret_cast<void**>(&commandList));
+    if (FAILED(result)) {
+        std::fprintf(stderr, "Command object creation failed: 0x%08lx\n", result);
+        if (queue) queue->Release();
+        if (allocator) allocator->Release();
+        readback->Release();
+        resource->Release();
+        device->Release();
+        return 6;
+    }
+    commandList->CopyBufferRegion(readback, 0, resource, 0, desc.Width);
+    result = commandList->Close();
+    ID3D12Fence* fence = nullptr;
+    if (SUCCEEDED(result))
+        result = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence),
+                                     reinterpret_cast<void**>(&fence));
+    if (SUCCEEDED(result)) {
+        ID3D12CommandList* lists[] = {commandList};
+        queue->ExecuteCommandLists(1, lists);
+        result = queue->Signal(fence, 1);
+        if (SUCCEEDED(result)) result = queue->Wait(fence, 1);
+        if (SUCCEEDED(result) && fence->GetCompletedValue() != 1) result = E_FAIL;
+    }
+    void* readbackData = nullptr;
+    D3D12_RANGE readRange{17, 18};
+    if (SUCCEEDED(result)) result = readback->Map(0, &readRange, &readbackData);
+    if (FAILED(result) || !readbackData || static_cast<unsigned char*>(readbackData)[17] != 0x5a) {
+        std::fprintf(stderr, "Queue copy/fence/readback failed: 0x%08lx\n", result);
+        if (fence) fence->Release();
+        commandList->Release();
+        queue->Release();
+        allocator->Release();
+        readback->Release();
+        resource->Release();
+        device->Release();
+        return 7;
+    }
+    readback->Unmap(0, &readRange);
+    fence->Release();
+    commandList->Release();
+    queue->Release();
+    allocator->Release();
+    readback->Release();
+
+    D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc{};
+    descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    descriptorHeapDesc.NumDescriptors = 5;
+    ID3D12DescriptorHeap* descriptorHeap = nullptr;
+    result = device->CreateDescriptorHeap(
+        &descriptorHeapDesc, __uuidof(ID3D12DescriptorHeap),
+        reinterpret_cast<void**>(&descriptorHeap));
+    if (FAILED(result)) {
+        std::fprintf(stderr, "CreateDescriptorHeap failed: 0x%08lx\n", result);
+        resource->Release();
+        device->Release();
+        return 8;
+    }
+
+    D3D12_CONSTANT_BUFFER_VIEW_DESC cbv{};
+    cbv.BufferLocation = resource->GetGPUVirtualAddress();
+    cbv.SizeInBytes = 256;
+    const UINT stride = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    auto cpuHandle = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    device->CreateConstantBufferView(&cbv, cpuHandle);
+
+    D3D12_RESOURCE_DESC uavResourceDesc = desc;
+    uavResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    D3D12_HEAP_PROPERTIES defaultHeap{};
+    defaultHeap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    defaultHeap.CreationNodeMask = defaultHeap.VisibleNodeMask = 1;
+    ID3D12Resource* uavResource = nullptr;
+    result = device->CreateCommittedResource(
+        &defaultHeap,
+        D3D12_HEAP_FLAG_NONE, &uavResourceDesc, D3D12_RESOURCE_STATE_COMMON,
+        nullptr, __uuidof(ID3D12Resource), reinterpret_cast<void**>(&uavResource));
+    if (FAILED(result)) {
+        std::fprintf(stderr, "Default buffer creation failed: 0x%08lx\n", result);
+        descriptorHeap->Release();
+        resource->Release();
+        device->Release();
+        return 9;
+    }
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
+    srv.Format = DXGI_FORMAT_R32_TYPELESS;
+    srv.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srv.Buffer.NumElements = 64;
+    srv.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+    auto srvHandle = cpuHandle;
+    srvHandle.ptr += stride;
+    device->CreateShaderResourceView(uavResource, &srv, srvHandle);
+
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};
+    uav.Format = DXGI_FORMAT_R32_TYPELESS;
+    uav.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+    uav.Buffer.NumElements = 64;
+    uav.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
+    auto uavHandle = srvHandle;
+    uavHandle.ptr += stride;
+    device->CreateUnorderedAccessView(uavResource, nullptr, &uav, uavHandle);
+
+    D3D12_RESOURCE_DESC textureDesc{};
+    textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    textureDesc.Width = 16;
+    textureDesc.Height = 16;
+    textureDesc.DepthOrArraySize = 1;
+    textureDesc.MipLevels = 1;
+    textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    textureDesc.SampleDesc.Count = 1;
+    textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    textureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    ID3D12Resource* texture = nullptr;
+    result = device->CreateCommittedResource(
+        &defaultHeap, D3D12_HEAP_FLAG_NONE, &textureDesc,
+        D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr, __uuidof(ID3D12Resource),
+        reinterpret_cast<void**>(&texture));
+    if (FAILED(result)) {
+        std::fprintf(stderr, "Texture creation failed: 0x%08lx\n", result);
+        uavResource->Release();
+        descriptorHeap->Release();
+        resource->Release();
+        device->Release();
+        return 10;
+    }
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC textureSrv{};
+    textureSrv.Format = textureDesc.Format;
+    textureSrv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    textureSrv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    textureSrv.Texture2D.MipLevels = 1;
+    auto textureSrvHandle = uavHandle;
+    textureSrvHandle.ptr += stride;
+    device->CreateShaderResourceView(texture, &textureSrv, textureSrvHandle);
+
+    D3D12_RENDER_TARGET_VIEW_DESC textureRtv{};
+    textureRtv.Format = textureDesc.Format;
+    textureRtv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+    auto textureRtvHandle = textureSrvHandle;
+    textureRtvHandle.ptr += stride;
+    device->CreateRenderTargetView(texture, &textureRtv, textureRtvHandle);
+
+    texture->Release();
+    uavResource->Release();
+    descriptorHeap->Release();
+    resource->Release();
+    device->Release();
+    return 0;
+}

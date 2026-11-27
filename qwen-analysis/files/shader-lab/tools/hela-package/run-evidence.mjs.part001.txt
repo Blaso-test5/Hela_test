@@ -1,0 +1,176 @@
+#!/usr/bin/env node
+import { createHash } from "node:crypto";
+import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
+import path from "node:path";
+import { runPackageGate } from "./package-gate.mjs";
+
+export const BUNDLE_FILE = "run-evidence.json";
+export const BUNDLE_REPORT_FILE = "run-evidence-report.json";
+const SHA256_RE = /^[0-9a-f]{64}$/;
+
+export function sha256Buffer(buffer) {
+  return createHash("sha256").update(buffer).digest("hex");
+}
+
+export function parseLoadedOverrides(logText) {
+  const loaded = new Map();
+  const re = /SHADER READY\s+stage=(?:VS|PS|GS|HS|DS|CS)\s+hash=[0-9a-fA-F]{16}\s+source=SM5-override\s+path=(.+?)\s+bytes=\d+\s+sha256=([0-9a-fA-F]{64})/g;
+  let match;
+  while ((match = re.exec(logText))) {
+    const fileName = match[1].replaceAll("\\", "/").split("/").pop();
+    loaded.set(fileName, match[2].toLowerCase());
+  }
+  return loaded;
+}
+
+export function bmpNonBlackFraction(buffer) {
+  if (buffer.length < 54 || buffer.toString("ascii", 0, 2) !== "BM") return null;
+  const offset = buffer.readUInt32LE(10);
+  const width = buffer.readInt32LE(18);
+  const height = Math.abs(buffer.readInt32LE(22));
+  const bpp = buffer.readUInt16LE(28);
+  const compression = buffer.readUInt32LE(30);
+  if (width <= 0 || height <= 0 || (bpp !== 24 && bpp !== 32) || compression !== 0) return null;
+  const bytesPerPixel = bpp / 8;
+  const rowStride = Math.ceil((width * bytesPerPixel) / 4) * 4;
+  if (buffer.length < offset + rowStride * height) return null;
+  let nonBlack = 0;
+  for (let y = 0; y < height; y++) {
+    const row = offset + y * rowStride;
+    for (let x = 0; x < width; x++) {
+      const pixel = row + x * bytesPerPixel;
+      if ((buffer[pixel] | buffer[pixel + 1] | buffer[pixel + 2]) !== 0) nonBlack++;
+    }
+  }
+  return nonBlack / (width * height);
+}
+
+async function readJson(absPath) {
+  try {
+    return JSON.parse((await readFile(absPath, "utf8")).replace(/^\uFEFF/, ""));
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    if (error instanceof SyntaxError) return { __invalidJson: true };
+    throw error;
+  }
+}
+
+async function fileRef(baseDir, relativePath) {
+  const buffer = await readFile(path.join(baseDir, relativePath));
+  return { path: relativePath, sha256: sha256Buffer(buffer) };
+}
+
+export function validateRunEvidence(bundle) {
+  const issues = [];
+  const add = (code, message) => issues.push({ code, message });
+  const isRef = (value) =>
+    value && typeof value === "object" &&
+    typeof value.path === "string" && value.path.length > 0 &&
+    typeof value.sha256 === "string" && SHA256_RE.test(value.sha256);
+
+  if (!bundle || typeof bundle !== "object") return [{ code: "BUNDLE_INVALID", message: "bundle non oggetto" }];
+  if (bundle.schemaVersion !== 1) add("BUNDLE_INVALID", "schemaVersion deve essere 1");
+  if (typeof bundle.runId !== "string" || !bundle.runId) add("RUN_ID_MISSING", "runId mancante");
+  if (!isRef(bundle.package?.manifest) || !isRef(bundle.package?.inventory) || !isRef(bundle.package?.packageReport)) {
+    add("BUNDLE_INVALID", "package fileRef non valido");
+  }
+  if (!isRef(bundle.configuration?.managerRun)) add("BUNDLE_INVALID", "managerRun non valido");
+  if (!Array.isArray(bundle.loadedOverrides?.entries)) add("BUNDLE_INVALID", "loadedOverrides.entries non array");
+  if (!Array.isArray(bundle.readback)) add("BUNDLE_INVALID", "readback non array");
+  if (!bundle.visual || !("menuChecklist" in bundle.visual)) add("BUNDLE_INVALID", "visual.menuChecklist mancante");
+  if (!["unverified", "failed", "verified-with-checklist"].includes(bundle.verdict?.menu)) {
+    add("BUNDLE_INVALID", "verdict.menu non valido");
+  }
+  if (bundle.verdict?.menu === "verified-with-checklist") {
+    const checklist = bundle.visual?.menuChecklist;
+    const allPass = Array.isArray(checklist) && checklist.length > 0 && checklist.every((entry) => entry?.status === "pass");
+    if (!Array.isArray(bundle.readback) || bundle.readback.length === 0) add("VERDICT_GUARDRAIL", "serve almeno un readback");
+    if (!allPass) add("VERDICT_GUARDRAIL", "serve checklist tutta pass");
+    if (!Array.isArray(bundle.loadedOverrides?.entries) || bundle.loadedOverrides.entries.length === 0) {
+      add("VERDICT_GUARDRAIL", "serve almeno un override caricato");
+    }
+  }
+  return issues;
+}
+
+async function findBmpFiles(runDir) {
+  const dir = path.join(runDir, "readbacks");
+  try {
+    return (await readdir(dir)).filter((name) => /^HelaReadback_Present\d+_(source|backbuffer)\.bmp$/i.test(name)).sort();
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+export async function buildRunEvidence(options) {
+  const runDir = path.resolve(options.runDir);
+  const packageDir = path.resolve(options.packageDir);
+  const outDir = path.resolve(options.outDir);
+  const targetPresent = options.targetPresent;
+  const issues = [];
+  const warnings = [];
+  const add = (code, message, extra = {}) => issues.push({ code, message, ...extra });
+  const report = {
+    schemaVersion: 1,
+    tool: "hela-run-evidence",
+    toolVersion: "0.2.0",
+    runDir,
+    packageDir,
+    outDir,
+    ok: false,
+    lifecycle: "offline-evidence",
+    installed: false,
+    networkUsed: false,
+    issues,
+    warnings,
+  };
+
+  const managerRun = await readJson(path.join(runDir, "manager-run.json"));
+  const runManifest = await readJson(path.join(runDir, "run-manifest.json"));
+  const monitor = await readJson(path.join(runDir, "live-monitor-report.json"));
+  let logText;
+  try {
+    logText = await readFile(path.join(runDir, "d3d12on11.log"), "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") logText = null;
+    else throw error;
+  }
+
+  if (!managerRun || managerRun.__invalidJson) add("MANAGER_RUN_MISSING", "manager-run.json assente o non valido");
+  if (!runManifest || runManifest.__invalidJson) add("RUN_MANIFEST_MISSING", "run-manifest.json assente o non valido");
+  if (!monitor || monitor.__invalidJson) add("MONITOR_MISSING", "live-monitor-report.json assente o non valido");
+  if (logText === null) add("LOG_MISSING", "d3d12on11.log assente");
+  if (issues.length > 0) return finish(null);
+
+  const runId = typeof managerRun.run_id === "string" ? managerRun.run_id : null;
+  if (!runId) add("RUN_ID_MISSING", "manager-run.json senza run_id");
+  const testVersion = runManifest.testVersion;
+  if (managerRun.test_version !== testVersion) add("TEST_VERSION_MISMATCH", "testVersion manager/run manifest differisce");
+  if (monitor?.run_identity?.test_version !== testVersion) add("TEST_VERSION_MISMATCH", "testVersion monitor/run manifest differisce");
+  if (monitor?.run_identity?.attestation_status !== "verified") add("MONITOR_ATTESTATION_NOT_VERIFIED", "monitor non attestato");
+
+  const packageGate = await runPackageGate(packageDir, { mode: "check" });
+  if (!packageGate.ok) add("PACKAGE_GATE_FAIL", "gate staged-only fallito");
+  const candidatePackage = await readJson(path.join(packageDir, "candidate-package.json"));
+  if (!candidatePackage || candidatePackage.__invalidJson) add("PACKAGE_MANIFEST_MISSING", "candidate-package.json assente");
+  if (!candidatePackage || candidatePackage.packageId !== testVersion) add("TEST_VERSION_MISMATCH", "packageId != testVersion");
+
+  const loaded = parseLoadedOverrides(logText);
+  const loadedEntries = [];
+  for (const [name, hash] of Object.entries(runManifest.overrides ?? {})) {
+    const observed = loaded.get(name);
+    const inventory = await readJson(path.join(packageDir, "override-inventory.json"));
+    const invEntry = inventory?.overrides?.find((entry) => entry.path === `overrides/${name}`);
+    loadedEntries.push({
+      id: invEntry?.id ?? name,
+      path: `overrides/${name}`,
+      sha256: observed ?? hash,
+      result: observed ? "loaded" : "failed",
+    });
+  }
+
+  const bmpNames = await findBmpFiles(runDir);
+  const readback = [];
+  for (const name of bmpNames) {
+    const match = name.match(/^HelaReadback_Present(\d+)_(source|backbuffer)\.bmp$/i);

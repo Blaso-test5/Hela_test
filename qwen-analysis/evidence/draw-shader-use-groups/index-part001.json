@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "path": "evidence/draw-shader-use-groups/part0001.ndjson",
+      "recordStart": 1,
+      "recordEnd": 30,
+      "recordCount": 30,
+      "byteCount": 7795,
+      "sha256": "79d3389d4379bac69fca8f7aad8800c08ad04c2e563af20a3b8adb0170df439f"
+    }
+  ]
+}

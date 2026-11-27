@@ -1,0 +1,132 @@
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY: {
+            using Sub = StreamSubobject<D3D12_PRIMITIVE_TOPOLOGY_TYPE>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            gfx.PrimitiveTopologyType = reinterpret_cast<const Sub*>(cursor)->inner;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS: {
+            using Sub = StreamSubobject<D3D12_RT_FORMAT_ARRAY>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            const auto& formats = reinterpret_cast<const Sub*>(cursor)->inner;
+            if (formats.NumRenderTargets > ARRAYSIZE(gfx.RTVFormats)) return E_INVALIDARG;
+            gfx.NumRenderTargets = formats.NumRenderTargets;
+            std::copy(std::begin(formats.RTFormats), std::end(formats.RTFormats), std::begin(gfx.RTVFormats));
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT: {
+            using Sub = StreamSubobject<DXGI_FORMAT>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            gfx.DSVFormat = reinterpret_cast<const Sub*>(cursor)->inner;
+            hasDsvFormat = true;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC: {
+            using Sub = StreamSubobject<DXGI_SAMPLE_DESC>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            gfx.SampleDesc = reinterpret_cast<const Sub*>(cursor)->inner;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK: {
+            using Sub = StreamSubobject<UINT>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            const UINT mask = reinterpret_cast<const Sub*>(cursor)->inner;
+            gfx.NodeMask = mask;
+            comp.NodeMask = mask;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CACHED_PSO: {
+            using Sub = StreamSubobject<D3D12_CACHED_PIPELINE_STATE>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            const auto& cached = reinterpret_cast<const Sub*>(cursor)->inner;
+            gfx.CachedPSO = cached;
+            comp.CachedPSO = cached;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS: {
+            using Sub = StreamSubobject<D3D12_PIPELINE_STATE_FLAGS>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            const auto flags = reinterpret_cast<const Sub*>(cursor)->inner;
+            gfx.Flags = flags;
+            comp.Flags = flags;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1: {
+            using Sub = StreamSubobject<D3D12_DEPTH_STENCIL_DESC1>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            const auto& ds1 = reinterpret_cast<const Sub*>(cursor)->inner;
+            gfx.DepthStencilState.DepthEnable = ds1.DepthEnable;
+            gfx.DepthStencilState.DepthWriteMask = ds1.DepthWriteMask;
+            gfx.DepthStencilState.DepthFunc = ds1.DepthFunc;
+            gfx.DepthStencilState.StencilEnable = ds1.StencilEnable;
+            gfx.DepthStencilState.StencilReadMask = ds1.StencilReadMask;
+            gfx.DepthStencilState.StencilWriteMask = ds1.StencilWriteMask;
+            gfx.DepthStencilState.FrontFace = ds1.FrontFace;
+            gfx.DepthStencilState.BackFace = ds1.BackFace;
+            hasExplicitDepthStencil = true;
+            advance = sizeof(Sub);
+            break;
+        }
+        case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VIEW_INSTANCING: {
+            using Sub = StreamSubobject<D3D12_VIEW_INSTANCING_DESC>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            advance = sizeof(Sub);
+            break;
+        }
+        case static_cast<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE>(24):
+        case static_cast<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE>(25): {
+            using Sub = StreamSubobject<D3D12_SHADER_BYTECODE>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            advance = sizeof(Sub);
+            break;
+        }
+        case static_cast<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE>(26): {
+            using Sub = StreamSubobject<CompatDepthStencilDesc2>;
+            if (remaining < sizeof(Sub)) return E_INVALIDARG;
+            const auto& ds2 = reinterpret_cast<const Sub*>(cursor)->inner;
+            gfx.DepthStencilState.DepthEnable = ds2.DepthEnable;
+            gfx.DepthStencilState.DepthWriteMask = ds2.DepthWriteMask;
+            gfx.DepthStencilState.DepthFunc = ds2.DepthFunc;
+            gfx.DepthStencilState.StencilEnable = ds2.StencilEnable;
+            gfx.DepthStencilState.StencilReadMask = ds2.FrontFace.StencilReadMask;
+            gfx.DepthStencilState.StencilWriteMask = ds2.FrontFace.StencilWriteMask;
+            gfx.DepthStencilState.FrontFace = {
+                ds2.FrontFace.StencilFailOp, ds2.FrontFace.StencilDepthFailOp,
+                ds2.FrontFace.StencilPassOp, ds2.FrontFace.StencilFunc
+            };
+            gfx.DepthStencilState.BackFace = {
+                ds2.BackFace.StencilFailOp, ds2.BackFace.StencilDepthFailOp,
+                ds2.BackFace.StencilPassOp, ds2.BackFace.StencilFunc
+            };
+            hasExplicitDepthStencil = true;
+            advance = sizeof(Sub);
+            break;
+        }
+        default:
+            Log("PSO STREAM unknown subobject type=%u at offset=%zu/%zu",
+                static_cast<UINT>(type), static_cast<size_t>(cursor - stream), desc->SizeInBytes);
+            return E_INVALIDARG;
+        }
+
+        const size_t alignedAdvance = static_cast<size_t>(AlignUp(advance, sizeof(void*)));
+        if (!advance || alignedAdvance > remaining) return E_INVALIDARG;
+        cursor += alignedAdvance;
+    }
+
+    if ((!hasDsvFormat || gfx.DSVFormat == DXGI_FORMAT_UNKNOWN) && !hasExplicitDepthStencil)
+        gfx.DepthStencilState.DepthEnable = FALSE;
+
+    if (hasCs && !hasVs) return CreateComputePipelineState(&comp, riid, out);
+    if (hasVs && !hasCs) return CreateGraphicsPipelineState(&gfx, riid, out);
+
+    Log("PSO STREAM invalid shader combination hasVs=%u hasCs=%u bytes=%zu",
+        hasVs ? 1u : 0u, hasCs ? 1u : 0u, desc->SizeInBytes);
+    return E_INVALIDARG;
+}

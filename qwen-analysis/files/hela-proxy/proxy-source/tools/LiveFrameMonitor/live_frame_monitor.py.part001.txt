@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+"""
+live_frame_monitor.py - Real-time streaming log & BMP monitor for Hela D3D12-to-D3D11 proxy runs.
+
+Designed to run alongside Hela-Win64-Shipping.exe and tail `d3d12on11.log` (where each line is
+flushed via `fflush(g_logFile)`), handling:
+  - Missing file at startup (waits for creation)
+  - Incremental line appends (buffered until newline so partial lines are never misparsed)
+  - Log truncation / rotation (resets file offset and increments generation counter)
+  - Multi-threaded / interleaved readback blocks correlated by (kind, present) across split headers
+  - Both 5-point native sample lines (Top-left/Top-right/Center/Bottom-left/Bottom-right) and
+    optional explicit `Non-black pixels: X/Y (Z%)` summary lines
+  - Strict Present #100 slot isolation (never falls back to Present #200+ in `present_100` report)
+  - Bounded memory (ring buffers / deques with fixed capacities for all transient state)
+  - Optional live detection and atomic completeness check of source/backbuffer 24/32-bit BMP dumps
+  - Strict separation between verified log facts and open diagnostic hypotheses
+"""
+
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import json
+import os
+import re
+import signal
+import struct
+import sys
+import time
+from collections import OrderedDict, deque
+from pathlib import Path
+from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
+
+SCHEMA_ID = "hela.live_frame_monitor"
+SCHEMA_VERSION = "1.2.0"
+
+# Bounded memory limits
+MAX_RETAINED_DRAWS_PER_RESOURCE = 20
+MAX_TRACKED_RESOURCES = 16
+MAX_TRACKED_READBACK_PRESENTS = 16
+MAX_TRACKED_SHADERS = 256
+MAX_RECENT_COPY_TO_BB = 16
+MAX_HEARTBEATS = 10
+MAX_DISPATCH_CLUES = 25
+MAX_LIVE_EVENTS = 100
+
+# Default number of named sample points logged by native proxy readback
+EXPECTED_POINT_SAMPLES = 5
+
+RE_HEX_PTR = r"(?:0x)?([0-9A-Fa-f]{8,16})"
+RE_HEX_HASH = r"(?:0x)?([0-9A-Fa-f]{16})"
+
+RE_HISTORY_RESOURCE = re.compile(
+    r"\bResource[:=\s]+" + RE_HEX_PTR + r".*?"
+    r"\boperations=(\d+)\s+draws=(\d+)\s+skipped=(\d+)\s+clears=(\d+)",
+    re.IGNORECASE,
+)
+RE_API_DRAW_ENTRY = re.compile(
+    r"\bapi=(DrawIndexedInstanced|DrawInstanced|Draw)\b", re.IGNORECASE
+)
+RE_DRAW_ENTRY = re.compile(r"\b(DrawIndexedInstanced|DrawInstanced|Draw)\b", re.IGNORECASE)
+RE_VS_HASH = re.compile(r"\bVS(?:_hash)?[:=\s]+" + RE_HEX_HASH, re.IGNORECASE)
+RE_PS_HASH = re.compile(r"\bPS(?:_hash)?[:=\s]+" + RE_HEX_HASH, re.IGNORECASE)
+RE_ELEMENTS = re.compile(r"\b(?:elements|indices|indexCount|verts)[:=\s]+(\d+)", re.IGNORECASE)
+RE_INSTANCES = re.compile(r"\b(?:instances|instanceCount)[:=\s]+(\d+)", re.IGNORECASE)
+RE_RTV_SLOT = re.compile(r"\b(?:rtv(?:[\s_]*slot)?|slot)[:=\s]+(\d+)", re.IGNORECASE)
+RE_VIEWPORT = re.compile(
+    r"\bviewport[:=\s]+(?:"
+    r"(?P<width>\d+(?:\.\d+)?)\s*[xX]\s*(?P<height>\d+(?:\.\d+)?)"
+    r"|\(\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*,\s*"
+    r"(?P<tuple_width>\d+(?:\.\d+)?)\s*,\s*(?P<tuple_height>\d+(?:\.\d+)?)\s*\))",
+    re.IGNORECASE,
+)
+
+# Matches ANY `[READBACK_SRC] Present #N ...` line (both `CopyResource source=...` and `size=WxH...`)
+RE_READBACK_SRC_HEADER = re.compile(
+    r"\[READBACK_SRC\]\s*Present\s*#(\d+)\b(.*)",
+    re.IGNORECASE,
+)
+# Matches ANY `[READBACK] Present #N ...` line
+RE_READBACK_BB_HEADER = re.compile(
+    r"\[READBACK\]\s*Present\s*#(\d+)\b(.*)",
+    re.IGNORECASE,
+)
+# Optional tag prefix on continuation/sample lines: `[READBACK_SRC]` or `[READBACK]`
+RE_READBACK_TAG_PREFIX = re.compile(r"^\s*\[(READBACK_SRC|READBACK)\]\s*(.*)", re.IGNORECASE)
+RE_SOURCE_PTR = re.compile(r"\bsource=" + RE_HEX_PTR, re.IGNORECASE)
+
+RE_NON_BLACK = re.compile(
+    r"Non-black\s+pixels:\s*(\d+)\s*/\s*(\d+)\s*\(\s*([0-9.]+)%\s*\)",
+    re.IGNORECASE,
+)
+
+# Named 5-point sample indicator (Top-left, Top-right, Center, Bottom-left, Bottom-right, or Sample)
+RE_SAMPLE_LABEL = re.compile(
+    r"\b(Top-left|Top-right|Center|Bottom-left|Bottom-right|Sample)\b",
+    re.IGNORECASE,
+)
+
+# Flexible RGBA extractor supporting:
+#   - RGBA=(0, 0, 0, 0) or RGBA: (0,0,0,0) or RGBA=(0,0,0,0)
+#   - R=0 G=0 B=0 A=0 or R:0 G:0 B:0 A:0
+#   - RGBA=[0, 0, 0, 0] or RGBA 0 0 0 0
+#   - Named point line with `(...): (r, g, b, a)`
+RE_RGBA_TUPLE = re.compile(
+    r"(?:RGBA\s*[:=]?\s*[\(\[]?\s*(\d+)\s*[,\s]\s*(\d+)\s*[,\s]\s*(\d+)\s*[,\s]\s*(\d+)\s*[\)\]]?"
+    r"|\bR\s*[:=]\s*(\d+)\s*[,\s]\s*G\s*[:=]\s*(\d+)\s*[,\s]\s*B\s*[:=]\s*(\d+)\s*[,\s]\s*A\s*[:=]\s*(\d+)"
+    r"|(?:Top-left|Top-right|Center|Bottom-left|Bottom-right)\b[^(\n]*?(?:\(\s*\d+\s*,\s*\d+\s*\)\s*[:=]?\s*)?"
+    r"\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\))",
+    re.IGNORECASE,
+)
+
+RE_COPY_TO_BB = re.compile(r"\[?COPY_TO_BB\]?.*?\bsource=" + RE_HEX_PTR + r"(.*)", re.IGNORECASE)
+RE_SEQ = re.compile(r"\bsequence=(\d+)", re.IGNORECASE)
+RE_KEY_INT = re.compile(r"\b(dimension|width|height|format|sequence|buffer)=(\d+)", re.IGNORECASE)
+RE_SIZE_WH = re.compile(r"\bsize=(\d+)x(\d+)", re.IGNORECASE)
+
+RE_SHADER_READY = re.compile(r"\bSHADER\s+READY\b", re.IGNORECASE)
+RE_SHADER_PLACEHOLDER = re.compile(r"\bSHADER\s+PLACEHOLDER\b", re.IGNORECASE)
+RE_MODULE_FINGERPRINT = re.compile(
+    r"\bMODULE_FINGERPRINT\s+role=(d3d12|dxgi_proxy)\b.*?"
+    r"\bsha256=([0-9a-fA-F]{64})\b",
+    re.IGNORECASE,
+)
+RE_MODULE_FINGERPRINT_FAILED = re.compile(
+    r"\bMODULE_FINGERPRINT_FAILED\s+role=(d3d12|dxgi_proxy)\b.*?"
+    r"\breason=([^\s,;]+)",
+    re.IGNORECASE,
+)
+RE_SHADER_STAGE = re.compile(
+    r"\b(?:stage|type)[:=\s]*(VS|PS|CS|GS|HS|DS|compute|vertex|pixel)\b|\b(VS|PS|CS)\b",
+    re.IGNORECASE,
+)
+RE_REASON = re.compile(r"\breason=([^\s,;]+)", re.IGNORECASE)
+RE_ANY_HASH16 = re.compile(r"\b([0-9a-fA-F]{16})\b")
+
+RE_HEARTBEAT = re.compile(
+    r"\bpresent=(\d+)\b.*?\bdraw(?:\(ok\))?=(\d+)\b.*?\bskip-vs=(\d+)\b",
+    re.IGNORECASE,
+)
+RE_HB_KV = re.compile(r"([a-zA-Z0-9_-]+(?:\([a-zA-Z0-9_-]+\))?)=(\d+)")
+RE_DISPATCH_CLUE = re.compile(
+    r"\b(?:skipDispatches|skip-dispatch|skip-cs|dispatch\s+skipped|Dispatch\()",
+    re.IGNORECASE,
+)
+
+
+def norm_ptr(ptr: str) -> str:
+    return ptr.upper().zfill(16)
+
+
+def norm_hash(h: str) -> str:
+    return h.lower()
+
+
+def load_run_manifest(manifest_path: Path) -> Dict[str, Any]:
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Unable to read run manifest '{manifest_path}': {exc}") from exc
+
+    if not isinstance(manifest, dict):
+        raise ValueError(f"Invalid run manifest '{manifest_path}': expected a JSON object")
+    if (
+        manifest.get("schema") != "hela-run-manifest/v1"
+        or manifest.get("runtimeAttestation") != "module-and-shader-sha256"
+        or not isinstance(manifest.get("testVersion"), str)
+        or not manifest["testVersion"].strip()
+    ):
+        raise ValueError(f"Invalid run manifest identity: {manifest_path}")
+
+    runtime = manifest.get("runtime")
+    if not isinstance(runtime, dict):
+        raise ValueError(f"Invalid run manifest runtime section: {manifest_path}")
+    expected_modules: Dict[str, str] = {}
+    for role in ("d3d12", "dxgi"):
+        digest = runtime.get(role)
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", digest):
+            raise ValueError(f"Invalid SHA-256 for runtime.{role} in '{manifest_path}'")
+        expected_modules[role] = digest.lower()
+
+    overrides = manifest.get("overrides")
+    required_overrides = manifest.get("requiredOverrides")
+    if not isinstance(overrides, dict) or not isinstance(required_overrides, list):
+        raise ValueError(f"Invalid run manifest shader override section: {manifest_path}")
+    for name, digest in overrides.items():
+        if (
+            not isinstance(name, str)
+            or Path(name).name != name
+            or not name.lower().endswith(".cso")
+            or not isinstance(digest, str)
+            or not re.fullmatch(r"[0-9a-fA-F]{64}", digest)
+        ):

@@ -1,0 +1,131 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { pathToFileURL } from "node:url";
+import { parseHelaProxyLogFile } from "./hela-log-parser.js";
+import {
+  buildHelaOverrideStage,
+  planHelaManifestPatch,
+  verifyHelaRun,
+} from "./hela-pipeline.js";
+
+/**
+ * Registra i 4 tool MCP di integrazione tra Shader Lab e il proxy D3D12-on-D3D11 di Hela:
+ * - Read-only: `inspect_hela_proxy_log`, `verify_hela_run`
+ * - Staging isolato: `build_hela_override_stage`, `plan_hela_manifest_patch`
+ *
+ * Uso in `src/index.ts` (dopo `registerPixTool(server)`):
+ *   import { registerHelaPipelineTools } from "./hela-mcp-tools.js";
+ *   registerHelaPipelineTools(server);
+ */
+export function registerHelaPipelineTools(server: McpServer): void {
+  server.registerTool("build_hela_run_evidence", {
+    title: "Costruisce bundle di evidenze run Hela (offline)",
+    description:
+      "Legge runDir/packageDir in sola lettura, applica il package gate staged-only e scrive run-evidence.json/report in una nuova outDir. " +
+      "Non avvia Hela, non installa DLL/override e mantiene menuVerified=false/verdict unverified.",
+    inputSchema: {
+      runDir: z.string().min(1).describe("Cartella run archiviata da ProxyManager"),
+      packageDir: z.string().min(1).describe("Cartella package staged-only"),
+      outDir: z.string().min(1).describe("Nuova cartella output, non deve esistere"),
+      targetPresent: z.number().int().min(1).optional().describe("Present target da cui filtrare i BMP"),
+    },
+  }, async (args) => {
+    try {
+      const modulePath = path.resolve(process.cwd(), "tools/hela-package/run-evidence.mjs");
+      if (!fs.existsSync(modulePath)) {
+        throw new Error(`Modulo evidenze Hela non trovato: ${modulePath}`);
+      }
+      const module = await import(pathToFileURL(modulePath).href) as {
+        buildRunEvidence: (options: {
+          runDir: string;
+          packageDir: string;
+          outDir: string;
+          targetPresent?: number;
+        }) => Promise<{ bundle: unknown; report: unknown }>;
+      };
+      const result = await module.buildRunEvidence(args);
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text" as const, text: "build_hela_run_evidence: " + String(e) }] };
+    }
+  });
+
+  server.registerTool("inspect_hela_proxy_log", {
+    title: "Analizza log proxy Hela (read-only)",
+    description:
+      "Tool read-only: legge d3d12on11.log secondo i campi reali emessi da pipeline.cpp, util.cpp, commands.cpp e dxgi_proxy.cpp " +
+      "(draw_commands, rtv_is_backbuffer, dispatch_commands, readback_present_count, copy_sequence, copy_source, draw_index, " +
+      "tracked_rtv_resource, latest_copy_sequence_at_draw, latest_copy_source_at_draw). " +
+      "Distingue coppie eseguite, override pronti e placeholder; non interpreta rtv_is_backbuffer=1 o i conteggi placeholder come prova di rendering.",
+    inputSchema: {
+      logPath: z.string().min(1).describe("Percorso locale di d3d12on11.log (sola lettura)"),
+      topPlaceholders: z.number().int().min(1).max(200).default(25).describe("Numero massimo di placeholder mostrati in anteprima"),
+    },
+  }, async ({ logPath, topPlaceholders }) => {
+    try {
+      const report = parseHelaProxyLogFile(path.resolve(logPath));
+      const payload = {
+        summary: report.summary,
+        attestation: report.attestation,
+        presentProgress: report.presentProgress,
+        executedGraphicsPairs: report.executedGraphicsPairs,
+        targetInputLayoutCoverage: report.targetInputLayoutCoverage,
+        inputLayoutFailures: report.inputLayoutFailures,
+        psSharedByMultipleVs: Object.entries(report.psToVsMap)
+          .filter(([, vs]) => vs.length > 1)
+          .map(([ps, vs]) => ({ ps, vs })),
+        sampledReadbacks: report.sampledReadbacks,
+        readbackCorrelations: report.readbackCorrelations,
+        bbSourceHistorySnapshots: report.bbSourceHistorySnapshots,
+        placeholdersPreview: report.placeholdersRanked.slice(0, topPlaceholders),
+      };
+      return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text" as const, text: "inspect_hela_proxy_log: " + String(e) }] };
+    }
+  });
+
+  server.registerTool("verify_hela_run", {
+    title: "Verifica post-run Hela e readback BMP (read-only)",
+    description:
+      "Tool read-only: verifica una cartella di run archiviata da ProxyManager.ps1 distinguendo " +
+      "'attestation-failed', 'present-not-reached', 'present-reached-readback-missing', " +
+      "'present-reached-black-readback' e 'present-reached-nonzero-pixels-observed'. " +
+      "Pixel non neri osservati non equivalgono a menu validato (menuValidated rimane sempre false).",
+    inputSchema: {
+      runDir: z.string().min(1).describe("Cartella della run archiviata da ProxyManager.ps1 (sola lettura)"),
+      logPath: z.string().optional().describe("Override opzionale percorso d3d12on11.log"),
+      manifestPath: z.string().optional().describe("Override opzionale percorso run-manifest.json"),
+      bmpPaths: z.array(z.string()).optional().describe("Elenco esplicito di BMP readback da verificare"),
+      targetPresent: z.number().int().min(1).optional().describe("Target readback Present atteso; la verifica usa il contatore readback e solo BMP con lo stesso Present (es. 1400)"),
+    },
+  }, async (args) => {
+    try {
+      const report = verifyHelaRun(args);
+      return { content: [{ type: "text" as const, text: JSON.stringify(report, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text" as const, text: "verify_hela_run: " + String(e) }] };
+    }
+  });
+
+  server.registerTool("build_hela_override_stage", {
+    title: "Prepara staging SM5 PSO-aware per proxy Hela",
+    description:
+      "Riusa convertDxilToHlsl, fnv1a64, analisi firme e FXC di Shader Lab. Scrive SOLO in una nuova cartella stagingDir isolata. " +
+      "Valida i PS contro TUTTI i VS abbinati (fallisce/blocca su pair-conflict, pair-incomplete o pair-failed) e preserva 100% degli hash " +
+      "e requiredOverrides del baseline manifest. Non modifica DLL/override attivi del gioco e non avvia Hela.",
+    inputSchema: {
+      dumpDir: z.string().min(1).describe("Cartella sorgente dei .dxil"),
+      stagingDir: z.string().min(1).describe("Nuova cartella di staging isolata (non deve esistere)"),
+      logPath: z.string().optional().describe("Percorso di d3d12on11.log per pairing VS<->PS"),
+      baselineManifestPath: z.string().optional().describe("Manifest baseline hela-run-manifest/v1 (sola lettura)"),
+      baselineOverridesDir: z.string().optional().describe("Cartella .cso baseline per validare PS contro VS esistenti"),
+      runtimeDir: z.string().optional().describe("Cartella contenente d3d12.dll e dxgi.dll; se indicata, crea candidate-package.json e applica il package gate staged-only"),
+      bindingMapPath: z.string().optional().describe("JSON mappa register space condivisa col proxy"),
+      testVersion: z.string().optional().describe("testVersion per il manifest candidato"),
+      autoDisassemble: z.boolean().default(true).describe("Invoca dxc -dumpbin nello staging per .dxil senza *_dxil.txt"),
+      requirePairValidationForPs: z.boolean().default(true).describe("Esclude dal manifest i PS senza validazione completa su tutti i VS abbinati"),
+      enableDumpInCandidateManifest: z.boolean().default(false).describe("Imposta D3D12ON11_DUMP_SHADERS=1 nel candidato ricalcolando launchProfile.sha256"),
+      addNewCandidatesToRequiredOverrides: z.boolean().default(false).describe("Aggiunge i nuovi candidati anche a requiredOverrides (mantenendo sempre quelli del baseline)"),

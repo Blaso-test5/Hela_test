@@ -1,0 +1,170 @@
+#include "types.h"
+
+namespace {
+
+std::mutex g_shaderCacheMutex;
+std::set<uint64_t> g_loggedShaders;
+std::atomic<uint32_t> g_graphicsPsoCount{0};
+std::atomic<uint32_t> g_computePsoCount{0};
+
+bool HasBytecode(const D3D12_SHADER_BYTECODE& bytecode) {
+    return bytecode.pShaderBytecode && bytecode.BytecodeLength;
+}
+
+uint64_t ShaderHash(const D3D12_SHADER_BYTECODE& bytecode) {
+    return HasBytecode(bytecode)
+        ? Fnv1a64(bytecode.pShaderBytecode, bytecode.BytecodeLength)
+        : 0;
+}
+
+bool ShouldLogShaderHash(uint64_t hash) {
+    std::lock_guard<std::mutex> lock(g_shaderCacheMutex);
+    return g_loggedShaders.insert(hash).second;
+}
+
+bool ShouldLogPsoMilestone(uint32_t index) {
+    return index <= 64 || (index % 100 == 0);
+}
+
+HRESULT LoadShader(Device* device, const char* stage, const D3D12_SHADER_BYTECODE& bytecode,
+                   std::vector<uint8_t>& resolved) {
+    if (!HasBytecode(bytecode)) {
+        Log("SHADER BLOCKED stage=%s reason=empty-bytecode", stage);
+        return E_INVALIDARG;
+    }
+    const void* data = bytecode.pShaderBytecode;
+    const size_t size = bytecode.BytecodeLength;
+    const uint64_t hash = Fnv1a64(data, size);
+    const std::string hashText = Hex64(hash);
+    const DxbcInfo original = InspectContainer(data, size);
+    const bool firstSeen = ShouldLogShaderHash(hash);
+    if (firstSeen) {
+        Log("SHADER BEGIN stage=%s hash=%s bytes=%zu DXBC=%u DXIL=%u legacy=%u model=%u_%u RTS0=%u",
+            stage, hashText.c_str(), size, original.isDxbc, original.hasDxil, original.hasLegacy,
+            original.versionMajor, original.versionMinor, original.hasRts0);
+    }
+
+    if (original.isDxbc && original.hasLegacy && original.versionMajor <= 5) {
+        resolved.assign(static_cast<const uint8_t*>(data), static_cast<const uint8_t*>(data) + size);
+        if (firstSeen) {
+            Log("SHADER READY stage=%s hash=%s source=native-DXBC-SM%u_%u bytes=%zu",
+                stage, hashText.c_str(), original.versionMajor, original.versionMinor, resolved.size());
+        }
+        return S_OK;
+    }
+
+    std::vector<uint8_t> overrideBytes;
+    const std::string overridePath = Cfg().overridesDir + "\\" + hashText + ".cso";
+    if (ReadFileBytes(overridePath, overrideBytes)) {
+        const DxbcInfo replacement = InspectContainer(overrideBytes.data(), overrideBytes.size());
+        if (!replacement.isDxbc || !replacement.hasLegacy || replacement.versionMajor > 5) {
+            Log("%s replacement %s is not a valid SM5 DXBC shader", stage, overridePath.c_str());
+            return DXGI_ERROR_INVALID_CALL;
+        }
+        std::string overrideSha256;
+        if (!Sha256Hex(overrideBytes.data(), overrideBytes.size(), overrideSha256)) {
+            Log("SHADER BLOCKED stage=%s hash=%s reason=override-sha256-failed path=%s",
+                stage, hashText.c_str(), overridePath.c_str());
+            return HRESULT_FROM_WIN32(ERROR_CRC);
+        }
+        resolved = std::move(overrideBytes);
+        if (firstSeen) {
+            Log("SHADER READY stage=%s hash=%s source=SM5-override path=%s bytes=%zu sha256=%s model=%u_%u",
+                stage, hashText.c_str(), overridePath.c_str(), resolved.size(), overrideSha256.c_str(),
+                replacement.versionMajor, replacement.versionMinor);
+        }
+        return S_OK;
+    }
+
+    if (firstSeen && original.hasDxil) {
+        if (Cfg().dumpShaders && original.hasDxil) {
+            std::lock_guard<std::mutex> lock(g_shaderCacheMutex);
+            MakeDirs(Cfg().dumpDir);
+            const std::string dumpPath = Cfg().dumpDir + "\\" + hashText + ".dxil";
+            if (GetFileAttributesA(dumpPath.c_str()) != INVALID_FILE_ATTRIBUTES ||
+                WriteFileBytes(dumpPath, data, size)) {
+                Log("SHADER DUMPED stage=%s hash=%s path=%s bytes=%zu; SM5 override is missing",
+                    stage, hashText.c_str(), dumpPath.c_str(), size);
+            } else {
+                Log("SHADER DUMP_FAILED stage=%s hash=%s path=%s bytes=%zu",
+                    stage, hashText.c_str(), dumpPath.c_str(), size);
+            }
+        } else if (original.hasDxil) {
+            Log("SHADER DUMP_SKIPPED stage=%s hash=%s reason=dump-disabled", stage, hashText.c_str());
+        }
+        Log("SHADER PLACEHOLDER stage=%s hash=%s reason=no-usable-SM5-bytecode DXBC=%u DXIL=%u "
+            "action=provide-sm5-override-or-add-dxil-translation overrides=%s",
+            stage, hashText.c_str(), original.isDxbc, original.hasDxil, overridePath.c_str());
+    }
+    return original.hasDxil ? S_FALSE : DXGI_ERROR_UNSUPPORTED;
+}
+
+HRESULT CreateVertexShader(Device* device, const D3D12_SHADER_BYTECODE& bytecode,
+                           Ptr<ID3D11VertexShader>& shader, std::vector<uint8_t>& resolvedCode) {
+    HRESULT result = LoadShader(device, "VS", bytecode, resolvedCode);
+    if (result != S_OK) return result;
+    result = device->d11->CreateVertexShader(resolvedCode.data(), resolvedCode.size(), nullptr, shader.Put());
+    if (FAILED(result))
+        Log("SHADER D3D11_CREATE_FAILED stage=VS result=0x%08lx bytes=%zu", result, resolvedCode.size());
+    return result;
+}
+
+HRESULT CreatePixelShader(Device* device, const D3D12_SHADER_BYTECODE& bytecode,
+                          Ptr<ID3D11PixelShader>& shader) {
+    std::vector<uint8_t> code;
+    HRESULT result = LoadShader(device, "PS", bytecode, code);
+    if (result != S_OK) return result;
+    result = device->d11->CreatePixelShader(code.data(), code.size(), nullptr, shader.Put());
+    if (FAILED(result))
+        Log("SHADER D3D11_CREATE_FAILED stage=PS result=0x%08lx bytes=%zu", result, code.size());
+    return result;
+}
+
+HRESULT CreateGeometryShader(Device* device, const D3D12_SHADER_BYTECODE& bytecode,
+                             Ptr<ID3D11GeometryShader>& shader) {
+    std::vector<uint8_t> code;
+    HRESULT result = LoadShader(device, "GS", bytecode, code);
+    if (result != S_OK) return result;
+    result = device->d11->CreateGeometryShader(code.data(), code.size(), nullptr, shader.Put());
+    if (FAILED(result))
+        Log("SHADER D3D11_CREATE_FAILED stage=GS result=0x%08lx bytes=%zu", result, code.size());
+    return result;
+}
+
+HRESULT CreateHullShader(Device* device, const D3D12_SHADER_BYTECODE& bytecode,
+                         Ptr<ID3D11HullShader>& shader) {
+    std::vector<uint8_t> code;
+    HRESULT result = LoadShader(device, "HS", bytecode, code);
+    if (result != S_OK) return result;
+    result = device->d11->CreateHullShader(code.data(), code.size(), nullptr, shader.Put());
+    if (FAILED(result))
+        Log("SHADER D3D11_CREATE_FAILED stage=HS result=0x%08lx bytes=%zu", result, code.size());
+    return result;
+}
+
+HRESULT CreateDomainShader(Device* device, const D3D12_SHADER_BYTECODE& bytecode,
+                           Ptr<ID3D11DomainShader>& shader) {
+    std::vector<uint8_t> code;
+    HRESULT result = LoadShader(device, "DS", bytecode, code);
+    if (result != S_OK) return result;
+    result = device->d11->CreateDomainShader(code.data(), code.size(), nullptr, shader.Put());
+    if (FAILED(result))
+        Log("SHADER D3D11_CREATE_FAILED stage=DS result=0x%08lx bytes=%zu", result, code.size());
+    return result;
+}
+
+HRESULT CreateComputeShader(Device* device, const D3D12_SHADER_BYTECODE& bytecode,
+                            Ptr<ID3D11ComputeShader>& shader) {
+    std::vector<uint8_t> code;
+    HRESULT result = LoadShader(device, "CS", bytecode, code);
+    if (result != S_OK) return result;
+    result = device->d11->CreateComputeShader(code.data(), code.size(), nullptr, shader.Put());
+    if (FAILED(result))
+        Log("SHADER D3D11_CREATE_FAILED stage=CS result=0x%08lx bytes=%zu", result, code.size());
+    return result;
+}
+
+HRESULT CreateInputLayout(Device* device, const D3D12_INPUT_LAYOUT_DESC& source,
+                          const std::vector<uint8_t>& vertexShaderCode, Ptr<ID3D11InputLayout>& layout) {
+    if (!source.NumElements) return S_OK;
+    if (!source.pInputElementDescs) return E_INVALIDARG;

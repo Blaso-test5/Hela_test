@@ -1,0 +1,191 @@
+          baseEntry.missingPairedVsDisasm.push(vsHash);
+          continue;
+        }
+        vsDisasms.push({ vsHash, path: candidateDisasm, sigKey: normalizeVsOutputSigKey(sig) });
+      }
+
+      const distinctSigs = new Set(vsDisasms.map((d) => d.sigKey));
+      if (distinctSigs.size > 1) {
+        entries.push({
+          ...baseEntry,
+          status: "pair-conflict",
+          includedInManifest: false,
+          message:
+            `PS condiviso da più VS con firme output incompatibili (${vsDisasms.map((d) => d.vsHash).join(", ")}). ` +
+            "Rifiutato fail-closed: serve specializzazione o riallineamento manuale.",
+        });
+        continue;
+      }
+
+      if (baseEntry.missingPairedVsDisasm.length > 0) {
+        baseEntry.warnings.push(
+          `Disassemblato/firma output assente per VS abbinati: ${baseEntry.missingPairedVsDisasm.join(", ")}.`,
+        );
+      }
+      if (vsDisasms.length > 0 && baseEntry.missingPairedVsDisasm.length === 0) {
+        vsOutputDisasmPath = vsDisasms[0].path;
+      }
+    }
+
+    try {
+      const converted = await converter({
+        inputPath: item.filePath,
+        disasmPath: item.disasmPath,
+        vsOutputDisasmPath,
+        bindingMapPath: options.bindingMapPath ? path.resolve(options.bindingMapPath) : undefined,
+        bufferMode: "raw",
+      });
+      baseEntry.registerMap = converted.post.registerMap;
+
+      const localBindings = converted.post.warnings.filter((w) => w.includes("assegnato localmente"));
+      if (localBindings.length) {
+        unmappedRegisterSpaces.push({
+          hash: item.hash,
+          stage: item.stage,
+          bindings: converted.post.registerMap.map((r) => `${r.from} -> ${r.to}`),
+        });
+        entries.push({
+          ...baseEntry,
+          status: "blocked",
+          includedInManifest: false,
+          warnings: [...baseEntry.warnings, ...converted.post.warnings],
+          message: `Register space ≠ 0 senza mappa binding condivisa col proxy: ${localBindings.join(" | ")}`,
+        });
+        continue;
+      }
+      if (!converted.post.entryPoint) {
+        entries.push({
+          ...baseEntry,
+          status: "blocked",
+          includedInManifest: false,
+          warnings: [...baseEntry.warnings, ...converted.post.warnings],
+          message: "Entry point HLSL non identificato dopo SPIRV-Cross.",
+        });
+        continue;
+      }
+
+      const hlslPath = path.join(hlslDir, `${item.hash}_${item.stage}.hlsl`);
+      fs.writeFileSync(hlslPath, converted.hlsl, "utf8");
+      const tempCso = path.join(os.tmpdir(), `hela-stage-${process.pid}-${item.hash}.cso`);
+      try {
+        const fxcRes = await runner(getFxc(), [
+          "/nologo",
+          "/T",
+          profile,
+          "/E",
+          converted.post.entryPoint,
+          "/Fo",
+          tempCso,
+          hlslPath,
+        ]);
+        if (fxcRes.missing) throw new Error(`FXC non disponibile: ${fxcRes.stderr}`);
+        if (fxcRes.code !== 0 || !fs.existsSync(tempCso)) {
+          throw new Error(`FXC (${profile}) fallito: ${fxcRes.stderr || fxcRes.stdout}`);
+        }
+        const compiledBytes = fs.readFileSync(tempCso);
+        const compiledContainer = dxilAnalyzer.parseContainer(compiledBytes);
+        if (!compiledContainer?.hasLegacy || compiledContainer.hasDxil) {
+          throw new Error("Output FXC non è un container DXBC legacy SM5 valido.");
+        }
+        const compiledSha256 = sha256Buffer(compiledBytes);
+
+        // Protezione baseline: non sostituire silenziosamente un override già fissato nel baseline con un hash diverso
+        const csoFileName = `${item.hash}.cso`;
+        if (
+          baselineManifest?.overrides[csoFileName] &&
+          baselineManifest.overrides[csoFileName].toLowerCase() !== compiledSha256
+        ) {
+          const rejectedPath = path.join(rejectedDir, csoFileName);
+          fs.copyFileSync(tempCso, rejectedPath);
+          entries.push({
+            ...baseEntry,
+            status: "blocked",
+            includedInManifest: false,
+            csoPath: rejectedPath,
+            csoSha256: compiledSha256,
+            warnings: [...baseEntry.warnings, ...converted.post.warnings],
+            message: `Conflitto col baseline: ${csoFileName} è già fissato nel baseline con SHA-256 diverso; baseline preservato.`,
+          });
+          continue;
+        }
+
+        // Controllo [TARGET_INPUT_LAYOUT] SOLO per il VS diagnostico 20e0826b236597a1
+        if (
+          item.stage === "vs" &&
+          item.hash === TARGET_INPUT_LAYOUT_DIAGNOSTIC_VS &&
+          logReport &&
+          logReport.targetInputLayoutCoverage.elements.length > 0
+        ) {
+          const vsDump = await runner(getFxc(), ["/dumpbin", tempCso]);
+          if (vsDump.code === 0) {
+            const vsInSig = parseInputSignature(`${vsDump.stdout}\n${vsDump.stderr}`);
+            const ilCheck = checkVsAgainstDiagnosticInputLayout(
+              vsInSig,
+              logReport.targetInputLayoutCoverage.elements,
+            );
+            if (!ilCheck.ok) {
+              const rejectedPath = path.join(rejectedDir, csoFileName);
+              fs.copyFileSync(tempCso, rejectedPath);
+              entries.push({
+                ...baseEntry,
+                status: "input-layout-failed",
+                includedInManifest: false,
+                csoPath: rejectedPath,
+                csoSha256: compiledSha256,
+                inputLayoutCheck: "diagnostic-vs-failed",
+                warnings: [...baseEntry.warnings, ...converted.post.warnings],
+                message: `InputLayout mismatch sul VS diagnostico: ${ilCheck.mismatches.join(" | ")}`,
+              });
+              continue;
+            }
+            baseEntry.inputLayoutCheck = "diagnostic-vs-passed";
+          }
+        }
+
+        let status: ShaderStageOutcome = "compiled-candidate";
+        let includeInManifest = true;
+        let detailMessage = "Compilato SM5 con FXC (candidato; equivalenza e rendering non verificati).";
+        const validatedAgainstVs: string[] = [];
+
+        if (item.stage === "ps") {
+          const pairMismatches: string[] = [];
+          const psDump = await runner(getFxc(), ["/dumpbin", tempCso]);
+          const psInSig = psDump.code === 0 ? parseInputSignature(`${psDump.stdout}\n${psDump.stderr}`) : [];
+
+          for (const vsHash of pairedVsHashes) {
+            const vsCsoPath = findVsCsoPath(vsHash);
+            if (!vsCsoPath) {
+              baseEntry.missingPairedVsCso.push(vsHash);
+              continue;
+            }
+            const vsDump = await runner(getFxc(), ["/dumpbin", vsCsoPath]);
+            if (vsDump.code !== 0 || psDump.code !== 0) {
+              pairMismatches.push(`fxc /dumpbin fallito per coppia VS ${vsHash} -> PS ${item.hash}`);
+              continue;
+            }
+            const vsOutSig = parseOutputSignature(`${vsDump.stdout}\n${vsDump.stderr}`);
+            if (!vsOutSig.length || !psInSig.length) {
+              pairMismatches.push(`Firma mancante in fxc /dumpbin per coppia VS ${vsHash} -> PS ${item.hash}`);
+              continue;
+            }
+            const cmp = compareShaderSignatures(vsOutSig, psInSig);
+            if (!cmp.compatible) {
+              pairMismatches.push(`VS ${vsHash} -> PS ${item.hash}: ${cmp.mismatches.join("; ")}`);
+            } else {
+              validatedAgainstVs.push(vsHash);
+            }
+          }
+
+          if (pairMismatches.length > 0) {
+            const rejectedPath = path.join(rejectedDir, csoFileName);
+            fs.copyFileSync(tempCso, rejectedPath);
+            entries.push({
+              ...baseEntry,
+              status: "pair-failed",
+              includedInManifest: false,
+              csoPath: rejectedPath,
+              csoSha256: compiledSha256,
+              validatedAgainstVs,
+              warnings: [...baseEntry.warnings, ...converted.post.warnings],
+              message: `Validazione coppia VS/PS fallita: ${pairMismatches.join(" | ")}`,
+            });

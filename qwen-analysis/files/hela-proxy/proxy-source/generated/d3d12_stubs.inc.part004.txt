@@ -1,0 +1,8 @@
+    virtual HRESULT STDMETHODCALLTYPE CreateCommandSignature(const D3D12_COMMAND_SIGNATURE_DESC *pDesc, ID3D12RootSignature *pRootSignature, REFIID riid, void **ppvCommandSignature) { Unimpl("ID3D12Device2::CreateCommandSignature"); return E_NOTIMPL; }
+    virtual void STDMETHODCALLTYPE GetResourceTiling(ID3D12Resource *pTiledResource, UINT *pNumTilesForEntireResource, D3D12_PACKED_MIP_INFO *pPackedMipDesc, D3D12_TILE_SHAPE *pStandardTileShapeForNonPackedMips, UINT *pNumSubresourceTilings, UINT FirstSubresourceTilingToGet, D3D12_SUBRESOURCE_TILING *pSubresourceTilingsForNonPackedMips) { Unimpl("ID3D12Device2::GetResourceTiling"); }
+    virtual LUID STDMETHODCALLTYPE GetAdapterLuid(void) { Unimpl("ID3D12Device2::GetAdapterLuid"); return {}; }
+    virtual HRESULT STDMETHODCALLTYPE CreatePipelineLibrary(const void *pLibraryBlob, SIZE_T BlobLength, REFIID riid, void **ppPipelineLibrary) { Unimpl("ID3D12Device2::CreatePipelineLibrary"); return E_NOTIMPL; }
+    virtual HRESULT STDMETHODCALLTYPE SetEventOnMultipleFenceCompletion(ID3D12Fence *const *ppFences, const UINT64 *pFenceValues, UINT NumFences, D3D12_MULTIPLE_FENCE_WAIT_FLAGS Flags, HANDLE hEvent) { Unimpl("ID3D12Device2::SetEventOnMultipleFenceCompletion"); return E_NOTIMPL; }
+    virtual HRESULT STDMETHODCALLTYPE SetResidencyPriority(UINT NumObjects, ID3D12Pageable *const *ppObjects, const D3D12_RESIDENCY_PRIORITY *pPriorities) { Unimpl("ID3D12Device2::SetResidencyPriority"); return E_NOTIMPL; }
+    virtual HRESULT STDMETHODCALLTYPE CreatePipelineState(const D3D12_PIPELINE_STATE_STREAM_DESC *pDesc, REFIID riid, void **ppPipelineState) { Unimpl("ID3D12Device2::CreatePipelineState"); return E_NOTIMPL; }
+};

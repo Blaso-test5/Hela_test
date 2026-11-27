@@ -1,0 +1,15 @@
+{
+  "schema": "qwen.evidence.dataset-index",
+  "dataset": "source-history-1400-entries",
+  "recordCount": 129,
+  "byteCount": 53760,
+  "sha256": "32252c556f79258a41ac32fe3b9270379a322bf2a768a95684afbe4f0d11e52e",
+  "indexParts": [
+    {
+      "path": "evidence/source-history-1400-entries/index-part001.json",
+      "itemCount": 7,
+      "byteCount": 1870,
+      "sha256": "d9085fe060e00a8af9672997beef5c83639e254573d34f4d19855f8e688a0f9f"
+    }
+  ]
+}

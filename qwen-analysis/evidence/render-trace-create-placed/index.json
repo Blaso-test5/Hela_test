@@ -1,0 +1,15 @@
+{
+  "schema": "qwen.evidence.dataset-index",
+  "dataset": "render-trace-create-placed",
+  "recordCount": 126,
+  "byteCount": 19942,
+  "sha256": "1b2b2958da55cd2fd9f27ab7ae58dbb894e6cb78ef29e1e23388dbae021c8803",
+  "indexParts": [
+    {
+      "path": "evidence/render-trace-create-placed/index-part001.json",
+      "itemCount": 3,
+      "byteCount": 811,
+      "sha256": "3721cf2cb833d6c467c35d7f5782c4672342807f113aef33eb8cd7dd096035da"
+    }
+  ]
+}

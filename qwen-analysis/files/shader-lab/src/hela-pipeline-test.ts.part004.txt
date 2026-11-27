@@ -1,0 +1,173 @@
+              dumpByFile.set(outCso, vsCompatDisasm);
+              dumpByFile.set(`${vsBHash}.cso`, vsCompatDisasm);
+            } else if (src.includes(vsBadOutHash)) {
+              fs.writeFileSync(outCso, legacyVsBadOut);
+              dumpByFile.set(outCso, vsBadOutDisasm);
+              dumpByFile.set(`${vsBadOutHash}.cso`, vsBadOutDisasm);
+            } else if (src.includes(psCompatHash)) {
+              fs.writeFileSync(outCso, legacyPsCompat);
+              dumpByFile.set(outCso, psCompatDisasm);
+              dumpByFile.set(`${psCompatHash}.cso`, psCompatDisasm);
+            } else if (src.includes(psIncompleteHash)) {
+              fs.writeFileSync(outCso, legacyPsIncomplete);
+              dumpByFile.set(outCso, psCompatDisasm);
+              dumpByFile.set(`${psIncompleteHash}.cso`, psCompatDisasm);
+            } else if (src.includes(psConflictHash)) {
+              fs.writeFileSync(outCso, legacyPsConflict);
+              dumpByFile.set(outCso, psCompatDisasm);
+              dumpByFile.set(`${psConflictHash}.cso`, psCompatDisasm);
+            }
+            return { code: 0, stdout: "", stderr: "" };
+          }
+          return { code: 1, stdout: "", stderr: "unexpected" };
+        },
+      },
+    );
+
+    const compatEntry = stageRes.entries.find((e) => e.hash === psCompatHash)!;
+    assert.equal(compatEntry.sharedByMultipleVs, true);
+    assert.equal(compatEntry.status, "pair-validated");
+    assert.equal(compatEntry.validatedAgainstVs.length, 2, "tutti e 2 i VS abbinati verificati");
+    assert.equal(compatEntry.includedInManifest, true);
+
+    const incompleteEntry = stageRes.entries.find((e) => e.hash === psIncompleteHash)!;
+    assert.equal(incompleteEntry.sharedByMultipleVs, true);
+    assert.equal(
+      incompleteEntry.status,
+      "pair-incomplete",
+      "se manca firma/bytecode di uno dei VS abbinati NON deve essere pair-validated",
+    );
+    assert.equal(incompleteEntry.includedInManifest, false);
+    assert.deepEqual(incompleteEntry.missingPairedVsDisasm, [vsMissingHash]);
+    assert.deepEqual(incompleteEntry.missingPairedVsCso, [vsMissingHash]);
+
+    const conflictEntry = stageRes.entries.find((e) => e.hash === psConflictHash)!;
+    assert.equal(conflictEntry.sharedByMultipleVs, true);
+    assert.equal(
+      conflictEntry.status,
+      "pair-conflict",
+      "PS condiviso da 2 VS con firme incompatibili deve diventare pair-conflict",
+    );
+    assert.equal(conflictEntry.includedInManifest, false);
+    assert.equal(conflictEntry.csoPath, undefined, "pair-conflict bloccato fail-closed prima di produrre .cso");
+    assert.deepEqual(conflictEntry.validatedAgainstVs, []);
+    assert.match(conflictEntry.message, new RegExp(vsAHash));
+    assert.match(conflictEntry.message, new RegExp(vsBadOutHash));
+
+    assert.equal(stageRes.counts.blocked, 1, "CS con Wave ops bloccato");
+    assert.equal(stageRes.counts["pair-conflict"], 1, "1 PS in pair-conflict");
+    assert.equal(stageRes.counts["pair-incomplete"], 1, "1 PS in pair-incomplete");
+    assert.equal(stageRes.baselineOverridesPreserved, 1);
+    assert.equal(stageRes.newCandidatesIncluded, 4, "vsA + vsB + vsBadOut + psCompat");
+
+    // Verifica preservazione baseline nel manifest candidato generato
+    const stagedManifest = JSON.parse(fs.readFileSync(stageRes.manifestPath!, "utf8")) as HelaRunManifestV1;
+    assert.equal(stagedManifest.overrides[baselineCsoName], baselineCsoSha, "hash baseline preservato");
+    assert.deepEqual(stagedManifest.requiredOverrides, [baselineCsoName], "requiredOverrides baseline preservati");
+    assert.equal(stagedManifest.overrides[`${psIncompleteHash}.cso`], undefined, "pair-incomplete escluso");
+    assert.equal(stagedManifest.overrides[`${psConflictHash}.cso`], undefined, "pair-conflict escluso");
+
+    const candidateRuntimeDir = path.join(tmp, "candidate-runtime");
+    fs.mkdirSync(candidateRuntimeDir, { recursive: true });
+    const candidateRuntimeBytes = {
+      d3d12: Buffer.from("candidate d3d12 proxy"),
+      dxgi: Buffer.from("candidate dxgi proxy"),
+    };
+    fs.writeFileSync(path.join(candidateRuntimeDir, "d3d12.dll"), candidateRuntimeBytes.d3d12);
+    fs.writeFileSync(path.join(candidateRuntimeDir, "dxgi.dll"), candidateRuntimeBytes.dxgi);
+    const runtimeStageDir = path.join(tmp, "runtime-replacement-stage");
+    const runtimeStage = await buildHelaOverrideStage(
+      {
+        dumpDir,
+        stagingDir: runtimeStageDir,
+        baselineManifestPath,
+        baselineOverridesDir,
+        runtimeDir: candidateRuntimeDir,
+        testVersion: "1050ti-runtime-candidate",
+        autoDisassemble: false,
+        onlyHashes: ["ffffffffffffffff"],
+      },
+      { fxcPath: () => "unused", dxcPath: () => "unused" },
+    );
+    const runtimeCandidateManifest = JSON.parse(
+      fs.readFileSync(runtimeStage.manifestPath!, "utf8"),
+    ) as HelaRunManifestV1;
+    const runtimePackage = JSON.parse(
+      fs.readFileSync(path.join(runtimeStageDir, "candidate-package.json"), "utf8"),
+    ) as { runtime: Array<{ path: string; sha256: string }> };
+    assert.equal(runtimeCandidateManifest.runtime.d3d12, sha256Buffer(candidateRuntimeBytes.d3d12));
+    assert.equal(runtimeCandidateManifest.runtime.dxgi, sha256Buffer(candidateRuntimeBytes.dxgi));
+    assert.deepEqual(
+      runtimePackage.runtime.map(({ path: runtimePath, sha256 }) => [runtimePath, sha256]),
+      [
+        ["runtime/d3d12.dll", sha256Buffer(candidateRuntimeBytes.d3d12)],
+        ["runtime/dxgi.dll", sha256Buffer(candidateRuntimeBytes.dxgi)],
+      ],
+    );
+    assert.equal(runtimeStage.packageGate?.ok, true);
+    assert.deepEqual(
+      readAndValidateManifest(baselineManifestPath).runtime,
+      baselineManifest.runtime,
+      "l'aggiornamento runtime del candidato non deve modificare il manifest baseline",
+    );
+
+    // 6. Test planHelaManifestPatch: preserva baseline + rifiuta percorsi pericolosi
+    const deltaStagingOverrides = path.join(tmp, "delta-staging-overrides");
+    fs.mkdirSync(deltaStagingOverrides, { recursive: true });
+    const newOnlyCso = makeFakeContainer("legacy", 5, 955);
+    const newOnlyName = "1122334455667788.cso";
+    fs.writeFileSync(path.join(deltaStagingOverrides, newOnlyName), newOnlyCso);
+
+    // Rifiuta sovrascrittura del baseline
+    assert.throws(
+      () =>
+        planHelaManifestPatch({
+          baselineManifestPath,
+          stagingOverridesDir: deltaStagingOverrides,
+          outManifestPath: baselineManifestPath,
+          testVersion: "bad",
+        }),
+      /coincide con baselineManifestPath/,
+    );
+    // Rifiuta scrittura dentro la cartella del baseline
+    assert.throws(
+      () =>
+        planHelaManifestPatch({
+          baselineManifestPath,
+          stagingOverridesDir: deltaStagingOverrides,
+          outManifestPath: path.join(baselineDir, "other.json"),
+          testVersion: "bad",
+        }),
+      /stessa cartella del manifest baseline/,
+    );
+    // Rifiuta scrittura dentro stagingOverridesDir
+    assert.throws(
+      () =>
+        planHelaManifestPatch({
+          baselineManifestPath,
+          stagingOverridesDir: deltaStagingOverrides,
+          outManifestPath: path.join(deltaStagingOverrides, "out.json"),
+          testVersion: "bad",
+        }),
+      /dentro stagingOverridesDir/,
+    );
+    // Rifiuta scrittura dentro percorso protetto del gioco
+    assert.throws(
+      () =>
+        planHelaManifestPatch({
+          baselineManifestPath,
+          stagingOverridesDir: deltaStagingOverrides,
+          outManifestPath: path.join(tmp, "Binaries", "Win64", "run-manifest.json"),
+          testVersion: "bad",
+        }),
+      /percorso protetto/,
+    );
+
+    const plannedPath = path.join(tmp, "planned-candidates", "run-manifest.v1.2.0.json");
+    const planned = planHelaManifestPatch({
+      baselineManifestPath,
+      stagingOverridesDir: deltaStagingOverrides,
+      outManifestPath: plannedPath,
+      testVersion: "1050ti-menu-v1.2.0-planned",
+      dumpShaders: true,
+    });

@@ -1,0 +1,163 @@
+[
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/tests/bc_mip_staging_smoke.cpp",
+    "totalLineCount": 117,
+    "sourceByteCount": 4752,
+    "sha256": "efbaa913b3416a46be88c39db18797d22f4120bcfeeafbe0a8250cccca758680",
+    "publishedSha256": "efbaa913b3416a46be88c39db18797d22f4120bcfeeafbe0a8250cccca758680",
+    "publishedByteCount": 4752,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tests/bc_mip_staging_smoke.cpp",
+        "lineStart": 1,
+        "lineEnd": 117,
+        "byteCount": 4752,
+        "sha256": "efbaa913b3416a46be88c39db18797d22f4120bcfeeafbe0a8250cccca758680"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/tests/crash_handler_smoke.cpp",
+    "totalLineCount": 99,
+    "sourceByteCount": 3345,
+    "sha256": "41d6bafc532922876be483f6cc66cc4daeebc5283de08f0c6714163de6d91fd5",
+    "publishedSha256": "41d6bafc532922876be483f6cc66cc4daeebc5283de08f0c6714163de6d91fd5",
+    "publishedByteCount": 3345,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tests/crash_handler_smoke.cpp",
+        "lineStart": 1,
+        "lineEnd": 99,
+        "byteCount": 3345,
+        "sha256": "41d6bafc532922876be483f6cc66cc4daeebc5283de08f0c6714163de6d91fd5"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/tests/dxgi_smoke.cpp",
+    "totalLineCount": 78,
+    "sourceByteCount": 2896,
+    "sha256": "ca522e2fbb1503fc031c84389ea9ab281da2f35492717fe5e8d0ac1a81b4a940",
+    "publishedSha256": "ca522e2fbb1503fc031c84389ea9ab281da2f35492717fe5e8d0ac1a81b4a940",
+    "publishedByteCount": 2896,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tests/dxgi_smoke.cpp",
+        "lineStart": 1,
+        "lineEnd": 78,
+        "byteCount": 2896,
+        "sha256": "ca522e2fbb1503fc031c84389ea9ab281da2f35492717fe5e8d0ac1a81b4a940"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/tests/dxgi_swapchain_smoke.cpp",
+    "totalLineCount": 225,
+    "sourceByteCount": 9684,
+    "sha256": "fc573da6c8037c67b553dfdccf584c865e79e6a19d76fd26854828543cddf38a",
+    "publishedSha256": "fc573da6c8037c67b553dfdccf584c865e79e6a19d76fd26854828543cddf38a",
+    "publishedByteCount": 9684,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tests/dxgi_swapchain_smoke.cpp.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 180,
+        "byteCount": 7977,
+        "sha256": "d717091787b24555d369b3523b6f1b9b85d73f18be45436ec6062e588e807a6e"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tests/dxgi_swapchain_smoke.cpp.part002.txt",
+        "lineStart": 181,
+        "lineEnd": 225,
+        "byteCount": 1707,
+        "sha256": "e59cf18ce7fd72ae3ab279bf2f75e08f66a9d4392d0393e2b116fa284828c96c"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/tests/queue_clock_smoke.cpp",
+    "totalLineCount": 86,
+    "sourceByteCount": 3219,
+    "sha256": "2b6c082fd323cb7e52aef2bc1fb10265b993ae8813f5e1e1a3de822109193cd4",
+    "publishedSha256": "2b6c082fd323cb7e52aef2bc1fb10265b993ae8813f5e1e1a3de822109193cd4",
+    "publishedByteCount": 3219,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tests/queue_clock_smoke.cpp",
+        "lineStart": 1,
+        "lineEnd": 86,
+        "byteCount": 3219,
+        "sha256": "2b6c082fd323cb7e52aef2bc1fb10265b993ae8813f5e1e1a3de822109193cd4"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/tests/shader_override_smoke.cpp",
+    "totalLineCount": 65,
+    "sourceByteCount": 2638,
+    "sha256": "d5743a08be835eb962b7e473a64e98bb071be66b482ce116e9bbf23703d38f4f",
+    "publishedSha256": "d5743a08be835eb962b7e473a64e98bb071be66b482ce116e9bbf23703d38f4f",
+    "publishedByteCount": 2638,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/d3d12on11/tests/shader_override_smoke.cpp",
+        "lineStart": 1,
+        "lineEnd": 65,
+        "byteCount": 2638,
+        "sha256": "d5743a08be835eb962b7e473a64e98bb071be66b482ce116e9bbf23703d38f4f"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/tests/shader_use_ledger_smoke.cpp",
+    "totalLineCount": 128,
+    "sourceByteCount": 4944,
+    "sha256": "a5fc4c20ddcdf8ec65e7ab43871fcfe113410a4aa1fc32ee4d944e20ecc57570",
+    "publishedSha256": "a5fc4c20ddcdf8ec65e7ab43871fcfe113410a4aa1fc32ee4d944e20ecc57570",
+    "publishedByteCount": 4944,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/d3d12on11/tests/shader_use_ledger_smoke.cpp",
+        "lineStart": 1,
+        "lineEnd": 128,
+        "byteCount": 4944,
+        "sha256": "a5fc4c20ddcdf8ec65e7ab43871fcfe113410a4aa1fc32ee4d944e20ecc57570"
+      }
+    ]
+  }
+]

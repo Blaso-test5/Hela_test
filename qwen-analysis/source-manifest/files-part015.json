@@ -1,0 +1,182 @@
+[
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/src/diag_trace.h",
+    "totalLineCount": 35,
+    "sourceByteCount": 1313,
+    "sha256": "91b08f666b199a50003b6eff34a526e939c789bd7b6bceec31e827edb9062cec",
+    "publishedSha256": "91b08f666b199a50003b6eff34a526e939c789bd7b6bceec31e827edb9062cec",
+    "publishedByteCount": 1313,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/src/diag_trace.h",
+        "lineStart": 1,
+        "lineEnd": 35,
+        "byteCount": 1313,
+        "sha256": "91b08f666b199a50003b6eff34a526e939c789bd7b6bceec31e827edb9062cec"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/src/dxgi_proxy.cpp",
+    "totalLineCount": 1011,
+    "sourceByteCount": 43338,
+    "sha256": "7074103c8b00a391cdd53ede85a27d044fd7ec71899a6d2df3658a88c215e188",
+    "publishedSha256": "7074103c8b00a391cdd53ede85a27d044fd7ec71899a6d2df3658a88c215e188",
+    "publishedByteCount": 43338,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/d3d12on11/src/dxgi_proxy.cpp.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 203,
+        "byteCount": 7994,
+        "sha256": "4e66df0536863163f85b2c7672e8967b24d074912955cf364d7032a99901d998"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/src/dxgi_proxy.cpp.part002.txt",
+        "lineStart": 204,
+        "lineEnd": 373,
+        "byteCount": 7955,
+        "sha256": "2a54e2b1f4002c89a55a3e2bbc1985e7cf3088f2c9eeda8826e0e6e5e4363ff1"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/src/dxgi_proxy.cpp.part003.txt",
+        "lineStart": 374,
+        "lineEnd": 567,
+        "byteCount": 7984,
+        "sha256": "f099602046ad2ad0f5e68a0a435f707d1b972a1ebae6e9b89a86b9fae5157ea9"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/src/dxgi_proxy.cpp.part004.txt",
+        "lineStart": 568,
+        "lineEnd": 742,
+        "byteCount": 7999,
+        "sha256": "b4889f4ec177471774a170df1e23832bd30cff5ce594505ba562d1ed4408d99c"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/src/dxgi_proxy.cpp.part005.txt",
+        "lineStart": 743,
+        "lineEnd": 926,
+        "byteCount": 7959,
+        "sha256": "1c2748515358e1cccd3deb87ffcb62939830542ca4d172d04ecd5ac91dbf676f"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/src/dxgi_proxy.cpp.part006.txt",
+        "lineStart": 927,
+        "lineEnd": 1011,
+        "byteCount": 3447,
+        "sha256": "3b1ed4075eca667fb7d53c19d5703c96fa3ea3875695f5d153f7268758edd734"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/src/dxgi_proxy.def",
+    "totalLineCount": 21,
+    "sourceByteCount": 1058,
+    "sha256": "411edfe96b66efcfd51fa3e98b52db31c55ddc6de833b06ef90d779ec780b1de",
+    "publishedSha256": "411edfe96b66efcfd51fa3e98b52db31c55ddc6de833b06ef90d779ec780b1de",
+    "publishedByteCount": 1058,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/src/dxgi_proxy.def",
+        "lineStart": 1,
+        "lineEnd": 21,
+        "byteCount": 1058,
+        "sha256": "411edfe96b66efcfd51fa3e98b52db31c55ddc6de833b06ef90d779ec780b1de"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/src/exports.cpp",
+    "totalLineCount": 216,
+    "sourceByteCount": 8343,
+    "sha256": "b53d81b8b9b46ec6b50a06d3eba899048ab014badc536be1c14922ae29edbfe0",
+    "publishedSha256": "b53d81b8b9b46ec6b50a06d3eba899048ab014badc536be1c14922ae29edbfe0",
+    "publishedByteCount": 8343,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/src/exports.cpp.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 207,
+        "byteCount": 7979,
+        "sha256": "ecf24e55dd6f4b3ec3e8cf31b97135ce16fe2a7ef25b08974e808cc4f36b7e79"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/src/exports.cpp.part002.txt",
+        "lineStart": 208,
+        "lineEnd": 216,
+        "byteCount": 364,
+        "sha256": "a4235cded30673d11e79efec9c7970f636bdc6f4a89259e49860d6c76288a2c4"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/src/pipeline.cpp",
+    "totalLineCount": 804,
+    "sourceByteCount": 38399,
+    "sha256": "9de247d033d023a6fdee73387a19e372a5564b6df3ec73be76c05dc7252ee1a9",
+    "publishedSha256": "9de247d033d023a6fdee73387a19e372a5564b6df3ec73be76c05dc7252ee1a9",
+    "publishedByteCount": 38399,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/src/pipeline.cpp.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 170,
+        "byteCount": 7999,
+        "sha256": "c0c8d3982faefb4980a0628390255b4e04918fe2dc7b7bc680443eacca1923ee"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/src/pipeline.cpp.part002.txt",
+        "lineStart": 171,
+        "lineEnd": 343,
+        "byteCount": 7987,
+        "sha256": "50ffed8eee15a1031510b8f2bc047d77b9f1dc33e46293c47af3821b3bd14457"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/src/pipeline.cpp.part003.txt",
+        "lineStart": 344,
+        "lineEnd": 490,
+        "byteCount": 7941,
+        "sha256": "7dffa05b154d5a17477ea49b9c1903ee5f0627c35e62e45622992ba159ea468b"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/src/pipeline.cpp.part004.txt",
+        "lineStart": 491,
+        "lineEnd": 672,
+        "byteCount": 7995,
+        "sha256": "ae13c53a879c38c3347cac9d94422c1facf99bf4b72530d3a0115ff9599af900"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/src/pipeline.cpp.part005.txt",
+        "lineStart": 673,
+        "lineEnd": 804,
+        "byteCount": 6477,
+        "sha256": "d0b55c0b6e422fddc59b2b71c0d982ba62c977a361361abbcf59f25b8a7a8ee0"
+      }
+    ]
+  }
+]

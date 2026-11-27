@@ -1,0 +1,40 @@
+        default=5.0,
+        help="Seconds to wait for BMP completion after the target Present is logged (default: 5.0).",
+    )
+    parser.add_argument(
+        "--json",
+        dest="json_path",
+        default=None,
+        help="Optional output path for the structured JSON report.",
+    )
+    parser.add_argument(
+        "--run-manifest",
+        default=None,
+        help="Optional hela-run-manifest/v1 to label the run and attest loaded module fingerprints.",
+    )
+    parser.add_argument(
+        "--quiet-events",
+        action="store_true",
+        help="Suppress real-time [LIVE] lines and print only the final summary report.",
+    )
+
+    args = parser.parse_args(argv)
+    rc, _ = run_monitor(
+        log_path=Path(args.log_path),
+        poll_interval_sec=args.poll_interval,
+        once=args.once,
+        stop_after_present100=args.stop_after_present100,
+        stop_after_present_num=args.stop_after_present,
+        max_wait_sec=args.max_wait,
+        source_bmp_path=Path(args.source_bmp) if args.source_bmp else None,
+        backbuffer_bmp_path=Path(args.backbuffer_bmp) if args.backbuffer_bmp else None,
+        bmp_wait_timeout_sec=args.bmp_wait_timeout,
+        json_path=Path(args.json_path) if args.json_path else None,
+        quiet_events=args.quiet_events,
+        run_manifest_path=Path(args.run_manifest) if args.run_manifest else None,
+    )
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main())

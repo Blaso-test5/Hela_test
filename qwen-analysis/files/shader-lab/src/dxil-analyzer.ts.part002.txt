@@ -1,0 +1,139 @@
+    message: "createHandleFromBinding/annotateHandle: handle SM6.6 ma con binding statico (nessun bindless). Non è un ostacolo." });
+  if ((r.opCounts["rawBufferLoad"] ?? 0) + (r.opCounts["rawBufferStore"] ?? 0) > 0 || Object.keys(r.opCounts).some((k) => k.startsWith("rawBuffer")))
+    F({ sev: "info", code: "H002", message: "rawBufferLoad/Store: ByteAddressBuffer/StructuredBuffer, supportati in SM5 (serve lo stride giusto per i structured)." });
+  if (Object.keys(r.opCounts).some((k) => k.startsWith("textureStore")))
+    F({ sev: "warning", code: "U001", message: "Scrittura su UAV tipizzati: in D3D11 i formati diversi da R32_* richiedono il supporto 'typed UAV store' dell'hardware (FL11.1/opzionale)." });
+
+  // limiti D3D11
+  const cnt = (c: string, t?: string) => r.bindings.filter((b) => b.cls === c && (!t || b.type === t)).length;
+  const lim = (n: number, max: number, what: string) => { if (n > max) r.limits.push(`${what}: ${n} > ${max}`); };
+  lim(cnt("b"), 14, "constant buffer"); lim(cnt("s"), 16, "sampler"); lim(cnt("t"), 128, "SRV");
+  lim(cnt("u"), r.stage === "cs" ? 64 : 8, `UAV (${r.stage === "cs" ? "CS, FL11.1" : "graphics, FL11.0"})`);
+  if (r.stage === "cs" && cnt("u") > 8) r.limits.push(`UAV: ${cnt("u")} > 8 se l'hardware è solo Feature Level 11.0`);
+  if (r.stage === "ps" && cnt("u") > 0) {
+    const hasRt = /^; SV_Target/m.test(text);
+    F({ sev: "warning", code: "U002", message: hasRt
+      ? "UAV nel pixel shader insieme a render target: in D3D11 gli slot UAV devono essere ≥ al numero di render target."
+      : "UAV nel pixel shader senza render target in uscita: in D3D11 si usa OMSetRenderTargetsAndUnorderedAccessViews con 0 RTV (fattibile, ma serve un depth/viewport coerenti)." });
+  }
+
+  const sevRank = { blocker: 2, warning: 1, info: 0 } as const;
+  const worst = Math.max(-1, ...r.findings.map((f) => sevRank[f.sev]));
+  r.verdict = worst === 2 ? "not-convertible" : (worst === 1 || r.limits.length) ? "convertible-with-work" : "convertible";
+  return r;
+}
+
+export function analyzeFiles(dxilPath?: string, disasmPath?: string): DxilReport {
+  let r: DxilReport = { requires: [], bindings: [], opCounts: {}, findings: [], limits: [], verdict: "convertible" };
+  if (disasmPath) r = analyzeDisasm(fs.readFileSync(disasmPath, "utf8"));
+  if (dxilPath) {
+    const c = parseContainer(fs.readFileSync(dxilPath));
+    r.container = c;
+    if (c?.program && !r.shaderModel) { r.stage = c.program.type; r.shaderModel = `${c.program.type}_${c.program.major}_${c.program.minor}`; }
+    if (!disasmPath) r.findings.push({ sev: "info", code: "N000", message: "Solo container analizzato: per il rilevamento delle feature serve anche il disassemblato DXC (dxc -dumpbin / -Fc)." });
+  }
+  return r;
+}
+
+const ICON = { blocker: "✖ BLOCCANTE", warning: "⚠ AVVISO", info: "ℹ INFO" } as const;
+const VERDICT = {
+  "not-convertible": "NON convertibile a SM5 senza cambiare algoritmo/pipeline",
+  "convertible-with-work": "Convertibile (candidato) con lavoro manuale / avvisi",
+  convertible: "Nessun ostacolo SM6 rilevato dall'analisi statica",
+};
+
+export function formatReport(r: DxilReport, title = ""): string {
+  const o: string[] = [];
+  if (title) o.push(`=== ${title}`);
+  o.push(`Stadio: ${r.stage ?? "?"} | Shader model: ${r.shaderModel ?? "?"} | Entry: ${r.entry ?? "?"}${r.numThreads ? " | numthreads " + r.numThreads : ""}`);
+  if (r.container) o.push(`Container: ${r.container.size} B, parti ${r.container.parts.map((p) => p.fourcc).join("/")}, sha256 ${r.container.sha256.slice(0, 16)}…`);
+  if (r.requires.length) o.push(`Funzionalità richieste dal compilatore: ${r.requires.join("; ")}`);
+  const g = (c: string) => r.bindings.filter((b) => b.cls === c).length;
+  o.push(`Binding: CBV ${g("b")} | SRV ${g("t")} | UAV ${g("u")} | Sampler ${g("s")}`);
+  const sp = r.bindings.filter((b) => b.space);
+  if (sp.length) o.push(`  con register space: ${sp.map((b) => b.raw).join(", ")}`);
+  const ops = Object.entries(r.opCounts).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, n]) => `${k}×${n}`).join(", ");
+  if (ops) o.push(`Operazioni dx.op principali: ${ops}`);
+  o.push("");
+  for (const f of [...r.findings].sort((a, b) => ({ blocker: 0, warning: 1, info: 2 })[a.sev] - ({ blocker: 0, warning: 1, info: 2 })[b.sev]))
+    o.push(`${ICON[f.sev]} [${f.code}]${f.count ? ` ×${f.count}` : ""} ${f.message}${f.detail ? `\n    ${f.detail}` : ""}`);
+  if (r.limits.length) { o.push("Limiti D3D11:"); r.limits.forEach((l) => o.push("  - " + l)); }
+  o.push(`\nVerdetto: ${VERDICT[r.verdict]}`);
+  return o.join("\n");
+}
+
+export interface SigElement {
+  name: string; index: number; register: number | null; sysValue: string;
+  mask?: string; format?: string;
+}
+
+function parseSignature(text: string, kind: "Input" | "Output"): SigElement[] {
+  const lines = text.split(/\r?\n/);
+  const header = new RegExp(`^\\s*(?:;|//)\\s*${kind} signature:\\s*$`, "i");
+  const a = lines.findIndex((l) => header.test(l));
+  if (a < 0) return [];
+  const out: SigElement[] = [];
+  for (let i = a + 1; i < lines.length; i++) {
+    if (/^\s*(?:;|\/\/)\s*(?:Input|Output) signature:/i.test(lines[i])) break;
+    const row = lines[i].replace(/^\s*(?:;|\/\/)\s*/, "");
+    const m = row.match(/^([A-Za-z_]\w*)\s+(\d+)\s+([xyzw]+|N\/A)\s+(\d+|special)\s+(\w+)(?:\s+(\w+))?(?:\s+([xyzw]+|N\/A))?\s*$/i);
+    if (m) out.push({
+      name: m[1],
+      index: +m[2],
+      register: /^\d+$/.test(m[4]) ? +m[4] : null,
+      sysValue: m[5],
+      ...(m[3].toUpperCase() !== "N/A" ? { mask: m[3] } : {}),
+      ...(m[6] ? { format: m[6] } : {}),
+    });
+  }
+  return out;
+}
+
+/** Legge la Input signature da dump DXC o FXC. */
+export function parseInputSignature(text: string): SigElement[] {
+  return parseSignature(text, "Input");
+}
+
+/** Legge la Output signature da dump DXC o FXC. */
+export function parseOutputSignature(text: string): SigElement[] {
+  return parseSignature(text, "Output");
+}
+
+export interface SignatureComparison { compatible: boolean; checked: number; mismatches: string[] }
+
+/** Confronta gli input PS con gli output VS per semantica, maschera e tipo. */
+export function compareShaderSignatures(vsOutput: SigElement[], psInput: SigElement[]): SignatureComparison {
+  const mismatches: string[] = [];
+  let checked = 0;
+  for (const input of psInput) {
+    const sysValue = input.sysValue.toUpperCase();
+    if (sysValue !== "NONE") {
+      if (sysValue === "POS" || sysValue === "POSITION") {
+        checked++;
+        if (!vsOutput.some((output) => ["POS", "POSITION"].includes(output.sysValue.toUpperCase())))
+          mismatches.push("PS richiede SV_Position, ma la firma VS non emette una posizione.");
+      }
+      continue;
+    }
+
+    checked++;
+    const key = `${input.name.toUpperCase()}${input.index}`;
+    const output = vsOutput.find((candidate) =>
+      candidate.sysValue.toUpperCase() === "NONE" &&
+      `${candidate.name.toUpperCase()}${candidate.index}` === key,
+    );
+    if (!output) {
+      mismatches.push(`Manca nell'output VS la semantica ${input.name}${input.index} richiesta dal PS.`);
+      continue;
+    }
+    if (input.format && output.format && input.format.toLowerCase() !== output.format.toLowerCase()) {
+      mismatches.push(`${input.name}${input.index}: tipo VS ${output.format}, tipo PS ${input.format}.`);
+    }
+    if (input.mask && output.mask) {
+      const missing = [...input.mask.toLowerCase()].filter((component) => !output.mask!.toLowerCase().includes(component));
+      if (missing.length)
+        mismatches.push(`${input.name}${input.index}: PS richiede ${input.mask}, ma VS fornisce ${output.mask}.`);
+    }
+  }
+  return { compatible: mismatches.length === 0, checked, mismatches };
+}

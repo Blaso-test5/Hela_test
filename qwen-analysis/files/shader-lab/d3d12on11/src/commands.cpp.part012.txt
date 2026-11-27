@@ -1,0 +1,145 @@
+        Log("CopyTextureRegion received a resource not owned by this proxy");
+        return;
+    }
+
+    const bool dstTexture = destination->Type == D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    const bool srcTexture = source->Type == D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    const bool dstFootprint = destination->Type == D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    const bool srcFootprint = source->Type == D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    if (dstTexture && srcTexture) {
+        if (dst->IsBuffer() || src->IsBuffer() ||
+            destination->SubresourceIndex >= dst->NumSubresources() ||
+            source->SubresourceIndex >= src->NumSubresources()) {
+            Log("Rejected invalid texture copy locations");
+            return;
+        }
+    const UINT sourceMip = source->SubresourceIndex % std::max<UINT>(src->desc.MipLevels, 1);
+    const D3D12_BOX sourceRegion = sourceBox ? *sourceBox : D3D12_BOX{
+        0, 0, 0,
+        static_cast<UINT>(std::max<UINT64>(1, src->desc.Width >> sourceMip)),
+        std::max<UINT>(1, src->desc.Height >> sourceMip),
+        src->desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D
+            ? std::max<UINT>(1, src->desc.DepthOrArraySize >> sourceMip) : 1
+    };
+    Ptr<IUnknown> keepDst(static_cast<ID3D12Resource*>(dst));
+    Ptr<IUnknown> keepSrc(static_cast<ID3D12Resource*>(src));
+    const UINT dstSubresource = destination->SubresourceIndex;
+    const UINT srcSubresource = source->SubresourceIndex;
+    D3D11_BOX box{sourceRegion.left, sourceRegion.top, sourceRegion.front,
+                  sourceRegion.right, sourceRegion.bottom, sourceRegion.back};
+    Add([=](ExecState& state) {
+        auto* dstResource = dynamic_cast<Resource*>(keepDst.Get());
+        auto* srcResource = dynamic_cast<Resource*>(keepSrc.Get());
+        if (dstResource && srcResource) {
+            LogBackbufferCopy("CopyTextureRegion", dstResource, srcResource);
+            state.c->CopySubresourceRegion(dstResource->Raw(), dstSubresource, x, y, z,
+                                           srcResource->Raw(), srcSubresource, &box);
+        }
+    });
+        return;
+    }
+
+    if (dstTexture && srcFootprint) {
+        const auto& placed = source->PlacedFootprint;
+        FootprintCopyInfo info{};
+        if (dst->IsBuffer() || destination->SubresourceIndex >= dst->NumSubresources() ||
+            !src->IsBuffer() || src->heap == D3D12_HEAP_TYPE_READBACK ||
+            !ValidateFootprint(src, placed, info) ||
+            placed.Footprint.Format != dst->desc.Format) {
+            Log("Rejected buffer-to-texture footprint copy with incompatible resources or layout");
+            return;
+        }
+        const FormatInfo format = GetFormatInfo(placed.Footprint.Format);
+        const D3D12_BOX region = sourceBox ? *sourceBox : D3D12_BOX{
+            0, 0, 0, placed.Footprint.Width, placed.Footprint.Height, placed.Footprint.Depth
+        };
+        if (!ValidCopyBox(region, placed.Footprint) ||
+            region.left % format.blockW || region.top % format.blockH ||
+            (region.right % format.blockW && region.right != placed.Footprint.Width) ||
+            (region.bottom % format.blockH && region.bottom != placed.Footprint.Height)) {
+            Log("Rejected invalid or block-misaligned source footprint box");
+            return;
+        }
+
+        const UINT mipLevels = std::max<UINT>(dst->desc.MipLevels, 1);
+        const UINT mip = destination->SubresourceIndex % mipLevels;
+        const UINT64 targetWidth = std::max<UINT64>(1, dst->desc.Width >> mip);
+        const UINT targetHeight = dst->desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D
+            ? 1 : std::max<UINT>(1, dst->desc.Height >> mip);
+        const UINT targetDepth = dst->desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D
+            ? std::max<UINT>(1, dst->desc.DepthOrArraySize >> mip) : 1;
+        const UINT copyWidth = region.right - region.left;
+        const UINT copyHeight = region.bottom - region.top;
+        const UINT copyDepth = region.back - region.front;
+        if (x > targetWidth || copyWidth > targetWidth - x ||
+            y > targetHeight || copyHeight > targetHeight - y ||
+            z > targetDepth || copyDepth > targetDepth - z) {
+            Log("Rejected buffer-to-texture footprint copy outside the destination subresource");
+            return;
+        }
+
+        Ptr<IUnknown> keepDst(static_cast<ID3D12Resource*>(dst));
+        Ptr<IUnknown> keepSrc(static_cast<ID3D12Resource*>(src));
+        const D3D12_SUBRESOURCE_FOOTPRINT footprint = placed.Footprint;
+        const UINT subresource = destination->SubresourceIndex;
+        Add([=](ExecState& state) {
+            auto* dstResource = dynamic_cast<Resource*>(keepDst.Get());
+            auto* srcResource = dynamic_cast<Resource*>(keepSrc.Get());
+            if (!dstResource || !srcResource) return;
+            Ptr<ID3D11Resource> stagingTexture;
+            UINT stagingSubresource = 0;
+            HRESULT result = NeedsBcMipStaging(footprint)
+                ? CreateBcMipStagingTexture(state.dev, footprint, D3D11_CPU_ACCESS_WRITE,
+                    stagingTexture, stagingSubresource)
+                : CreateStagingTexture(state.dev, dstResource->desc.Dimension, footprint,
+                    D3D11_CPU_ACCESS_WRITE, stagingTexture);
+            if (FAILED(result)) {
+                Log("Could not create texture staging resource for upload: 0x%08lx", result);
+                return;
+            }
+            const uint8_t* sourceData = nullptr;
+            D3D11_MAPPED_SUBRESOURCE mappedBuffer{};
+            Ptr<ID3D11Buffer> stagingBuffer;
+            result = MapBufferForRead(state, srcResource, stagingBuffer, mappedBuffer, sourceData);
+            if (FAILED(result) || !sourceData) {
+                Log("Could not read upload footprint buffer: 0x%08lx", result);
+                return;
+            }
+            D3D11_MAPPED_SUBRESOURCE mappedTexture{};
+            result = state.c->Map(stagingTexture.Get(), stagingSubresource,
+                D3D11_MAP_WRITE, 0, &mappedTexture);
+            if (SUCCEEDED(result)) {
+                const UINT sourceRows = info.rows;
+                const UINT sourceSlices = footprint.Depth;
+                const size_t rowBytes = static_cast<size_t>(info.rowBytes);
+                for (UINT slice = 0; slice < sourceSlices; ++slice) {
+                    for (UINT row = 0; row < sourceRows; ++row) {
+                        const uint8_t* sourceRow = sourceData + placed.Offset +
+                            static_cast<UINT64>(slice) * info.sliceBytes +
+                            static_cast<UINT64>(row) * footprint.RowPitch;
+                        uint8_t* destinationRow = static_cast<uint8_t*>(mappedTexture.pData) +
+                            static_cast<size_t>(slice) * mappedTexture.DepthPitch +
+                            static_cast<size_t>(row) * mappedTexture.RowPitch;
+                        memcpy(destinationRow, sourceRow, rowBytes);
+                    }
+                }
+                state.c->Unmap(stagingTexture.Get(), stagingSubresource);
+            }
+            if (mappedBuffer.pData) state.c->Unmap(stagingBuffer.Get(), 0);
+            if (FAILED(result)) {
+                Log("Could not map texture staging resource for upload: 0x%08lx", result);
+                return;
+            }
+            const D3D11_BOX box{region.left, region.top, region.front,
+                region.right, region.bottom, region.back};
+            LogBackbufferCopy("CopyTextureRegion", dstResource, srcResource);
+            state.c->CopySubresourceRegion(dstResource->Raw(), subresource, x, y, z,
+                stagingTexture.Get(), stagingSubresource, &box);
+        });
+        return;
+    }
+
+    if (dstFootprint && srcTexture) {
+        const auto& placed = destination->PlacedFootprint;
+        FootprintCopyInfo info{};
+        if (!dst->IsBuffer() || dst->heap == D3D12_HEAP_TYPE_UPLOAD ||

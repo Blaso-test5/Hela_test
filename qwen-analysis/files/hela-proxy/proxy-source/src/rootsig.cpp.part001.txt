@@ -1,0 +1,181 @@
+#include "types.h"
+
+namespace {
+
+using CreateVersionedDeserializer = HRESULT(WINAPI*)(LPCVOID, SIZE_T, REFIID, void**);
+using CreateDeserializer = HRESULT(WINAPI*)(LPCVOID, SIZE_T, REFIID, void**);
+
+struct SystemD3D12DeserializerApi {
+    HMODULE module = nullptr;
+    CreateVersionedDeserializer createVersioned = nullptr;
+    CreateDeserializer createLegacy = nullptr;
+};
+
+const SystemD3D12DeserializerApi& GetDeserializerApi() {
+    static const SystemD3D12DeserializerApi api = []() {
+        SystemD3D12DeserializerApi loaded{};
+        wchar_t systemDir[MAX_PATH]{};
+        const UINT chars = GetSystemDirectoryW(systemDir, ARRAYSIZE(systemDir));
+        if (!chars || chars >= ARRAYSIZE(systemDir)) {
+            Log("GetSystemDirectoryW failed while loading system root-signature deserializer: %lu",
+                GetLastError());
+            return loaded;
+        }
+        std::wstring path(systemDir, chars);
+        path += L"\\d3d12.dll";
+        loaded.module = LoadLibraryExW(path.c_str(), nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+        if (!loaded.module) {
+            Log("Could not load system d3d12.dll for root-signature deserialization: %lu",
+                GetLastError());
+            return loaded;
+        }
+        loaded.createVersioned = reinterpret_cast<CreateVersionedDeserializer>(
+            GetProcAddress(loaded.module, "D3D12CreateVersionedRootSignatureDeserializer"));
+        loaded.createLegacy = reinterpret_cast<CreateDeserializer>(
+            GetProcAddress(loaded.module, "D3D12CreateRootSignatureDeserializer"));
+        return loaded;
+    }();
+    return api;
+}
+
+struct NativeDeserializer {
+    Ptr<ID3D12VersionedRootSignatureDeserializer> versioned;
+    Ptr<ID3D12RootSignatureDeserializer> legacy;
+
+    HRESULT Open(const void* data, SIZE_T size) {
+        const auto& api = GetDeserializerApi();
+        if (!api.module) return HRESULT_FROM_WIN32(ERROR_MOD_NOT_FOUND);
+
+        if (api.createVersioned) {
+            const HRESULT result = api.createVersioned(data, size,
+                __uuidof(ID3D12VersionedRootSignatureDeserializer),
+                reinterpret_cast<void**>(versioned.Put()));
+            if (SUCCEEDED(result)) return S_OK;
+            Log("Versioned root-signature deserializer rejected blob: 0x%08lx", result);
+        }
+
+        if (!api.createLegacy) return HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
+        return api.createLegacy(data, size, __uuidof(ID3D12RootSignatureDeserializer),
+                            reinterpret_cast<void**>(legacy.Put()));
+    }
+
+    const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* GetVersioned() {
+        if (!versioned) return nullptr;
+        const D3D12_VERSIONED_ROOT_SIGNATURE_DESC* desc = nullptr;
+        if (FAILED(versioned->GetRootSignatureDescAtVersion(D3D_ROOT_SIGNATURE_VERSION_1_1, &desc)))
+            return nullptr;
+        return desc;
+    }
+};
+
+char RegisterClass(D3D12_DESCRIPTOR_RANGE_TYPE type) {
+    switch (type) {
+    case D3D12_DESCRIPTOR_RANGE_TYPE_CBV: return 'b';
+    case D3D12_DESCRIPTOR_RANGE_TYPE_SRV: return 't';
+    case D3D12_DESCRIPTOR_RANGE_TYPE_UAV: return 'u';
+    case D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER: return 's';
+    default: return 0;
+    }
+}
+
+char RegisterClass(D3D12_ROOT_PARAMETER_TYPE type) {
+    switch (type) {
+    case D3D12_ROOT_PARAMETER_TYPE_CBV: return 'b';
+    case D3D12_ROOT_PARAMETER_TYPE_SRV: return 't';
+    case D3D12_ROOT_PARAMETER_TYPE_UAV: return 'u';
+    default: return 0;
+    }
+}
+
+HRESULT CreateStaticSampler(Device* device, const D3D12_STATIC_SAMPLER_DESC& source,
+                            StaticSamplerInfo& result) {
+    D3D11_SAMPLER_DESC desc{};
+    desc.Filter = static_cast<D3D11_FILTER>(source.Filter);
+    desc.AddressU = static_cast<D3D11_TEXTURE_ADDRESS_MODE>(source.AddressU);
+    desc.AddressV = static_cast<D3D11_TEXTURE_ADDRESS_MODE>(source.AddressV);
+    desc.AddressW = static_cast<D3D11_TEXTURE_ADDRESS_MODE>(source.AddressW);
+    desc.MipLODBias = source.MipLODBias;
+    desc.MaxAnisotropy = std::min<UINT>(std::max<UINT>(source.MaxAnisotropy, 1), D3D11_MAX_MAXANISOTROPY);
+    desc.ComparisonFunc = static_cast<D3D11_COMPARISON_FUNC>(source.ComparisonFunc);
+    switch (source.BorderColor) {
+    case D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK:
+        desc.BorderColor[0] = desc.BorderColor[1] = desc.BorderColor[2] = desc.BorderColor[3] = 0.0f;
+        break;
+    case D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK:
+    case static_cast<D3D12_STATIC_BORDER_COLOR>(3):
+        desc.BorderColor[0] = desc.BorderColor[1] = desc.BorderColor[2] = 0.0f;
+        desc.BorderColor[3] = 1.0f;
+        break;
+    case D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE:
+    case static_cast<D3D12_STATIC_BORDER_COLOR>(4):
+        desc.BorderColor[0] = desc.BorderColor[1] = desc.BorderColor[2] = desc.BorderColor[3] = 1.0f;
+        break;
+    default:
+        desc.BorderColor[0] = desc.BorderColor[1] = desc.BorderColor[2] = desc.BorderColor[3] = 0.0f;
+        break;
+    }
+    desc.MinLOD = source.MinLOD;
+    desc.MaxLOD = source.MaxLOD;
+    HRESULT hr = device->d11->CreateSamplerState(&desc, result.st.Put());
+    if (FAILED(hr)) {
+        desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+        hr = device->d11->CreateSamplerState(&desc, result.st.Put());
+    }
+    return hr;
+}
+
+HRESULT ConvertRange(const D3D12_DESCRIPTOR_RANGE1& source, RangeInfo& result, UINT& appendOffset) {
+    const char registerClass = RegisterClass(source.RangeType);
+    if (!registerClass || source.NumDescriptors == 0 || source.NumDescriptors == UINT_MAX)
+        return E_INVALIDARG;
+    if (source.BaseShaderRegister > D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT ||
+        source.NumDescriptors > D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT)
+        return E_INVALIDARG;
+
+    result.type = source.RangeType;
+    result.num = source.NumDescriptors;
+    result.baseReg = source.BaseShaderRegister;
+    result.space = source.RegisterSpace;
+    result.offset = source.OffsetInDescriptorsFromTableStart == D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
+        ? appendOffset : source.OffsetInDescriptorsFromTableStart;
+    result.slots.reserve(source.NumDescriptors);
+
+    std::set<UINT> used;
+    for (UINT i = 0; i < source.NumDescriptors; ++i) {
+        UINT slot = MapRegister(registerClass, source.RegisterSpace, source.BaseShaderRegister + i);
+        if (slot >= D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT) return E_INVALIDARG;
+        if (!used.insert(slot).second) {
+            Log("Root signature maps multiple %c registers onto slot %u", registerClass, slot);
+            return E_INVALIDARG;
+        }
+        result.slots.push_back(slot);
+    }
+    if (result.offset > UINT_MAX - source.NumDescriptors) return E_INVALIDARG;
+    appendOffset = result.offset + source.NumDescriptors;
+    return S_OK;
+}
+
+HRESULT ConvertParam(Device* device, const D3D12_ROOT_PARAMETER1& source, RootParam& result) {
+    result.type = source.ParameterType;
+    result.vis = source.ShaderVisibility;
+    switch (source.ParameterType) {
+    case D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE: {
+        const auto& table = source.DescriptorTable;
+        if (table.NumDescriptorRanges && !table.pDescriptorRanges) return E_INVALIDARG;
+        UINT appendOffset = 0;
+        result.ranges.reserve(table.NumDescriptorRanges);
+        for (UINT i = 0; i < table.NumDescriptorRanges; ++i) {
+            RangeInfo range{};
+            const HRESULT hr = ConvertRange(table.pDescriptorRanges[i], range, appendOffset);
+            if (FAILED(hr)) return hr;
+            result.ranges.push_back(std::move(range));
+        }
+        return S_OK;
+    }
+    case D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS: {
+        const auto& constants = source.Constants;
+        if (!constants.Num32BitValues || constants.Num32BitValues > D3D11_REQ_CONSTANT_BUFFER_ELEMENT_COUNT)
+            return E_INVALIDARG;
+        result.num32 = constants.Num32BitValues;
+        result.reg = constants.ShaderRegister;
+        result.space = constants.RegisterSpace;

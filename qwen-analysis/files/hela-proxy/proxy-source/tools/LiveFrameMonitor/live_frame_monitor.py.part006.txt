@@ -1,0 +1,146 @@
+
+    def build_report(self, log_path: str, capture_present: int = 100) -> Dict[str, Any]:
+        # Strictly report Present #100 in `present_100` (never substitute Present #200+ as #100)
+        rb_src = self.present100_readback_src
+        rb_bb = self.present100_readback_bb
+        if rb_src is not None:
+            rb_src.recompute_from_samples_if_needed()
+        if rb_bb is not None:
+            rb_bb.recompute_from_samples_if_needed()
+
+        matched_hist = self.resources_by_ptr.get(rb_src.source) if (rb_src and rb_src.source) else None
+        capture_src = self.readbacks_by_key.get(("source", capture_present))
+        capture_bb = self.readbacks_by_key.get(("backbuffer", capture_present))
+        if capture_src is not None:
+            capture_src.recompute_from_samples_if_needed()
+        if capture_bb is not None:
+            capture_bb.recompute_from_samples_if_needed()
+
+        history_vs = sorted({vs for r in self.resources_by_ptr.values() for vs in r.unique_vs()})
+        history_ps = sorted({ps for r in self.resources_by_ptr.values() for ps in r.unique_ps()})
+        target_hashes = history_vs + history_ps
+
+        verified_facts: List[str] = []
+        hypotheses: List[str] = []
+
+        if rb_src and matched_hist:
+            verified_facts.append(
+                f"Direct pointer identity verified at Present #{rb_src.present}: [READBACK_SRC] "
+                f"source={rb_src.source} matches Resource History key {matched_hist.resource} "
+                f"(operations={matched_hist.operations}, draws={matched_hist.draws}, "
+                f"skipped={matched_hist.skipped}, clears={matched_hist.clears})."
+            )
+        elif self.resources_by_ptr and not rb_src:
+            verified_facts.append(
+                f"Recorded {len(self.resources_by_ptr)} RTV source history resource(s); no Present #100 [READBACK_SRC] observed."
+            )
+
+        if matched_hist:
+            verified_facts.append(
+                f"Source RTV {matched_hist.resource} executed {matched_hist.draws} draw call(s) "
+                f"(skipped={matched_hist.skipped}, clears={matched_hist.clears}) with VS "
+                f"[{', '.join(matched_hist.unique_vs()) or 'none'}] and PS "
+                f"[{', '.join(matched_hist.unique_ps()) or 'none'}] at viewport "
+                f"[{', '.join(matched_hist.unique_viewports()) or 'unspecified'}]."
+            )
+
+        if rb_src:
+            verified_facts.append(
+                f"[READBACK_SRC] Present #{rb_src.present} (source={rb_src.source}, "
+                f"{rb_src.width}x{rb_src.height}, fmt={rb_src.format}, seq={rb_src.sequence}): "
+                f"Non-black pixels={rb_src.non_black_count}/{rb_src.total_sampled} ({rb_src.non_black_pct}%), "
+                f"5-point samples all_zero={rb_src.all_samples_zero}."
+            )
+
+        if rb_bb:
+            verified_facts.append(
+                f"[READBACK] Backbuffer Present #{rb_bb.present} (buffer={rb_bb.buffer}, "
+                f"{rb_bb.width}x{rb_bb.height}, fmt={rb_bb.format}): "
+                f"Non-black pixels={rb_bb.non_black_count}/{rb_bb.total_sampled} ({rb_bb.non_black_pct}%), "
+                f"5-point samples all_zero={rb_bb.all_samples_zero}."
+            )
+
+        for label, bmp in self.bmp_results.items():
+            verified_facts.append(
+                f"BMP '{label}' ({Path(bmp.path).name}): {bmp.non_black_pixels}/{bmp.total_pixels} "
+                f"non-black pixels ({bmp.width}x{bmp.height}, {bmp.bits_per_pixel}-bit)."
+            )
+
+        ready_targets = [h for h in target_hashes if h in self.shaders_ready]
+        if ready_targets:
+            verified_facts.append(
+                f"Target graphics shaders in RTV history logged SHADER READY: {', '.join(ready_targets)}."
+            )
+
+        if self.shaders_placeholder:
+            ph_list = [
+                f"{s.shader_hash} (stage={s.stage or 'unknown'}, reason={s.reason or 'unspecified'})"
+                for s in self.shaders_placeholder.values()
+            ]
+            verified_facts.append(
+                f"{len(self.shaders_placeholder)} unique shader(s) logged SHADER PLACEHOLDER: {'; '.join(ph_list)}."
+            )
+
+        if self.heartbeats:
+            last_hb = self.heartbeats[-1]["metrics"]
+            hb_str = ", ".join(f"{k}={v}" for k, v in last_hb.items())
+            verified_facts.append(f"Latest heartbeat (line {self.heartbeats[-1]['line_no']}): {hb_str}.")
+
+        # Disciplined diagnostic boundaries (never over-claim from black pixels or placeholders)
+        if rb_src and rb_src.non_black_count == 0:
+            hypotheses.append(
+                "BOUNDARY (CopyResource): Because [READBACK_SRC] is already 100% black (all zeros) before "
+                "CopyResource, a 100% black backbuffer in [READBACK] does NOT validate CopyResource transfer "
+                "fidelity (copying zeros onto zeros is indistinguishable from a no-op). It DOES prove the "
+                "black output originates upstream on the source RTV prior to CopyResource."
+            )
+            hypotheses.append(
+                "HYPOTHESIS (Zero fragment output / black inputs): Executed RTV draw calls prove command "
+                "invocation, not non-zero pixel writes. The PS overrides may be reading unbound/black SRVs "
+                "(t0..tn), zeroed Constant Buffers (b0..bn), or the second alternating draw may overwrite the "
+                "first draw's output with black."
+            )
+
+        if self.shaders_placeholder:
+            ph_hashes = ", ".join(self.shaders_placeholder.keys())
+            hypotheses.append(
+                f"BOUNDARY (Compute placeholders [{ph_hashes}]): SHADER PLACEHOLDER proves missing usable SM5 "
+                "bytecode for those hashes, but does NOT by itself prove whether their Dispatch calls were "
+                "skipped at runtime or whether their outputs feed the Present #100 source RTV draws."
+            )
+
+        return {
+            "schema": SCHEMA_ID,
+            "schema_version": SCHEMA_VERSION,
+            "run_identity": self.run_identity_report(),
+            "monitor_metadata": {
+                "log_path": log_path,
+                "generation": self.generation,
+                "truncation_count": self.truncation_count,
+                "lines_processed_in_generation": self.lines_processed,
+                "capture_present": capture_present,
+            },
+            "capture_target": {
+                "present": capture_present,
+                "complete": self.present_reached(capture_present),
+                "source_readback": dataclasses.asdict(capture_src) if capture_src else None,
+                "backbuffer_readback": dataclasses.asdict(capture_bb) if capture_bb else None,
+            },
+            "present_100": {
+                "source_readback": dataclasses.asdict(rb_src) if rb_src else None,
+                "backbuffer_readback": dataclasses.asdict(rb_bb) if rb_bb else None,
+                "matched_source_history": matched_hist.to_dict() if matched_hist else None,
+                "all_source_histories": {k: v.to_dict() for k, v in self.resources_by_ptr.items()},
+                "copy_to_bb_seq100": self.copy_to_bb_seq100,
+                "copy_to_bb_recent": list(self.copy_to_bb_recent),
+            },
+            "shaders": {
+                "target_graphics_hashes_in_history": {"vs": history_vs, "ps": history_ps},
+                "ready_unique_count": len(self.shaders_ready),
+                "ready_total_events": self.total_ready_events,
+                "ready": {k: dataclasses.asdict(v) for k, v in self.shaders_ready.items()},
+                "placeholder_unique_count": len(self.shaders_placeholder),
+                "placeholder_total_events": self.total_placeholder_events,
+                "placeholders": {k: dataclasses.asdict(v) for k, v in self.shaders_placeholder.items()},
+            },
+            "runtime_clues": {

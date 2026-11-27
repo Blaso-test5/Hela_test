@@ -1,0 +1,184 @@
+<#
+.SYNOPSIS
+    Read-only diagnostic snapshot of a Hela proxy installation (PowerShell 5.1).
+
+.DESCRIPTION
+    Computes SHA-256 of d3d12.dll, dxgi.dll and the override *.cso files and, optionally,
+    compares them with a hela-run-manifest/v1 (-RunManifestPath) or a restore point
+    (-RestorePointPath, manifest schema hela-proxy-restore/v1, modern or legacy).
+
+    The tool NEVER installs, restores, deletes or writes inside the game directory or the
+    restore point. The only file it can create is the optional -JsonOut report, which must
+    live outside the game directory and outside the restore point.
+
+    Per-item statuses:
+      Match          live state equals what the reference records (including "recorded as absent, is absent")
+      Mismatch       file exists but hash/size differs, or a directory sits where a file is expected
+      Missing        the reference expects it, it is not on disk
+      Extra          on disk, but the reference records it as absent / does not list it
+      NotAttestable  the comparison cannot be decided (no hash recorded, unreadable path,
+                     overrides directory name not supplied, ...). Never reported as a match.
+      Observed       inventory mode only (no reference)
+      NotInspected   inventory mode only (overrides directory name not supplied)
+
+    Verdict and exit code:
+      0  Match or InventoryOnly   1  Mismatch (Mismatch/Missing/Extra present)
+      2  Invalid input / error    3  Inconclusive (no discrepancy found but something is NotAttestable)
+
+.PARAMETER GameDirectory
+    Directory that contains d3d12.dll and dxgi.dll. Required for inventory and run-manifest
+    modes. Optional with -RestorePointPath: falls back to game_directory of the restore manifest.
+
+.PARAMETER RunManifestPath
+    Path to a hela-run-manifest/v1 JSON file.
+
+.PARAMETER RestorePointPath
+    Path to a restore manifest (hela-proxy-restore/v1) or to a restore point directory that
+    contains one (restore-manifest.json, manifest.json, or exactly one *.json with that schema).
+
+.PARAMETER OverridesDirectoryName
+    Relative directory (inside GameDirectory) that holds the override *.cso files. There is NO
+    default: without it overrides cannot be located and are reported as NotAttestable.
+
+.PARAMETER JsonOut
+    Optional destination for the JSON report. Must not exist, its parent must exist, and it must
+    be outside the game directory and outside the restore point.
+
+.EXAMPLE
+    .\Get-HelaProxySnapshot.ps1 -GameDirectory 'D:\Game\Win64' -OverridesDirectoryName shader_overrides
+
+.EXAMPLE
+    .\Get-HelaProxySnapshot.ps1 -GameDirectory 'D:\Game\Win64' -RunManifestPath .\run.json -OverridesDirectoryName shader_overrides -JsonOut C:\Temp\snap.json
+#>
+#Requires -Version 5.1
+[CmdletBinding(DefaultParameterSetName = 'Inventory')]
+param(
+    [Parameter(ParameterSetName = 'Inventory', Mandatory = $true)]
+    [Parameter(ParameterSetName = 'Run', Mandatory = $true)]
+    [Parameter(ParameterSetName = 'Restore')]
+    [string]$GameDirectory,
+
+    [Parameter(ParameterSetName = 'Run', Mandatory = $true)]
+    [string]$RunManifestPath,
+
+    [Parameter(ParameterSetName = 'Restore', Mandatory = $true)]
+    [string]$RestorePointPath,
+
+    [string]$OverridesDirectoryName,
+
+    [string]$JsonOut
+)
+
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+
+$script:ToolName = 'Get-HelaProxySnapshot'
+$script:ToolVersion = '1.0.0'
+$script:RuntimeFiles = @('d3d12.dll', 'dxgi.dll')
+$script:Sha256Pattern = '^[0-9a-fA-F]{64}$'
+
+# ----------------------------------------------------------------------------------------------
+# Generic helpers
+# ----------------------------------------------------------------------------------------------
+
+function Test-IsObject {
+    param($Value)
+    return ($Value -is [System.Management.Automation.PSCustomObject])
+}
+
+function Get-JsonProp {
+    param($Obj, [string]$Name)
+    $p = $Obj.PSObject.Properties[$Name]
+    if ($null -eq $p) { return [pscustomobject]@{ Exists = $false; Value = $null } }
+    return [pscustomobject]@{ Exists = $true; Value = $p.Value }
+}
+
+function Assert-Sha256 {
+    param($Value, [string]$What)
+    if ($Value -isnot [string] -or $Value -notmatch $script:Sha256Pattern) {
+        throw "$What must be a 64-character hexadecimal SHA-256 string."
+    }
+    return $Value.ToLowerInvariant()
+}
+
+function Resolve-FullPath {
+    param([string]$Path, [string]$What)
+    if ([string]::IsNullOrWhiteSpace($Path)) { throw "$What is empty." }
+    try {
+        $u = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
+        $full = [System.IO.Path]::GetFullPath($u)
+    } catch {
+        throw "$What is not a valid path ('$Path'): $($_.Exception.Message)"
+    }
+    $root = [System.IO.Path]::GetPathRoot($full)
+    if ($full.Length -gt $root.Length) { $full = $full.TrimEnd('\', '/') }
+    return $full
+}
+
+function Test-PathInside {
+    param([string]$Path, [string]$Root)
+    $cmp = [System.StringComparison]::OrdinalIgnoreCase
+    if ($Path.Equals($Root, $cmp)) { return $true }
+    $rootSep = $Root
+    if (-not ($rootSep.EndsWith('\') -or $rootSep.EndsWith('/'))) { $rootSep = $Root + '\' }
+    return $Path.StartsWith($rootSep, $cmp)
+}
+
+function ConvertTo-SafeRelativePath {
+    param([string]$Path, [string]$What)
+    if ([string]::IsNullOrWhiteSpace($Path)) { throw "$What is empty." }
+    if ($Path -ne $Path.Trim()) { throw "$What has leading or trailing whitespace: '$Path'." }
+    if ([System.IO.Path]::IsPathRooted($Path) -or $Path.StartsWith('\') -or $Path.StartsWith('/')) {
+        throw "$What must be a relative path: '$Path'."
+    }
+    if ($Path.Contains(':')) { throw "$What must not contain ':' (drive or stream syntax): '$Path'." }
+    $invalid = [System.IO.Path]::GetInvalidFileNameChars()
+    $segments = @($Path -split '[\\/]')
+    foreach ($s in $segments) {
+        if ($s.Length -eq 0) { throw "$What contains an empty path segment: '$Path'." }
+        if ($s -eq '.' -or $s -eq '..') { throw "$What must not contain '.' or '..' segments: '$Path'." }
+        if ($s.TrimEnd('.', ' ').Length -ne $s.Length) { throw "$What has a segment ending with '.' or space: '$Path'." }
+        if ($s.IndexOfAny($invalid) -ge 0) { throw "$What contains invalid characters: '$Path'." }
+        if ($s -match '^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$') { throw "$What contains a reserved device name: '$Path'." }
+    }
+    return ($segments -join '\')
+}
+
+function Get-ContainedPath {
+    param([string]$Root, [string]$Relative)
+    $full = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($Root, $Relative))
+    if (-not (Test-PathInside -Path $full -Root $Root)) {
+        throw "Path '$Relative' resolves outside of '$Root'."
+    }
+    return $full
+}
+
+function Read-JsonObject {
+    param([string]$Path)
+    if (-not [System.IO.File]::Exists($Path)) { throw "File not found: $Path" }
+    try {
+        $text = [System.IO.File]::ReadAllText($Path)
+    } catch {
+        throw "Cannot read '$Path': $($_.Exception.Message)"
+    }
+    try {
+        $obj = $text | ConvertFrom-Json
+    } catch {
+        throw "Invalid JSON in '$Path': $($_.Exception.Message)"
+    }
+    if (-not (Test-IsObject $obj)) { throw "'$Path' must contain a JSON object at top level." }
+    return $obj
+}
+
+# ----------------------------------------------------------------------------------------------
+# Live file inspection (strictly read-only)
+# ----------------------------------------------------------------------------------------------
+
+function Get-FileState {
+    param([string]$Path)
+    $r = [ordered]@{ state = 'Absent'; sha256 = $null; bytes = $null; error = $null }
+    try {
+        if ([System.IO.Directory]::Exists($Path)) { $r.state = 'Directory'; return $r }
+        if (-not [System.IO.File]::Exists($Path)) { return $r }
+        $share = [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
+        $fs = New-Object System.IO.FileStream($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, $share)

@@ -1,0 +1,189 @@
+      const entry = ensureShader(shaders, hash, readyOverrideMatch[1], lineNo);
+      entry.status = "override-ready";
+      entry.overridePath = readyOverrideMatch[3].trim();
+      entry.overrideSha256 = readyOverrideMatch[5].toLowerCase();
+      continue;
+    }
+
+    const readyNativeMatch = line.match(
+      /SHADER READY\s+stage=(VS|PS|GS|HS|DS|CS)\s+hash=([0-9a-fA-F]{16})\s+source=native-DXBC-SM(\d+_\d+)\s+bytes=(\d+)/,
+    );
+    if (readyNativeMatch && isStage(readyNativeMatch[1])) {
+      const hash = readyNativeMatch[2].toLowerCase();
+      const entry = ensureShader(shaders, hash, readyNativeMatch[1], lineNo);
+      entry.status = "native-sm5";
+      entry.shaderModel = entry.shaderModel ?? readyNativeMatch[3];
+      continue;
+    }
+
+    const dumpedMatch = line.match(
+      /SHADER DUMPED\s+stage=(VS|PS|GS|HS|DS|CS)\s+hash=([0-9a-fA-F]{16})\s+path=(.+?)\s+bytes=(\d+)/,
+    );
+    if (dumpedMatch && isStage(dumpedMatch[1])) {
+      const hash = dumpedMatch[2].toLowerCase();
+      const entry = ensureShader(shaders, hash, dumpedMatch[1], lineNo);
+      entry.dumpPath = dumpedMatch[3].trim();
+      entry.dumpSkipped = false;
+      continue;
+    }
+
+    const dumpSkippedMatch = line.match(
+      /SHADER DUMP_SKIPPED\s+stage=(VS|PS|GS|HS|DS|CS)\s+hash=([0-9a-fA-F]{16})\s+reason=(\S+)/,
+    );
+    if (dumpSkippedMatch && isStage(dumpSkippedMatch[1])) {
+      const hash = dumpSkippedMatch[2].toLowerCase();
+      const entry = ensureShader(shaders, hash, dumpSkippedMatch[1], lineNo);
+      entry.dumpSkipped = true;
+      continue;
+    }
+
+    const placeholderMatch = line.match(
+      /SHADER PLACEHOLDER\s+stage=(VS|PS|GS|HS|DS|CS)\s+hash=([0-9a-fA-F]{16})\s+reason=(\S+).*?overrides=(.+)$/,
+    );
+    if (placeholderMatch && isStage(placeholderMatch[1])) {
+      const hash = placeholderMatch[2].toLowerCase();
+      const entry = ensureShader(shaders, hash, placeholderMatch[1], lineNo);
+      if (entry.status !== "override-ready" && entry.status !== "native-sm5") {
+        entry.status = "placeholder";
+      }
+      entry.reason = placeholderMatch[3];
+      entry.overridePath = entry.overridePath ?? placeholderMatch[4].trim();
+      continue;
+    }
+
+    const blockedMatch = line.match(/SHADER BLOCKED\s+stage=(VS|PS|GS|HS|DS|CS)(?:\s+hash=([0-9a-fA-F]{16}))?\s+reason=(\S+)/);
+    if (blockedMatch && isStage(blockedMatch[1]) && blockedMatch[2]) {
+      const hash = blockedMatch[2].toLowerCase();
+      const entry = ensureShader(shaders, hash, blockedMatch[1], lineNo);
+      entry.status = "blocked";
+      entry.reason = blockedMatch[3];
+      continue;
+    }
+
+    const createFailMatch = line.match(/SHADER D3D11_CREATE_FAILED\s+stage=(VS|PS|GS|HS|DS|CS)\s+result=(0x[0-9a-fA-F]+)\s+bytes=(\d+)/);
+    if (createFailMatch && isStage(createFailMatch[1])) {
+      const lastForStage = Object.values(shaders)
+        .filter((s) => s.stage === createFailMatch[1])
+        .sort((a, b) => b.firstLine - a.firstLine)[0];
+      if (lastForStage) {
+        lastForStage.status = "create-failed";
+        lastForStage.createFailedHr = createFailMatch[2].toLowerCase();
+      }
+      continue;
+    }
+
+    // 4. [TARGET_INPUT_LAYOUT] (hardcoded in pipeline.cpp:178 al solo VS diagnostico 20e0826b236597a1)
+    const targetIlMatch = line.match(
+      /\[TARGET_INPUT_LAYOUT\]\s+element=(\d+)\s+semantic=(\S+)\s+semantic_index=(\d+)\s+slot=(\d+)\s+format=(\d+)\s+offset=(\d+)\s+classification=(\d+)\s+step_rate=(\d+)/,
+    );
+    if (targetIlMatch) {
+      targetInputLayoutElements.push({
+        element: Number(targetIlMatch[1]),
+        semantic: targetIlMatch[2],
+        semanticIndex: Number(targetIlMatch[3]),
+        slot: Number(targetIlMatch[4]),
+        format: Number(targetIlMatch[5]),
+        offset: Number(targetIlMatch[6]),
+        classification: Number(targetIlMatch[7]),
+        stepRate: Number(targetIlMatch[8]),
+      });
+      continue;
+    }
+
+    const ilFailMatch = line.match(/INPUT_LAYOUT_FAILED\s+elements=(\d+)\s+result=(0x[0-9a-fA-F]+)/);
+    if (ilFailMatch) {
+      inputLayoutFailures.push({
+        elements: Number(ilFailMatch[1]),
+        hresult: ilFailMatch[2].toLowerCase(),
+        line: lineNo,
+      });
+      continue;
+    }
+
+    // 5. PSO GRAPHICS / COMPUTE READY (pipeline.cpp)
+    const psoGfxMatch = line.match(
+      /PSO GRAPHICS #(\d+)\s+READY\s+status=(\S+)\s+pso=(\S+)\s+missing_mask=0x([0-9a-fA-F]+)\s+VS=(\S+)\s+PS=(\S+)\s+GS=(\S+)\s+HS=(\S+)\s+DS=(\S+)\s+d11_vs=([01])\s+d11_ps=([01])\s+d11_il=([01])/,
+    );
+    if (psoGfxMatch) {
+      const record: GraphicsPsoRecord = {
+        index: Number(psoGfxMatch[1]),
+        status: psoGfxMatch[2],
+        psoPtr: psoGfxMatch[3],
+        missingMask: parseInt(psoGfxMatch[4], 16),
+        vs: parseStageRef(psoGfxMatch[5]),
+        ps: parseStageRef(psoGfxMatch[6]),
+        gs: parseStageRef(psoGfxMatch[7]),
+        hs: parseStageRef(psoGfxMatch[8]),
+        ds: parseStageRef(psoGfxMatch[9]),
+        d11Vs: psoGfxMatch[10] === "1",
+        d11Ps: psoGfxMatch[11] === "1",
+        d11Il: psoGfxMatch[12] === "1",
+        line: lineNo,
+      };
+      graphicsPsos.push(record);
+      if (record.vs) ensureShader(shaders, record.vs.hash, "VS", lineNo);
+      if (record.ps) ensureShader(shaders, record.ps.hash, "PS", lineNo);
+      if (record.gs) ensureShader(shaders, record.gs.hash, "GS", lineNo);
+      if (record.hs) ensureShader(shaders, record.hs.hash, "HS", lineNo);
+      if (record.ds) ensureShader(shaders, record.ds.hash, "DS", lineNo);
+      continue;
+    }
+
+    const psoCompMatch = line.match(
+      /PSO COMPUTE #(\d+)\s+READY\s+status=(\S+)\s+pso=(\S+)\s+missing_mask=0x([0-9a-fA-F]+)\s+CS=(\S+)\s+d11_cs=([01])/,
+    );
+    if (psoCompMatch) {
+      const csRef = parseStageRef(psoCompMatch[5]);
+      if (csRef) {
+        computePsos.push({
+          index: Number(psoCompMatch[1]),
+          status: psoCompMatch[2],
+          psoPtr: psoCompMatch[3],
+          missingMask: parseInt(psoCompMatch[4], 16),
+          cs: csRef,
+          d11Cs: psoCompMatch[6] === "1",
+          line: lineNo,
+        });
+        ensureShader(shaders, csRef.hash, "CS", lineNo);
+      }
+      continue;
+    }
+
+    // 6. [DRAW_SHADER_USE] & [COMPUTE_SHADER_USE] (util.cpp:229-256 — nomi campo esatti!)
+    if (line.includes("[DRAW_SHADER_USE]")) {
+      const kv = parseKvTokens(line);
+      if (kv.draw_commands !== undefined && kv.rtv_is_backbuffer !== undefined) {
+        const rec: DrawShaderUseRecord = {
+          outcome: kv.outcome ?? "unknown",
+          vsHash: normalizeHash(kv.vs),
+          psHash: normalizeHash(kv.ps),
+          gsHash: normalizeHash(kv.gs),
+          hsHash: normalizeHash(kv.hs),
+          dsHash: normalizeHash(kv.ds),
+          missingMask: parseHexMask(kv.missing_mask),
+          graphicsPsoBound: kv.graphics_pso_bound === "1",
+          rtvIsBackbuffer: kv.rtv_is_backbuffer === "1",
+          drawCommands: Number(kv.draw_commands) || 0,
+          firstObservedPresentCountProcessWide: Number(kv.first_observed_present_count_process_wide) || 0,
+          lastObservedPresentCountProcessWide: Number(kv.last_observed_present_count_process_wide) || 0,
+          line: lineNo,
+        };
+        drawShaderUse.push(rec);
+        presentProgress.maxSummaryPresent = Math.max(
+          presentProgress.maxSummaryPresent,
+          rec.lastObservedPresentCountProcessWide,
+        );
+      }
+      continue;
+    }
+
+    if (line.includes("[COMPUTE_SHADER_USE]")) {
+      const kv = parseKvTokens(line);
+      if (kv.dispatch_commands !== undefined) {
+        const rec: ComputeShaderUseRecord = {
+          outcome: kv.outcome ?? "unknown",
+          csHash: normalizeHash(kv.cs),
+          missingMask: parseHexMask(kv.missing_mask),
+          dispatchCommands: Number(kv.dispatch_commands) || 0,
+          firstObservedPresentCountProcessWide: Number(kv.first_observed_present_count_process_wide) || 0,
+          lastObservedPresentCountProcessWide: Number(kv.last_observed_present_count_process_wide) || 0,

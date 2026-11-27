@@ -1,0 +1,91 @@
+# Precompilazione locale DXIL-to-SM5 integrata in Shader Lab
+
+**Stato:** prima milestone implementata localmente; cache, pairing automatico VS/PS e smoke test proxy restano da fare
+**Repository di riferimento:** `Blaso89/Shader-Lab`, branch `main`, commit `23b73f61cdd2a22fef6e5bbf109d8b280d5de3d8`
+
+Questa implementazione riguarda una pipeline locale di precompilazione di shader DXIL già disponibili su disco, controllata dal pannello esistente di Shader Lab. Non avvia Hela, non genera traffico di prova e non include shader catturati o log del gioco. Il problema egress rimane un vincolo separato: questa funzionalità non tocca firewall o configurazioni di rete.
+
+## 1. Scopo e limiti
+
+- L'azione **Precompilazione DXIL locale** nel pannello seleziona input, cartella base di staging e mappa binding JSON opzionale; il job enumera `.dxil`/`.cso`, mostra progressi e accetta cancellazione cooperativa.
+- Riutilizza la pipeline DXIL-to-HLSL e compila con FXC, scrivendo candidati `.cso` DXBC/SM5 in una sottocartella `ShaderLab-Staging-<timestamp>`.
+- Mostrare conteggi e avanzamento riferiti esclusivamente ai file enumerati nel job. Non dichiarare copertura o compatibilità complessiva del gioco: la sorgente contiene solo shader già disponibili.
+- Un esito FXC positivo dimostra la compilazione, non l'equivalenza funzionale né il rendering corretto.
+
+Fuori ambito: injector, bridge runtime col proxy, conversione durante il gioco, modifiche al proxy o al repository Hela e avvio del gioco.
+
+## 2. Architettura implementata
+
+### Punto d'integrazione
+
+Il server MCP usa stdio. L'estensione VS Code non agisce da client MCP: molte azioni inoltrano richieste a Copilot Chat, ma il job batch è gestito localmente dall'extension host. Lo stato “Live” deriva dal monitor dei log MCP, non dal protocollo di progress batch.
+
+Di conseguenza, l'**extension host** possiede il job e lo stato: avvio, progress e cancellazione. La Webview invia comandi all'host e riceve messaggi di progress usando il canale `postMessage` esistente. Non c'è cache o ripresa tra job.
+
+### Core condiviso
+
+Per evitare una seconda implementazione della conversione, la logica condivisa è in `src/dxil-precompile.ts`: il tool MCP `dxil_to_sm5_hlsl` la usa per la conversione singola e l'extension host importa il build `dist/dxil-precompile.js` per il batch. Non è stato aggiunto un tool MCP batch.
+
+Il core dovrebbe comporre i primitivi già presenti:
+
+- analisi e firme da `src/dxil-analyzer.ts`;
+- post-processing da `src/hlsl-post.ts`;
+- esecuzione dei tool esterni da `src/external.ts`.
+
+Il server MCP e l'extension host sono consumatori distinti: la condivisione del codice non implica un canale runtime tra i due. L'import dinamico ESM da CJS è passato in un test Node locale; resta da validare nel VS Code Extension Development Host.
+
+## 3. Job, progress e cancellazione
+
+### Avvio e snapshot
+
+La Webview invia `startPrecompile`; l'host chiede input, directory base di staging e mappa binding opzionale. Il core congela all'avvio i file `.dxil` e `.cso` (escludendo `node_modules` e `.git`) e ne registra SHA-256; verifica che i byte non cambino prima della conversione.
+
+La percentuale è `settled / total` per quello snapshot, con contatori `compiled`, `blocked`, `failed`, `skipped`, `cancelled`, file corrente e stato. Le aggiunte successive alla directory non entrano nel job corrente. Un `.cso` valido senza payload DXIL è ignorato; un `.dxil` senza payload DXIL o un container malformato è un errore.
+
+### Messaggi Webview
+
+La Webview riceve un messaggio di progress per file con questa forma:
+
+```json
+{
+  "command": "precompileProgress",
+  "total": 40,
+  "settled": 12,
+  "counts": { "compiled": 8, "blocked": 1, "failed": 1, "skipped": 1, "cancelled": 1 },
+  "currentFile": "shader.dxil",
+  "currentStatus": "converting"
+}
+```
+
+Durante la costruzione dello snapshot arrivano messaggi separati `precompileSnapshotProgress`; in quella fase la barra è indeterminata.
+
+La Webview passa a una schermata dedicata per la preparazione e l'esecuzione del job. La schermata mostra rapporto `settled / total`, file/stato corrente, contatori, output staging e una finestra mobile degli ultimi 12 risultati; il riepilogo terminale mostra fino a 30 blocker/errori. La scansione e l'hashing dello snapshot hanno una barra distinta da quella di compilazione. Tornando al dashboard mentre il job è attivo, un banner permette di riaprire l'avanzamento; il job continua nell'extension host. Il riepilogo finale resta consultabile finché l'utente non torna al dashboard.
+
+### Cancellazione ed errori
+
+`cancelPrecompile` imposta un segnale cooperativo controllato tra file e tra i processi esterni. L'attuale `run()` usa `execFile` con timeout e non espone un `AbortSignal`: la v1 non interrompe un processo già in esecuzione, ma controlla la richiesta al suo termine e prima del processo successivo. La UI dichiara che l'annullamento attende il passaggio esterno attivo.
+
+Gli errori e i blocker per singolo file vengono mostrati in UI; il job continua sugli altri file. Errori di enumerazione, directory non separata o staging non vuoto interrompono il job esplicitamente. La UI limita a 30 le righe di dettaglio mostrate nel riepilogo finale.
+
+## 4. Pipeline per file e metadati
+
+`convert_directory` converte sorgente HLSL testuale e produce anche `binding_map.json`; non è il convertitore binario DXIL. La pipeline candidata per DXIL usa `dxil-spirv`, `spirv-cross` e `postprocessHlsl`, poi FXC.
+
+Per ogni file, il batch:
+
+- **Stage e profilo FXC:** ricava lo stage dal disassemblato DXC associato e lo confronta con quello del container, se disponibile; stage mancante o non supportato è `blocked`.
+- **Entry point:** usa solo l'entry point riconosciuto nell'HLSL generato; se manca, non invoca FXC.
+- **Disassembly e binding map:** cerca `<base>_dxil.txt` o `<nome>.dxil.txt`. Se register space restano rimappati localmente senza binding map, non invoca FXC.
+- **Pixel shader:** segnala che l'abbinamento/firma VS-PS non è verificato automaticamente.
+- **Feature non supportate:** non passa `force=true`; i blocker SM6 sono `blocked`.
+
+## 5. Stati del job
+
+Stati terminali implementati: `compiled`, `blocked`, `failed`, `skipped`, `cancelled`. `compiled` richiede FXC con exit code 0 e un container DXBC legacy privo di chunk DXIL. Il profilo FXC è scelto dallo stage disassemblato; i blocker, lo stage sconosciuto, l'entry point non riconosciuto e i register space senza mappa fermano il file prima della scrittura. I pixel shader sono candidati con avviso esplicito perché il pairing/firma VS-PS non è verificato automaticamente. Nessuno stato prova equivalenza o rendering.
+
+## 6. Naming degli override e prerequisito di parità hash
+
+Nel proxy, `LoadShader` calcola `Fnv1a64(data, size)` sul bytecode ricevuto (`d3d12on11/src/pipeline.cpp:37`), ne formatta il testo (`:38`) e cerca `<hash>.cso` nella directory override (`:57`). L'override viene accettato solo se il container è DXBC legacy e il modello è al massimo SM5 (`:60`). Il dump salva gli stessi byte ricevuti (`:83`, `:85`).
+
+Quindi il nome del `.cso` è calcolato dall'esatto container originale hashato dal proxy, non dall'HLSL candidato né da un contenitore estratto o normalizzato. `Fnv1a64` e `Hex64` sono stati verificati direttamente in `d3d12on11/src/util.cpp`: offset basis `14695981039346656037`, prime `1099511628211`, wrap uint64 e output lowercase zero-padded a 16 cifre. Il test locale controlla il vettore noto `"hello" → a430d84680aabd0b` e il nome output.
+

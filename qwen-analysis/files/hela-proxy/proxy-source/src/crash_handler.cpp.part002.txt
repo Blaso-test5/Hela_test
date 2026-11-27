@@ -1,0 +1,134 @@
+            WriteLine(report, L"  [%02lu] 0x%016llX <unresolved module>",
+                index, static_cast<unsigned long long>(address));
+        }
+
+        if (!UnwindOneFrame(context)) break;
+    }
+
+    CloseHandle(report);
+
+    wchar_t output[MAX_PATH]{};
+    _snwprintf_s(output, ARRAYSIZE(output), _TRUNCATE,
+        L"d3d12on11: first-chance exception captured; report: %s\r\n",
+        reportPath.c_str());
+    OutputDebugStringW(output);
+}
+
+DWORD WINAPI CrashReportWorker(void*) {
+    for (;;) {
+        const DWORD wait = WaitForSingleObject(g_requestEvent, INFINITE);
+        if (wait != WAIT_OBJECT_0 || InterlockedCompareExchange(
+                &g_stopWorker, 0, 0) != 0)
+            return 0;
+
+        try {
+            WriteCrashReport();
+        } catch (const std::exception& error) {
+            char message[256]{};
+            snprintf(message, sizeof(message),
+                "d3d12on11: crash report generation failed: %s\n", error.what());
+            OutputDebugStringA(message);
+        } catch (...) {
+            OutputDebugStringA(
+                "d3d12on11: crash report generation failed with an unknown error\n");
+        }
+        SetEvent(g_completeEvent);
+        InterlockedExchange(&g_handlerBusy, 0);
+    }
+}
+
+LONG WINAPI VectoredExceptionHandler(PEXCEPTION_POINTERS info) {
+    if (!info || !info->ExceptionRecord || !info->ContextRecord ||
+        info->ExceptionRecord->ExceptionCode != EXCEPTION_ACCESS_VIOLATION)
+        return EXCEPTION_CONTINUE_SEARCH;
+
+    if (InterlockedCompareExchange(&g_handlerBusy, 1, 0) != 0)
+        return EXCEPTION_CONTINUE_SEARCH;
+
+    memcpy(&g_exceptionRecord, info->ExceptionRecord, sizeof(g_exceptionRecord));
+    memcpy(&g_exceptionContext, info->ContextRecord, sizeof(g_exceptionContext));
+    g_exceptionPointers.ExceptionRecord = &g_exceptionRecord;
+    g_exceptionPointers.ContextRecord = &g_exceptionContext;
+    g_exceptionThreadId = GetCurrentThreadId();
+
+    ResetEvent(g_completeEvent);
+    if (!SetEvent(g_requestEvent)) {
+        InterlockedExchange(&g_handlerBusy, 0);
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+
+    WaitForSingleObject(g_completeEvent, kReportTimeoutMs);
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
+BOOL CALLBACK InitializeCrashHandler(PINIT_ONCE, PVOID, PVOID*) {
+    HMODULE module = nullptr;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+            GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            reinterpret_cast<LPCWSTR>(&InstallCrashHandler), &module))
+        return FALSE;
+
+    if (!GetModuleDirectory(module, g_outputDirectory)) {
+        std::vector<wchar_t> buffer(MAX_PATH);
+        const DWORD length = GetTempPathW(static_cast<DWORD>(buffer.size()),
+            buffer.data());
+        if (!length || length >= buffer.size()) {
+            SetLastError(ERROR_PATH_NOT_FOUND);
+            return FALSE;
+        }
+        g_outputDirectory.assign(buffer.data(), length);
+    }
+
+    g_requestEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    g_completeEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!g_requestEvent || !g_completeEvent) {
+        const DWORD error = GetLastError();
+        if (g_requestEvent) CloseHandle(g_requestEvent);
+        if (g_completeEvent) CloseHandle(g_completeEvent);
+        g_requestEvent = nullptr;
+        g_completeEvent = nullptr;
+        SetLastError(error);
+        return FALSE;
+    }
+
+    g_workerThread = CreateThread(nullptr, 0, CrashReportWorker, nullptr, 0, nullptr);
+    if (!g_workerThread) {
+        const DWORD error = GetLastError();
+        CloseHandle(g_requestEvent);
+        CloseHandle(g_completeEvent);
+        g_requestEvent = nullptr;
+        g_completeEvent = nullptr;
+        SetLastError(error);
+        return FALSE;
+    }
+
+    g_vehHandle = AddVectoredExceptionHandler(1, VectoredExceptionHandler);
+    if (!g_vehHandle) {
+        const DWORD error = GetLastError();
+        InterlockedExchange(&g_stopWorker, 1);
+        SetEvent(g_requestEvent);
+        WaitForSingleObject(g_workerThread, INFINITE);
+        CloseHandle(g_workerThread);
+        CloseHandle(g_requestEvent);
+        CloseHandle(g_completeEvent);
+        g_workerThread = nullptr;
+        g_requestEvent = nullptr;
+        g_completeEvent = nullptr;
+        InterlockedExchange(&g_stopWorker, 0);
+        SetLastError(error);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+} // namespace
+
+bool InstallCrashHandler() {
+    if (!InitOnceExecuteOnce(&g_installOnce, InitializeCrashHandler, nullptr, nullptr)) {
+        Log("[CRASH_HANDLER] Installation failed: Win32 error %lu", GetLastError());
+        return false;
+    }
+    Log("[CRASH_HANDLER] Installed first-chance access-violation diagnostics; output=%ls",
+        g_outputDirectory.c_str());
+    return true;
+}

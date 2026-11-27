@@ -1,0 +1,170 @@
+    D3D11_TEXTURE2D_DESC desc{};
+    texture->GetDesc(&desc);
+    if (!desc.Width || !desc.Height || desc.SampleDesc.Count != 1) {
+        LogDxgi("[%s] Present #%llu unsupported texture size=%ux%u samples=%u",
+            label, static_cast<unsigned long long>(presentCount), desc.Width,
+            desc.Height, desc.SampleDesc.Count);
+        return E_NOTIMPL;
+    }
+
+    Ptr<ID3D11Texture2D> staging;
+    D3D11_TEXTURE2D_DESC stagingDesc = desc;
+    stagingDesc.Usage = D3D11_USAGE_STAGING;
+    stagingDesc.BindFlags = 0;
+    stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    stagingDesc.MiscFlags = 0;
+    HRESULT result = device->d11->CreateTexture2D(&stagingDesc, nullptr, staging.Put());
+    if (FAILED(result) || !staging) {
+        LogDxgi("[%s] Present #%llu staging texture creation failed hr=0x%08lx format=%u",
+            label, static_cast<unsigned long long>(presentCount), result, desc.Format);
+        return FAILED(result) ? result : E_FAIL;
+    }
+
+    device->ctx->CopyResource(staging.Get(), texture);
+    device->ctx->Flush();
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    result = device->ctx->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+    if (FAILED(result)) {
+        LogDxgi("[%s] Present #%llu Map failed hr=0x%08lx format=%u",
+            label, static_cast<unsigned long long>(presentCount), result, desc.Format);
+        return result;
+    }
+
+    ReadbackPixel pixel{};
+    if (!ReadbackPixelAt(mapped, desc, 0, 0, pixel)) {
+        device->ctx->Unmap(staging.Get(), 0);
+        LogDxgi("[%s] Present #%llu unsupported pixel format=%u",
+            label, static_cast<unsigned long long>(presentCount), desc.Format);
+        return E_NOTIMPL;
+    }
+
+    const UINT sampleXs[] = { 0, desc.Width - 1, desc.Width / 2, 0, desc.Width - 1 };
+    const UINT sampleYs[] = { 0, 0, desc.Height / 2, desc.Height - 1, desc.Height - 1 };
+    const char* sampleNames[] = {
+        "Top-left", "Top-right", "Center", "Bottom-left", "Bottom-right"
+    };
+    LogDxgi("[%s] Present #%llu size=%ux%u format=%u buffer=%u",
+        label, static_cast<unsigned long long>(presentCount), desc.Width,
+        desc.Height, desc.Format, bufferIndex);
+    for (size_t i = 0; i < ARRAYSIZE(sampleXs); ++i) {
+        if (ReadbackPixelAt(mapped, desc, sampleXs[i], sampleYs[i], pixel)) {
+            LogDxgi("[%s]   %s: R=%u G=%u B=%u A=%u",
+                label, sampleNames[i], pixel.r, pixel.g, pixel.b, pixel.a);
+        }
+    }
+
+    UINT nonBlackCount = 0;
+    constexpr UINT sampleCount = 100;
+    for (UINT i = 0; i < sampleCount; ++i) {
+        const UINT x = static_cast<UINT>((static_cast<uint64_t>(i) * 7) % desc.Width);
+        const UINT y = static_cast<UINT>((static_cast<uint64_t>(i) * 13) % desc.Height);
+        if (ReadbackPixelAt(mapped, desc, x, y, pixel) &&
+            (pixel.r > 5 || pixel.g > 5 || pixel.b > 5)) {
+            ++nonBlackCount;
+        }
+    }
+    LogDxgi("[%s]   Non-black pixels: %u/%u (%.1f%%)",
+        label, nonBlackCount, sampleCount, 100.0f * nonBlackCount / sampleCount);
+    if (fullReadbackFilename)
+        SaveMappedTextureAsBmp(mapped, desc, fullReadbackFilename, presentCount, label);
+    device->ctx->Unmap(staging.Get(), 0);
+    return S_OK;
+}
+
+void CaptureBackbufferReadback(IDXGISwapChain4* swapChain, IUnknown* source) {
+    static std::atomic<uint64_t> presentCount{0};
+    static const bool enabled = BackbufferReadbackEnabled();
+    static const bool fullReadbackEnabled = FullReadbackEnabled();
+    static const UINT fullReadbackPresent = FullReadbackPresent();
+    Device* device = nullptr;
+    if (auto* queue = dynamic_cast<CommandQueue*>(source)) {
+        device = queue->dev;
+    } else {
+        device = dynamic_cast<Device*>(source);
+    }
+    if (!device || !device->ctx) {
+        D3D12On11Flush(source);
+        if (enabled)
+            LogDxgi("[READBACK] Skipped: wrapped D3D11 device/context unavailable");
+        return;
+    }
+
+    std::lock_guard<std::recursive_mutex> contextLock(device->ctxLock);
+    device->ctx->Flush();
+    const uint64_t count = presentCount.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (count == 100)
+        D3D12On11DumpBackbufferSourceHistory();
+    if (!enabled || count % 100 != 0) return;
+    if (!device->d11) {
+        LogDxgi("[READBACK] Present #%llu skipped: wrapped D3D11 device unavailable",
+            static_cast<unsigned long long>(count));
+        return;
+    }
+
+    const bool saveFullReadback = fullReadbackEnabled &&
+        (count == 100 || (fullReadbackPresent && count == fullReadbackPresent));
+    wchar_t sourceFilename[MAX_PATH]{};
+    wchar_t backbufferFilename[MAX_PATH]{};
+    if (saveFullReadback) {
+        swprintf_s(sourceFilename, ARRAYSIZE(sourceFilename),
+            L"D:\\HelaReadback_Present%llu_source.bmp",
+            static_cast<unsigned long long>(count));
+        swprintf_s(backbufferFilename, ARRAYSIZE(backbufferFilename),
+            L"D:\\HelaReadback_Present%llu_backbuffer.bmp",
+            static_cast<unsigned long long>(count));
+    }
+
+    const UINT bufferIndex = swapChain->GetCurrentBackBufferIndex();
+    Ptr<ID3D11Texture2D> backbuffer;
+    HRESULT result = swapChain->GetBuffer(bufferIndex, __uuidof(ID3D11Texture2D),
+        reinterpret_cast<void**>(backbuffer.Put()));
+    if (FAILED(result) || !backbuffer) {
+        LogDxgi("[READBACK] Present #%llu GetBuffer(%u) failed hr=0x%08lx",
+            static_cast<unsigned long long>(count), bufferIndex, result);
+        return;
+    }
+
+    Ptr<ID3D11Resource> sourceResource;
+    D3D12_RESOURCE_DESC sourceDesc{};
+    uint64_t sourceSequence = 0;
+    {
+        std::lock_guard<std::mutex> sourceLock(device->backbufferCopyLock);
+        sourceResource = device->lastBackbufferCopySource;
+        sourceDesc = device->lastBackbufferCopySourceDesc;
+        sourceSequence = device->lastBackbufferCopySequence;
+    }
+    if (!sourceSequence) {
+        LogDxgi("[READBACK_SRC] Present #%llu no CopyResource-to-backbuffer source recorded",
+            static_cast<unsigned long long>(count));
+    } else if (!sourceResource) {
+        LogDxgi("[READBACK_SRC] Present #%llu last source is not a texture "
+            "dimension=%u width=%llu height=%u format=%u sequence=%llu",
+            static_cast<unsigned long long>(count), sourceDesc.Dimension,
+            static_cast<unsigned long long>(sourceDesc.Width), sourceDesc.Height,
+            sourceDesc.Format, static_cast<unsigned long long>(sourceSequence));
+    } else {
+        Ptr<ID3D11Texture2D> sourceTexture;
+        result = sourceResource->QueryInterface(__uuidof(ID3D11Texture2D),
+            reinterpret_cast<void**>(sourceTexture.Put()));
+        if (FAILED(result) || !sourceTexture) {
+            LogDxgi("[READBACK_SRC] Present #%llu source QueryInterface failed "
+                "hr=0x%08lx sequence=%llu",
+                static_cast<unsigned long long>(count), result,
+                static_cast<unsigned long long>(sourceSequence));
+        } else {
+            D3D11_TEXTURE2D_DESC sourceTextureDesc{};
+            sourceTexture->GetDesc(&sourceTextureDesc);
+            LogDxgi("[READBACK_SRC] Present #%llu CopyResource source=%p "
+                "dimension=%u width=%llu height=%u format=%u sequence=%llu",
+                static_cast<unsigned long long>(count), sourceTexture.Get(),
+                sourceDesc.Dimension, static_cast<unsigned long long>(sourceDesc.Width),
+                sourceDesc.Height, sourceDesc.Format,
+                static_cast<unsigned long long>(sourceSequence));
+            if (sourceTextureDesc.Width != sourceDesc.Width ||
+                sourceTextureDesc.Height != sourceDesc.Height ||
+                sourceTextureDesc.Format != sourceDesc.Format) {
+                LogDxgi("[READBACK_SRC] Native texture desc differs: "
+                    "width=%u height=%u format=%u",
+                    sourceTextureDesc.Width, sourceTextureDesc.Height,
+                    sourceTextureDesc.Format);
+            }

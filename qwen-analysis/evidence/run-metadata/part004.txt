@@ -1,0 +1,100 @@
+      "width": 1280,
+      "height": 720,
+      "bpp": 24,
+      "orientation": "top-down",
+      "nonBlackCount": 0,
+      "totalPixels": 921600,
+      "validBmp": true
+    },
+    {
+      "present": 1400,
+      "side": "source",
+      "path": "<run-local>/readbacks/HelaReadback_Present1400_source.bmp",
+      "fileName": "HelaReadback_Present1400_source.bmp",
+      "bytes": 2764854,
+      "sha256": "d43ec90910e666b315661be75dfea0af9722ff471aa30593999567dffc53ac9c",
+      "width": 1280,
+      "height": 720,
+      "bpp": 24,
+      "orientation": "top-down",
+      "nonBlackCount": 0,
+      "totalPixels": 921600,
+      "validBmp": true
+    }
+  ],
+  "presentProgress": {
+    "targetPresent": 1400,
+    "capturePresent": 1400,
+    "captureComplete": true,
+    "parserProgress": {
+      "swapChainsCreated": 1,
+      "maxHeartbeatPresent": 1887,
+      "maxSummaryPresent": 1887,
+      "maxReadbackPresent": 1900,
+      "maxObservedPresent": 1900
+    }
+  },
+  "sourceHistory1400Summary": [
+    {
+      "resourceRef": "address_ref_066",
+      "matchesReadbackCopySource": false,
+      "operations": 598,
+      "draws": 598,
+      "skipped": 0,
+      "clears": 0,
+      "entryCount": 129,
+      "allEntriesIncluded": false
+    },
+    {
+      "resourceRef": "address_ref_064",
+      "matchesReadbackCopySource": true,
+      "operations": 597,
+      "draws": 597,
+      "skipped": 0,
+      "clears": 0,
+      "entryCount": 129,
+      "allEntriesIncluded": true
+    },
+    {
+      "resourceRef": "address_ref_065",
+      "matchesReadbackCopySource": false,
+      "operations": 596,
+      "draws": 596,
+      "skipped": 0,
+      "clears": 0,
+      "entryCount": 129,
+      "allEntriesIncluded": false
+    }
+  ],
+  "resourceCreationForReadbackSource": {
+    "matchedReadbackSourceRef": "address_ref_064",
+    "structuredMatchingRecords": [],
+    "committedResourceOccurrenceCount": 308,
+    "placedResourceOccurrenceCount": 127,
+    "matchingRecordsObserved": 0
+  },
+  "processStatus": {
+    "game": {
+      "exited_before_cleanup": false,
+      "exit_code_before_cleanup": null,
+      "shutdown_requested_by_launcher": true,
+      "force_terminated_by_launcher": true,
+      "exited_after_cleanup": true,
+      "exit_code_after_cleanup": -1
+    },
+    "monitor": {
+      "exited_before_cleanup": true
+    }
+  },
+  "dataHandling": {
+    "rawLogsIncluded": false,
+    "networkObservationsIncluded": false,
+    "sentryIncluded": false,
+    "shaderBytesIncluded": false,
+    "bmpImagesIncluded": false,
+    "csoBinariesIncluded": false,
+    "dllsIncluded": false,
+    "memoryPointers": "pseudonymized consistently within evidence",
+    "localPaths": "replaced with symbolic roots"
+  }
+}

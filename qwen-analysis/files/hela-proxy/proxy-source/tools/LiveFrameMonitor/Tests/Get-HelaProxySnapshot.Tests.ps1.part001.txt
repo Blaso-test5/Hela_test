@@ -1,0 +1,200 @@
+#Requires -Version 5.1
+<#
+    Self-contained tests for Get-HelaProxySnapshot.ps1 (no Pester, no external dependencies).
+    Run:  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Tests\Get-HelaProxySnapshot.Tests.ps1
+    Exit code = number of failed tests. All fixtures live in a temporary directory that is removed at the end.
+#>
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
+
+$ScriptPath = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($PSScriptRoot, '..', 'Get-HelaProxySnapshot.ps1'))
+if (-not [System.IO.File]::Exists($ScriptPath)) { throw "Script under test not found: $ScriptPath" }
+
+$TempRoot = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), 'hela-snapshot-tests-' + [Guid]::NewGuid().ToString('N'))
+[void][System.IO.Directory]::CreateDirectory($TempRoot)
+$Utf8 = New-Object System.Text.UTF8Encoding($false)
+$Ov = 'shader_overrides'
+$script:Asserts = 0
+$script:Failures = 0
+$script:Passed = 0
+
+# ---------------------------------------------------------------- helpers
+
+function Join-P { param([string]$A, [string]$B) return [System.IO.Path]::Combine($A, $B) }
+
+function Get-Bytes { param([string]$Text) return , $Utf8.GetBytes($Text) }
+
+function Get-TextSha {
+    param([string]$Text, [switch]$Upper)
+    $s = [System.Security.Cryptography.SHA256]::Create()
+    try { $h = (($s.ComputeHash((Get-Bytes $Text)) | ForEach-Object { $_.ToString('x2') }) -join '') } finally { $s.Dispose() }
+    if ($Upper) { return $h.ToUpperInvariant() }
+    return $h
+}
+
+function New-Sandbox {
+    $p = Join-P $TempRoot ([Guid]::NewGuid().ToString('N'))
+    [void][System.IO.Directory]::CreateDirectory($p)
+    return $p
+}
+
+function New-Install {
+    param([string]$Dir, [hashtable]$Files)
+    [void][System.IO.Directory]::CreateDirectory($Dir)
+    foreach ($k in $Files.Keys) {
+        $f = Join-P $Dir $k
+        [void][System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($f))
+        [System.IO.File]::WriteAllBytes($f, (Get-Bytes $Files[$k]))
+    }
+}
+
+function Get-Tree {
+    param([string]$Dir)
+    $lines = New-Object System.Collections.Generic.List[string]
+    foreach ($e in [System.IO.Directory]::GetFileSystemEntries($Dir, '*', [System.IO.SearchOption]::AllDirectories)) {
+        if ([System.IO.Directory]::Exists($e)) {
+            $lines.Add("D|$e")
+        } else {
+            $fi = New-Object System.IO.FileInfo($e)
+            $h = Get-TextSha ([System.IO.File]::ReadAllText($e))
+            $lines.Add("F|$e|$($fi.Length)|$($fi.LastWriteTimeUtc.Ticks)|$h")
+        }
+    }
+    $lines.Sort()
+    return ($lines -join "`n")
+}
+
+function Write-Json {
+    param([string]$Path, $Obj)
+    [System.IO.File]::WriteAllText($Path, ($Obj | ConvertTo-Json -Depth 8), $Utf8)
+}
+
+function New-RunManifest {
+    param([string]$Path, [string]$D3d12, [string]$Dxgi, $Overrides = @{}, $Required = @(),
+          [string]$Schema = 'hela-run-manifest/v1', [string]$Attestation = 'module-and-shader-sha256')
+    Write-Json $Path ([ordered]@{
+        schema             = $Schema
+        testVersion        = 'unit-test'
+        runtimeAttestation = $Attestation
+        runtime            = [ordered]@{ d3d12 = $D3d12; dxgi = $Dxgi }
+        overrides          = $Overrides
+        requiredOverrides  = $Required
+    })
+}
+
+function Invoke-Snapshot {
+    param([hashtable]$Params)
+    $ErrorActionPreference = 'Continue'
+    $global:LASTEXITCODE = $null
+    $threw = $null
+    $out = @()
+    try { $out = @(& $ScriptPath @Params 6>$null 2>&1) } catch { $threw = $_.Exception.Message }
+    $code = $global:LASTEXITCODE
+    $errs = @($out | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] })
+    $plain = @($out | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
+    $text = (($plain | ForEach-Object { [string]$_ }) -join "`n")
+    $json = $null
+    if ($text.Trim().Length -gt 0) { $json = $text | ConvertFrom-Json }
+    return [pscustomobject]@{ ExitCode = $code; Json = $json; Errors = $errs; Threw = $threw; Text = $text }
+}
+
+function Assert-True {
+    param($Cond, [string]$What)
+    if (-not $Cond) { throw "Assertion failed: $What" }
+    $script:Asserts++
+}
+
+function Assert-Equal {
+    param($Actual, $Expected, [string]$What)
+    if ($Actual -ne $Expected) { throw "$What : expected '$Expected' but got '$Actual'" }
+    $script:Asserts++
+}
+
+function Find-Finding {
+    param($Res, [string]$Cat, [string]$Name)
+    $hit = @($Res.Json.items | Where-Object { $_.category -eq $Cat -and $_.name -eq $Name })
+    if ($hit.Count -ne 1) { throw "Expected exactly one finding $Cat/$Name but found $($hit.Count)" }
+    return $hit[0]
+}
+
+function Assert-Status {
+    param($Res, [string]$Cat, [string]$Name, [string]$Status)
+    $f = Find-Finding $Res $Cat $Name
+    Assert-Equal $f.status $Status "status of $Cat/$Name"
+}
+
+function Assert-Rejected {
+    param($Res, [string]$What)
+    Assert-Equal $Res.ExitCode 2 "$What exit code"
+    Assert-True ($null -eq $Res.Json) "$What must not print a JSON report"
+    Assert-True ($Res.Errors.Count -ge 1) "$What must emit an error"
+}
+
+function Test-Case {
+    param([string]$Name, [scriptblock]$Body)
+    try {
+        & $Body
+        $script:Passed++
+        Write-Host "PASS  $Name" -ForegroundColor Green
+    } catch {
+        $script:Failures++
+        Write-Host "FAIL  $Name" -ForegroundColor Red
+        Write-Host "      $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+# Literal legacy restore manifest taken from the project (runtime as strings, no overrides_directory_present).
+$LegacyExample = @'
+{
+  "schema": "hela-proxy-restore/v1",
+  "game_directory": "D:\\SteamLibrary\\steamapps\\common\\Hela Demo\\Hela\\Binaries\\Win64",
+  "created_utc": "2026-11-11T11:31:22.5341877Z",
+  "runtime": {
+    "d3d12.dll": "209c78ca0fa244228a967a6a98465cd625a92d1696fe6d1a68edc45cfdeaf062",
+    "dxgi.dll": "06f0836565bfc577956bb4cb2540e104c94de1fb68ac6fba5283d8082dfdc2e2"
+  },
+  "overrides": [
+    {"path":"20e0826b236597a1.cso","bytes":1768,"sha256":"5d844557b3a5f78c108aca027b14432f3eba52791057234f7310c487926a3d3e"},
+    {"path":"25e657206d761172.cso","bytes":372,"sha256":"84e92d1475080ac8919f855a2eb6f06e8c0829dad0fe76c5e453b6d1101e99ad"},
+    {"path":"38acdb88bb8801b9.cso","bytes":58476,"sha256":"0724669de377f5bcd07ccb96f3b3172e955d1fa7c56c99e09c997601d12df9cc"},
+    {"path":"44b0a992c2304254.cso","bytes":1560,"sha256":"43c029b121212d0a37e0a00aaf983d9b6f7ea3ee593412c46ef22c52513d263d"},
+    {"path":"74867736557b00e8.cso","bytes":1540,"sha256":"fd8dbefb9aba6699fa8bfed527a6388ed65682b8e9ce28cd529f1f7112fc3e40"},
+    {"path":"d77600bde0076c33.cso","bytes":1560,"sha256":"9f6fee68b9c8c824f106426db501012ebc176e35a22c7a8cd47e3e94719207b4"}
+  ]
+}
+'@
+
+# The real no-override run manifest from the project.
+$RealNoOverrideRun = @'
+{
+  "schema": "hela-run-manifest/v1",
+  "testVersion": "950m-v015-no-shader-override-srv-diagnostics-20261111",
+  "runtimeAttestation": "module-and-shader-sha256",
+  "runtime": {
+    "d3d12": "0B986B326848CDE6148F86E7F7BA8D17795293115F51F17DEC2593758484A605",
+    "dxgi": "252B4C8E62CC176A3B5568C53F76730E4CFB9432998DF556EDD502D73C5F70CD"
+  },
+  "overrides": {},
+  "requiredOverrides": []
+}
+'@
+
+function New-ModernRestore {
+    param([string]$Path, [string]$Game, $Runtime, [bool]$DirPresent, $Overrides = @())
+    Write-Json $Path ([ordered]@{
+        schema                      = 'hela-proxy-restore/v1'
+        game_directory              = $Game
+        created_utc                 = '2026-11-11T11:31:22.5341877Z'
+        runtime                     = $Runtime
+        overrides_directory_present = $DirPresent
+        overrides                   = $Overrides
+    })
+}
+
+# ---------------------------------------------------------------- tests
+
+try {
+
+Test-Case 'run no-override: matching install is a Match (uppercase manifest hashes, empty overrides dir)' {
+    $sb = New-Sandbox; $game = Join-P $sb 'game'
+    New-Install $game @{ 'd3d12.dll' = 'D3D12-PAYLOAD'; 'dxgi.dll' = 'DXGI-PAYLOAD' }

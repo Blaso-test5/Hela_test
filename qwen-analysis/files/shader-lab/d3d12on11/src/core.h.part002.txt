@@ -1,0 +1,53 @@
+                guid.Data1, guid.Data2, guid.Data3, requestedSize, size ? *size : 0,
+                data != nullptr, result);
+        }
+        return result;
+    }
+    HRESULT STDMETHODCALLTYPE SetPrivateData(REFGUID guid, UINT size, const void* data) override {
+        D3D12ON11_TRACE_CALLER("SetPrivateData");
+        {
+            std::lock_guard<std::mutex> l(pmu);
+            pif.erase(guid);
+            if (!data) pdata.erase(guid);
+            else pdata[guid].assign((const uint8_t*)data, (const uint8_t*)data + size);
+        }
+        if (Cfg().traceCallers) {
+            Log("SetPrivateData end guid=%08lx-%04x-%04x size=%u has-data=%u result=0x%08lx",
+                guid.Data1, guid.Data2, guid.Data3, size, data != nullptr, S_OK);
+        }
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE SetPrivateDataInterface(REFGUID guid, const IUnknown* data) override {
+        D3D12ON11_TRACE_CALLER("SetPrivateDataInterface");
+        {
+            std::lock_guard<std::mutex> l(pmu);
+            pdata.erase(guid);
+            if (!data) pif.erase(guid);
+            else pif[guid] = Ptr<IUnknown>(const_cast<IUnknown*>(data));
+        }
+        if (Cfg().traceCallers) {
+            Log("SetPrivateDataInterface end guid=%08lx-%04x-%04x has-interface=%u result=0x%08lx",
+                guid.Data1, guid.Data2, guid.Data3, data != nullptr, S_OK);
+        }
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE SetName(const WCHAR*) override { return S_OK; }
+    // ID3D12DeviceChild::GetDevice (implicito override quando I deriva da ID3D12DeviceChild)
+    HRESULT STDMETHODCALLTYPE GetDevice(REFIID riid, void** ppv) { return DeviceQuery(dev, riid, ppv); }
+};
+
+#include "d3d12_stubs.inc"
+
+// ------------------------------------------------------------------ utilita'
+struct FormatInfo { UINT bits; UINT blockW; UINT blockH; };   // bits per pixel, oppure per blocco se blockW>1
+FormatInfo GetFormatInfo(DXGI_FORMAT f);
+UINT64 AlignUp(UINT64 v, UINT64 a);
+uint64_t Fnv1a64(const void* data, size_t len);
+std::string Hex64(uint64_t v);
+UINT MapRegister(char kind, UINT space, UINT reg);
+
+struct DxbcInfo { bool isDxbc = false, hasDxil = false, hasLegacy = false, hasRts0 = false; UINT versionMajor = 0, versionMinor = 0; };
+DxbcInfo InspectContainer(const void* data, size_t len);
+bool ReadFileBytes(const std::string& path, std::vector<uint8_t>& out);
+bool WriteFileBytes(const std::string& path, const void* data, size_t len);
+void MakeDirs(const std::string& path);

@@ -1,0 +1,68 @@
+export async function exportPixDrawResource(options: PixDrawResourceExport, runner: PixRunner = run) {
+  if (!Number.isSafeInteger(options.queueId) || options.queueId < 0) {
+    throw new Error("queueId deve essere un intero non negativo tratto dalla colonna Queue ID di PIX.");
+  }
+  if (!Number.isSafeInteger(options.globalId) || options.globalId < 0) {
+    throw new Error("globalId deve essere un Global ID intero non negativo.");
+  }
+  const rtvIndex = options.rtvIndex ?? 0;
+  if (!Number.isSafeInteger(rtvIndex) || rtvIndex < 0 || rtvIndex > 7) {
+    throw new Error("rtvIndex deve essere compreso tra 0 e 7.");
+  }
+
+  return withEventList(options, runner, async (eventList) => {
+    const matches = eventList.rows.filter((event) => event.globalId === options.globalId);
+    if (matches.length !== 1) {
+      throw new Error(`Global ID ${options.globalId}: attesa una sola riga event list, trovate ${matches.length}.`);
+    }
+    const event = matches[0];
+    if (event.queueId === null) {
+      throw new Error(`Global ID ${options.globalId}: la colonna Queue ID manca o non è numerica; export annullato.`);
+    }
+    if (event.queueId !== options.queueId) {
+      throw new Error(`Global ID ${options.globalId} ha Queue ID ${event.queueId} (atteso ${options.queueId}); export annullato.`);
+    }
+    if (!/\bDraw(?:IndexedInstanced|Instanced)?\s*\(/i.test(event.name)) {
+      throw new Error(`Global ID ${options.globalId} non è un evento Draw riconosciuto: ${event.name}; export annullato.`);
+    }
+
+    const pixPath = assertCapturePath(options.pixPath);
+    const pixToolPath = resolvePixTool(options.pixToolPath);
+    const outputDir = path.resolve(options.outputDir);
+    if (outputDir === pixPath) throw new Error("La cartella output non può essere il file .wpix.");
+    const outputPath = path.join(outputDir, `pix-global-${options.globalId}-queue-${options.queueId}-rtv-${rtvIndex}.png`);
+    if (fs.existsSync(outputPath)) throw new Error(`Rifiuto di sovrascrivere l'output esistente: ${outputPath}`);
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    const result = await runner(pixToolPath, [
+      "--output=verbose",
+      "--log=off",
+      "open-capture",
+      pixPath,
+      "save-resource",
+      outputPath,
+      `--global-id=${options.globalId}`,
+      `--rtv=${rtvIndex}`,
+    ], 10 * 60 * 1000);
+    if (result.code !== 0 || !fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
+      throw new Error(`Export risorsa PIX non riuscito (codice ${result.code}): ${(result.stderr || result.stdout).slice(-3000)}`);
+    }
+
+    return {
+      capturePath: pixPath,
+      eventListSource: options.eventListPath ? "user_exported_event_list" : "pixtool_unfiltered_event_list",
+      eventListCaptureBinding: options.eventListPath ? "not_verified" : "exported_from_requested_capture",
+      globalId: options.globalId,
+      queueId: event.queueId,
+      queueLabel: options.queueLabel ?? null,
+      queueLabelSource: options.queueLabel ? "user_pix_ui_attestation" : null,
+      eventName: event.name,
+      rtvIndex,
+      outputPath,
+      outputBytes: fs.statSync(outputPath).size,
+      eventRowVerified: true,
+      queueLabelVerifiedByEventList: false,
+      correlationWithExternalRun: "unverified_candidate",
+    };
+  });
+}

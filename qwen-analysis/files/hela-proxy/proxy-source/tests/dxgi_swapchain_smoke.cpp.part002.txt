@@ -1,0 +1,45 @@
+    desc.BufferCount = 2;
+    desc.Scaling = DXGI_SCALING_STRETCH;
+    desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
+    IDXGISwapChain1* swapChain = nullptr;
+    if (SUCCEEDED(result))
+        result = factory->CreateSwapChainForHwnd(queue, window, &desc, nullptr,
+            nullptr, &swapChain);
+    if (FAILED(result)) {
+        std::fprintf(stderr, "CreateSwapChainForHwnd failed: 0x%08lx\n", result);
+        if (factory) factory->Release();
+        if (queue) queue->Release();
+        device->Release();
+        DestroyWindow(window);
+        return 4;
+    }
+
+    ID3D12Resource* backbuffer = nullptr;
+    result = swapChain->GetBuffer(0, __uuidof(ID3D12Resource),
+        reinterpret_cast<void**>(&backbuffer));
+    if (SUCCEEDED(result)) {
+        const D3D12_RESOURCE_DESC bufferDesc = backbuffer->GetDesc();
+        if (bufferDesc.Width != desc.Width || bufferDesc.Height != desc.Height)
+            result = E_FAIL;
+    }
+    if (SUCCEEDED(result)) result = DrawSmoke(device, queue, swapChain, backbuffer);
+    if (backbuffer) {
+        backbuffer->Release();
+        backbuffer = nullptr;
+    }
+    if (SUCCEEDED(result)) result = swapChain->ResizeBuffers(0, 80, 80,
+        DXGI_FORMAT_UNKNOWN, 0);
+    if (SUCCEEDED(result))
+        result = swapChain->GetBuffer(0, __uuidof(ID3D12Resource),
+            reinterpret_cast<void**>(&backbuffer));
+    if (backbuffer) backbuffer->Release();
+
+    if (FAILED(result)) std::fprintf(stderr, "Swapchain operation failed: 0x%08lx\n", result);
+    swapChain->Release();
+    factory->Release();
+    queue->Release();
+    device->Release();
+    DestroyWindow(window);
+    return FAILED(result) ? 5 : 0;
+}

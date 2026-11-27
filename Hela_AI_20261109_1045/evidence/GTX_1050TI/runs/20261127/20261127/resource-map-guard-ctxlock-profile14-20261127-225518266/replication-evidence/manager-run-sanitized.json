@@ -1,0 +1,54 @@
+{
+  "schema": "hela-proxy-manager-run/v1",
+  "run_id": "resource-map-guard-ctxlock-profile14-20261127-225518266",
+  "test_version": "resource-map-guard-ctxlock-profile14-20261127",
+  "started_utc": "2026-11-27T22:55:18.3142830Z",
+  "package_path": "<PROJECT_ROOT>\\evidence\\GTX_1050TI\\staged-packages\\resource-map-guard-ctxlock-profile14-20261127",
+  "package_gate": {
+    "schema": "hela-package-gate-bridge/v1",
+    "package_path": "<PROJECT_ROOT>\\evidence\\GTX_1050TI\\staged-packages\\resource-map-guard-ctxlock-profile14-20261127",
+    "package_id": "resource-map-guard-ctxlock-profile14-20261127",
+    "test_version": "resource-map-guard-ctxlock-profile14-20261127",
+    "override_count": 17,
+    "lifecycle": "staged-only",
+    "mutation_performed": false
+  },
+  "target_present": 1500,
+  "backbuffer_readback_enabled": true,
+  "full_bmp_readback_enabled": true,
+  "present_target_validation": "source-and-backbuffer-readbacks",
+  "launch_profile": {
+    "name": "1050ti-dataflow-trace-20261125",
+    "sha256": "c698d9291c3f32c35b38041570d6725b8c905af31628c9e4afb1bdee6b78e2fb",
+    "environment": {
+      "D3D12ON11_TILED_RESOURCES_TIER": "3",
+      "D3D12ON11_DIAGNOSTIC_CAPABILITIES": "1",
+      "D3D12ON11_DIAGNOSTIC_RENDER_TRACE": "1",
+      "D3D12ON11_MASK_VENDOR_ID": "ffff",
+      "D3D12ON11_DUMP": "<PROJECT_ROOT>\\evidence\\GTX_1050TI\\runs\\20261127\\20261127\\resource-map-guard-ctxlock-profile14-20261127-225518266\\launch-profile\\dump",
+      "D3D12ON11_TARGET_DRAW_CAPTURE_RESOURCE_HIT": "400",
+      "D3D12ON11_OVERRIDES": "<PROJECT_ROOT>\\evidence\\GTX_1050TI\\runs\\20261127\\20261127\\resource-map-guard-ctxlock-profile14-20261127-225518266\\launch-profile\\overrides",
+      "D3D12ON11_DUMP_SHADERS": "0",
+      "D3D12ON11_DATAFLOW_TRACE": "1",
+      "D3D12ON11_TRACE_CALLERS": "0",
+      "D3D12ON11_DIAGNOSTIC_MASK_NVIDIA": "1",
+      "D3D12ON11_SHADER_MODEL": "6_7"
+    },
+    "arguments": [
+      "-graphicsadapter=0",
+      "-windowed",
+      "-ResX=1280",
+      "-ResY=720",
+      "-stdout",
+      "-FullStdOutLogOutput",
+      "-forcelogflush"
+    ],
+    "working_directory": "<GAME_BIN>"
+  },
+  "crash_diagnostics_enabled": true,
+  "process_status_file": "process-status.json",
+  "status": "failed",
+  "error": "Live monitor did not complete source/backbuffer readbacks for Present #1500.",
+  "completed_utc": "2026-11-27T22:58:22.1808959Z",
+  "restored": true
+}

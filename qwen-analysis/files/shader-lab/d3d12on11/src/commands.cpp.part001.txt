@@ -1,0 +1,186 @@
+#include "types.h"
+
+namespace {
+
+enum class TargetHistoryKind {
+    ExecutedDraw,
+    SkippedDraw,
+    Clear
+};
+
+struct BackbufferSourceHistory {
+    Ptr<ID3D11Resource> resource;
+    uint64_t executedDraws = 0;
+    uint64_t skippedDraws = 0;
+    uint64_t clears = 0;
+    std::vector<std::string> entries;
+};
+
+std::mutex g_resourceDrawMutex;
+std::map<ID3D11Resource*, BackbufferSourceHistory> g_backbufferSourceHistory;
+bool g_backbufferSourceHistoryDumped = false;
+std::mutex g_targetDrawDiagMutex;
+std::map<ID3D11Resource*, UINT> g_targetDrawDiagResourceCounts;
+UINT g_targetDrawDiagCount = 0;
+
+struct TargetDrawPipelineStats {
+    Ptr<ID3D11Query> query;
+    UINT hit = 0;
+    UINT resourceHit = 0;
+    uintptr_t rtvResource = 0;
+    uint64_t vsHash = 0;
+    uint64_t psHash = 0;
+};
+
+struct PendingTargetDrawPipelineStats {
+    Ptr<ID3D11Query> query;
+    UINT hit = 0;
+    UINT resourceHit = 0;
+    uintptr_t rtvResource = 0;
+    uint64_t vsHash = 0;
+    uint64_t psHash = 0;
+};
+
+std::mutex g_pendingTargetDrawStatsMutex;
+std::vector<PendingTargetDrawPipelineStats> g_pendingTargetDrawStats;
+
+UINT ClaimTargetDrawDiagSlot(ID3D11Resource* resource, UINT& resourceHit) {
+    if (!resource) return 0;
+    std::lock_guard<std::mutex> lock(g_targetDrawDiagMutex);
+    UINT& resourceCount = g_targetDrawDiagResourceCounts[resource];
+    if (resourceCount >= 2 || g_targetDrawDiagCount >= 6) return 0;
+    resourceHit = ++resourceCount;
+    return ++g_targetDrawDiagCount;
+}
+
+void PollTargetDrawPipelineStats(ID3D11DeviceContext* context) {
+    if (!context) return;
+    std::lock_guard<std::mutex> lock(g_pendingTargetDrawStatsMutex);
+    for (auto it = g_pendingTargetDrawStats.begin(); it != g_pendingTargetDrawStats.end();) {
+        D3D11_QUERY_DATA_PIPELINE_STATISTICS statistics{};
+        const HRESULT result = context->GetData(it->query.Get(), &statistics,
+            sizeof(statistics), D3D11_ASYNC_GETDATA_DONOTFLUSH);
+        if (result == S_FALSE) {
+            ++it;
+            continue;
+        }
+        if (FAILED(result)) {
+            Log("[TARGET_DRAW_STATS] hit=%u resource_hit=%u resource=%p vs=%016llx ps=%016llx "
+                "status=failed hr=0x%08lx",
+                it->hit, it->resourceHit, reinterpret_cast<void*>(it->rtvResource),
+                static_cast<unsigned long long>(it->vsHash),
+                static_cast<unsigned long long>(it->psHash), result);
+        } else {
+            Log("[TARGET_DRAW_STATS] hit=%u resource_hit=%u resource=%p vs=%016llx ps=%016llx "
+                "ia_vertices=%llu ia_primitives=%llu vs_invocations=%llu gs_invocations=%llu "
+                "gs_primitives=%llu clip_invocations=%llu clip_primitives=%llu "
+                "ps_invocations=%llu hs_invocations=%llu ds_invocations=%llu cs_invocations=%llu",
+                it->hit, it->resourceHit, reinterpret_cast<void*>(it->rtvResource),
+                static_cast<unsigned long long>(it->vsHash),
+                static_cast<unsigned long long>(it->psHash),
+                static_cast<unsigned long long>(statistics.IAVertices),
+                static_cast<unsigned long long>(statistics.IAPrimitives),
+                static_cast<unsigned long long>(statistics.VSInvocations),
+                static_cast<unsigned long long>(statistics.GSInvocations),
+                static_cast<unsigned long long>(statistics.GSPrimitives),
+                static_cast<unsigned long long>(statistics.CInvocations),
+                static_cast<unsigned long long>(statistics.CPrimitives),
+                static_cast<unsigned long long>(statistics.PSInvocations),
+                static_cast<unsigned long long>(statistics.HSInvocations),
+                static_cast<unsigned long long>(statistics.DSInvocations),
+                static_cast<unsigned long long>(statistics.CSInvocations));
+        }
+        it = g_pendingTargetDrawStats.erase(it);
+    }
+}
+
+void FinishTargetDrawPipelineStats(ExecState& state, TargetDrawPipelineStats&& pipelineStats) {
+    if (!pipelineStats.query || !state.c) return;
+    state.c->End(pipelineStats.query.Get());
+    PendingTargetDrawPipelineStats pending{};
+    pending.query = std::move(pipelineStats.query);
+    pending.hit = pipelineStats.hit;
+    pending.resourceHit = pipelineStats.resourceHit;
+    pending.rtvResource = pipelineStats.rtvResource;
+    pending.vsHash = pipelineStats.vsHash;
+    pending.psHash = pipelineStats.psHash;
+    std::lock_guard<std::mutex> lock(g_pendingTargetDrawStatsMutex);
+    g_pendingTargetDrawStats.push_back(std::move(pending));
+}
+
+void LogTargetIndexData(ExecState& state, UINT hit, ID3D11Buffer* indexBuffer,
+    DXGI_FORMAT indexFormat, UINT indexOffset, UINT indexViewSize, UINT startIndex,
+    INT baseVertex, UINT indexCount) {
+    if (!state.c || !indexBuffer) {
+        Log("[TARGET_INDEX_DATA] hit=%u status=no_context_or_index_buffer", hit);
+        return;
+    }
+
+    const UINT indexSize = indexFormat == DXGI_FORMAT_R16_UINT ? 2u
+        : indexFormat == DXGI_FORMAT_R32_UINT ? 4u : 0u;
+    if (!indexSize || !indexCount || indexCount > 6) {
+        Log("[TARGET_INDEX_DATA] hit=%u status=unsupported_format_or_count format=%u count=%u",
+            hit, static_cast<unsigned int>(indexFormat), indexCount);
+        return;
+    }
+
+    const UINT64 viewByteOffset = static_cast<UINT64>(startIndex) * indexSize;
+    const UINT64 byteCount = static_cast<UINT64>(indexCount) * indexSize;
+    if (viewByteOffset > indexViewSize || byteCount > indexViewSize - viewByteOffset) {
+        Log("[TARGET_INDEX_DATA] hit=%u status=view_range_invalid format=%u view_bytes=%u "
+            "start_index=%u count=%u",
+            hit, static_cast<unsigned int>(indexFormat), indexViewSize, startIndex, indexCount);
+        return;
+    }
+
+    const UINT64 sourceByteOffset = static_cast<UINT64>(indexOffset) + viewByteOffset;
+    D3D11_BUFFER_DESC sourceDesc{};
+    indexBuffer->GetDesc(&sourceDesc);
+    if (sourceByteOffset > sourceDesc.ByteWidth ||
+        byteCount > sourceDesc.ByteWidth - sourceByteOffset ||
+        sourceByteOffset > UINT_MAX || sourceByteOffset + byteCount > UINT_MAX) {
+        Log("[TARGET_INDEX_DATA] hit=%u status=buffer_range_invalid format=%u source_bytes=%u "
+            "ib_offset=%u start_index=%u count=%u",
+            hit, static_cast<unsigned int>(indexFormat), sourceDesc.ByteWidth,
+            indexOffset, startIndex, indexCount);
+        return;
+    }
+
+    std::array<uint32_t, 6> cpuIndices{};
+    std::array<uint32_t, 6> gpuIndices{};
+    bool hasCpuShadow = false;
+    auto* resource = dynamic_cast<Resource*>(state.indexBufferResource.Get());
+    if (resource && resource->heap == D3D12_HEAP_TYPE_UPLOAD) {
+        std::lock_guard<std::mutex> lock(resource->mu);
+        if (sourceByteOffset <= resource->shadow.size() &&
+            byteCount <= resource->shadow.size() - sourceByteOffset) {
+            const uint8_t* source = resource->shadow.data() + sourceByteOffset;
+            for (UINT i = 0; i < indexCount; ++i) {
+                if (indexSize == 2) {
+                    uint16_t value = 0;
+                    memcpy(&value, source + i * indexSize, sizeof(value));
+                    cpuIndices[i] = value;
+                } else {
+                    memcpy(&cpuIndices[i], source + i * indexSize, sizeof(cpuIndices[i]));
+                }
+            }
+            hasCpuShadow = true;
+        }
+    }
+
+    D3D11_BUFFER_DESC stagingDesc{};
+    stagingDesc.ByteWidth = static_cast<UINT>(byteCount);
+    stagingDesc.Usage = D3D11_USAGE_STAGING;
+    stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    Ptr<ID3D11Buffer> staging;
+    const HRESULT createResult = state.dev && state.dev->d11
+        ? state.dev->d11->CreateBuffer(&stagingDesc, nullptr, staging.Put())
+        : E_POINTER;
+    if (FAILED(createResult)) {
+        Log("[TARGET_INDEX_DATA] hit=%u status=staging_create_failed hr=0x%08lx",
+            hit, createResult);
+        return;
+    }
+
+    D3D11_BOX sourceBox{};
+    sourceBox.left = static_cast<UINT>(sourceByteOffset);

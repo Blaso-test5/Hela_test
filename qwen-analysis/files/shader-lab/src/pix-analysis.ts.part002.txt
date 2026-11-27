@@ -1,0 +1,169 @@
+    ["--output=verbose", "--log=off", "open-capture", pixPath, "export-to-cpp", exportDirectory],
+    10 * 60 * 1000,
+  );
+  if (result.code !== 0) {
+    throw new Error(`Export C++ PIX fallito (codice ${result.code}): ${(result.stderr || result.stdout).slice(-6000)}`);
+  }
+}
+
+async function exportEventList(
+  pixPath: string,
+  eventPath: string,
+  pixToolPath?: string,
+): Promise<{ succeeded: boolean; warning: string }> {
+  const pixtool = resolvePixTool(pixToolPath);
+  if (!pixtool) return { succeeded: false, warning: "pixtool.exe non trovato: event list non esportata." };
+
+  const args = ["--output=verbose", "--log=off", "open-capture", pixPath, "save-event-list", eventPath];
+  const result = await run(pixtool, args, 10 * 60 * 1000);
+  if (result.code === 0 && fs.existsSync(eventPath)) {
+    return {
+      succeeded: true,
+      warning:       "Event list esportata senza filtro queue; i riferimenti PSO derivano dalle righe esportate e l'etichetta UI non è verificata dal file.",
+    };
+  }
+  return {
+    succeeded: false,
+    warning: `Event list PIX non esportata (codice ${result.code}): ${(result.stderr || result.stdout).slice(-3000)}`,
+  };
+}
+
+async function runShaderExtraction(
+  exportDirectory: string,
+  shadersDirectory: string,
+  powerShellPath?: string,
+): Promise<ExtractedShader[]> {
+  if (process.platform !== "win32") throw new Error("Estrazione XPRESS dei PSO PIX disponibile solo su Windows.");
+  const reads = buildPixPsoReads(exportDirectory);
+  const resourcesPath = path.join(exportDirectory, "resources.bin");
+  const helperPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "scripts", "extract-pix-shaders.ps1");
+  if (!fs.existsSync(helperPath)) throw new Error(`Helper XPRESS non trovato: ${helperPath}`);
+  fs.mkdirSync(shadersDirectory, { recursive: true });
+
+  const workDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "shaderlab-pix-plan-"));
+  const planPath = path.join(workDirectory, "plan.json");
+  const resultPath = path.join(workDirectory, "result.json");
+  try {
+    fs.writeFileSync(planPath, JSON.stringify({
+      resourcesPath,
+      outputDirectory: shadersDirectory,
+      resultPath,
+      entries: reads.map((read) => ({ ...read })),
+    }), "utf8");
+
+    const shell = findPowerShell(powerShellPath);
+    const result = await run(shell, [
+      "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", helperPath, planPath,
+    ], 10 * 60 * 1000);
+    if (result.code !== 0 || !fs.existsSync(resultPath)) {
+      throw new Error(`Estrazione shader XPRESS fallita (codice ${result.code}): ${(result.stderr || result.stdout).slice(-6000)}`);
+    }
+    const extracted = JSON.parse(fs.readFileSync(resultPath, "utf8")) as {
+      shaders: Omit<ExtractedShader, "report" | "psoRefs">[];
+    };
+    return extracted.shaders.map((shader) => ({
+      ...shader,
+      report: { requires: [], bindings: [], opCounts: {}, findings: [], limits: [], verdict: "convertible" },
+      psoRefs: [],
+    }));
+  } finally {
+    fs.rmSync(workDirectory, { recursive: true, force: true });
+  }
+}
+
+function readEventList(eventListPath: string): EventListInfo {
+  return parsePixEventListText(fs.readFileSync(eventListPath, "utf8"), eventListPath);
+}
+
+function csvCell(value: string | number | boolean | null | undefined): string {
+  const text = value === null || value === undefined ? "" : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function writeShaderMap(filePath: string, shaders: ExtractedShader[], eventPsoIds: Set<number>): void {
+  const lines = ["psoId,stage,byteLength,sha256,shaderModel,verdict,findings,eventReferenced"];
+  for (const shader of shaders) {
+    lines.push([
+      shader.psoId, shader.stage, shader.byteLength, shader.sha256, shader.shaderModel,
+      shader.report.verdict, shader.report.findings.map((finding) => finding.code).join(";"),
+      eventPsoIds.has(shader.psoId),
+    ].map(csvCell).join(","));
+  }
+  fs.writeFileSync(filePath, `${lines.join("\n")}\n`, "utf8");
+}
+
+function summarize(shaders: ExtractedShader[]) {
+  const verdicts: Record<string, number> = {};
+  const stages: Record<string, number> = {};
+  const shaderModels: Record<string, number> = {};
+  const findings = new Map<string, { severity: string; shaders: Set<string>; occurrences: number; message: string }>();
+
+  for (const shader of shaders) {
+    const report = shader.report;
+    verdicts[report.verdict] = (verdicts[report.verdict] ?? 0) + 1;
+    if (report.stage) stages[report.stage] = (stages[report.stage] ?? 0) + 1;
+    if (report.shaderModel) shaderModels[report.shaderModel] = (shaderModels[report.shaderModel] ?? 0) + 1;
+    for (const finding of report.findings) {
+      const aggregate = findings.get(finding.code) ?? {
+        severity: finding.sev, shaders: new Set<string>(), occurrences: 0, message: finding.message,
+      };
+      aggregate.shaders.add(shader.sha256);
+      aggregate.occurrences += finding.count ?? 1;
+      findings.set(finding.code, aggregate);
+    }
+  }
+
+  return {
+    verdicts,
+    stages,
+    shaderModels,
+    findings: Object.fromEntries([...findings.entries()].map(([code, value]) => [code, {
+      severity: value.severity,
+      shaders: value.shaders.size,
+      occurrences: value.occurrences,
+      message: value.message,
+    }])),
+  };
+}
+
+function markdownReport(report: PixDeepAnalysisReport): string {
+  const lines = [
+    `# Analisi PIX: ${path.basename(report.pixPath)}`,
+    "",
+    `- Cattura originale non modificata: \`${report.pixPath}\``,
+    `- Etichetta queue UI: ${report.queueName ?? "non specificata"} (non verificata dal file event list)`,
+    `- Eventi: ${report.eventList?.eventRows ?? "non disponibili"}`,
+    `- PSO referenziati: ${report.eventList?.psoIds.length ?? "non disponibili"}`,
+    `- PSO estratti dall'export C++: ${report.psoCount}`,
+    `- Payload shader: ${report.shaderPayloadCount}; container unici: ${report.uniqueShaderCount}`,
+    `- Disassemblati DXC: ${report.disassembledCount}/${report.uniqueShaderCount}`,
+    "",
+    "## Esito statico",
+    ...Object.entries(report.verdicts).map(([name, count]) => `- ${name}: ${count}`),
+    "",
+    "## Rilevazioni",
+    ...Object.entries(report.findings).map(([code, finding]) =>
+      `- ${code} (${finding.severity}): ${finding.shaders} shader; ${finding.message}`),
+    "",
+    "## Limiti",
+    "- IPSO/shader sono stati estratti dall'export C++ PIX, non decodificando direttamente il formato .wpix.",
+    "- I verdetti sono analisi statica di DXC e non provano equivalenza visiva o compatibilità runtime D3D11.",
+    "- Pixtool non filtra per queue. Il campo Queue ID identifica una riga/evento nella queue, non la queue stessa.",
+    "- L'etichetta queue mostrata nella UI PIX resta un'attestazione dell'utente; un event list manuale non prova la propria cattura o queue di origine.",
+  ];
+  if (report.eventExportWarning) lines.push("", `Avviso export eventi: ${report.eventExportWarning}`);
+  if (report.disassemblyFailures.length) lines.push("", "Disassemblati non riusciti:", ...report.disassemblyFailures.map((failure) => `- ${failure}`));
+  if (report.unmatchedEventPsoIds.length) lines.push("", `PSO evento non trovati nell'export: ${report.unmatchedEventPsoIds.join(", ")}`);
+  return `${lines.join("\n")}\n`;
+}
+
+export async function analyzePixDeep(options: PixDeepAnalysisOptions): Promise<PixDeepAnalysisReport> {
+  const pixPath = path.resolve(options.pixPath);
+  const outputDir = path.resolve(options.outputDir);
+  if (!pixPath.toLowerCase().endsWith(".wpix")) throw new Error("pixPath deve indicare un file .wpix.");
+  if (!fs.existsSync(pixPath) || !fs.statSync(pixPath).isFile()) throw new Error(`Cattura PIX non trovata: ${pixPath}`);
+  if (path.resolve(outputDir) === pixPath) throw new Error("La cartella output non può essere il file .wpix.");
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  const staticScan = await analyzePixCapture(pixPath);
+  const scanPath = path.join(outputDir, "pix-scan.json");

@@ -1,0 +1,157 @@
+import { analyze, formatFindings } from "./analyzer.js";
+import { convert } from "./converter.js";
+import assert from "node:assert";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+
+const sample = `
+// WaveActiveSum in un commento non deve contare
+struct Params { float4 tint; float16_t gain; };
+ConstantBuffer<Params> g_params : register(b0, space1);
+cbuffer Main : register(b0) { float4x4 vp; }
+Texture2D<float4> tex : register(t0, space0);
+Texture2D<float4> tex2 : register(t0, space2);
+SamplerState smp : register(s0);
+
+[shader("pixel")]
+float4 main(float2 uv : TEXCOORD0) : SV_Target
+{
+    uint idx = NonUniformResourceIndex(uv.x > 0.5 ? 1 : 0);
+    float16_t2 h = float16_t2(uv);
+    float a = select(uv.x > 0.5, select(uv.y > 0.5, 1.0, 2.0), 3.0);
+    uint d = dot4add_u8packed(0x01020304, 0x01010101, 0);
+    return tex.Sample(smp, uv) * g_params.tint * a + d + h.x;
+}
+`;
+const r = convert(sample);
+console.log(r.output); console.log(r.changes); console.log(r.registerMap);
+assert(!/space/.test(r.output.replace(/\/\/.*$/gm, "")), "space residuo");
+assert(r.output.includes("cbuffer g_params_cb : register(b1)"), "cbuffer atteso su b1");
+assert(r.output.includes("register(t1)"), "tex2 -> t1");
+assert(r.output.includes("((uv.x > 0.5) ? (((uv.y > 0.5) ? (1.0) : (2.0))) : (3.0))"), "select annidato");
+assert(r.output.includes("min16float2 h = min16float2(uv)"), "tipi 16-bit");
+assert(!r.output.includes("NonUniformResourceIndex") && !r.output.includes("[shader"), "attributi");
+assert.equal(r.remaining.length, 0, "nessun residuo");
+
+const bad = analyze(`float x = WaveActiveSum(1); RaytracingAccelerationStructure s; uint64_t v; t.SampleCmpLevel(a,b,c,d);
+[WaveSize(32)] void f(){} // WaveReadLaneAt`);
+console.log(formatFindings(bad));
+const codes = new Set(bad.map((f) => f.code));
+for (const c of ["W001", "R001", "I001", "X003", "A002"]) assert(codes.has(c), c);
+assert.equal(bad.filter((f) => f.code === "W001").length, 1, "WaveSize/commenti non devono contare come wave");
+
+// ---- analizzatore DXIL (regressione sul parsing dei binding del disassemblato DXC)
+import { analyzeDisasm, compareShaderSignatures, parseInputSignature, parseOutputSignature } from "./dxil-analyzer.js";
+import { postprocessHlsl } from "./hlsl-post.js";
+import { analyzeSource, DEFAULT_LIMITS, findPixTool, resolveLimits, type ByteSource } from "./pix-capture.js";
+import { exportPixDrawResource, listPixEvents, parsePixEventListText } from "./pix-events.js";
+import { runPrecompileTests } from "./precompile-test.js";
+import { runHelaPipelineTests } from "./hela-pipeline-test.js";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const { buildPixPrompt, buildPixEventListPrompt, buildPixResourcePrompt } = require("../vscode-extension/pix.cjs") as {
+  buildPixPrompt: (file: string, options?: Record<string, unknown>) => string;
+  buildPixEventListPrompt: (options: Record<string, unknown>) => string;
+  buildPixResourcePrompt: (options: Record<string, unknown>) => string;
+};
+type McpConnectionState = "unknown" | "starting" | "connected" | "disconnected";
+const {
+  createMcpServerLogMonitor,
+  findWindowLogDirectory,
+  parseMcpConnectionState,
+  parseMcpServerLogFileName,
+} = require("../vscode-extension/mcp-log-monitor.cjs") as {
+  createMcpServerLogMonitor: (
+    logPath: string,
+    serverName: string,
+    onState: (state: McpConnectionState, definitionId: string | undefined) => void,
+    onError?: (error: Error) => void,
+  ) => { dispose: () => void };
+  findWindowLogDirectory: (logPath: string) => string | undefined;
+  parseMcpConnectionState: (contents: string) => McpConnectionState | undefined;
+  parseMcpServerLogFileName: (fileName: string, serverName: string) => string | undefined;
+};
+assert.equal(
+  parseMcpServerLogFileName("mcpServer.mcp.config.ws14.sm6-to-sm5.log", "sm6-to-sm5"),
+  "mcp.config.ws14.sm6-to-sm5",
+  "il log rivela l'ID MCP completo usato da VS Code",
+);
+assert.equal(parseMcpServerLogFileName("mcpServer.other.log", "sm6-to-sm5"), undefined);
+assert.equal(parseMcpConnectionState("Stato connessione: Arrestato\n"), "disconnected");
+assert.equal(parseMcpConnectionState("Stato connessione: Avvio\n"), "starting");
+assert.equal(parseMcpConnectionState("Stato connessione: In esecuzione\n"), "connected");
+assert.equal(parseMcpConnectionState("Connection state: Stopped\n"), "disconnected");
+assert.equal(parseMcpConnectionState("Discovered 11 tools\n"), "connected");
+const monitorRoot = fs.mkdtempSync(path.join(os.tmpdir(), "shader-lab-mcp-log-"));
+const windowLogDirectory = path.join(monitorRoot, "window2");
+const extensionLogPath = path.join(windowLogDirectory, "exthost", "local-tools.shader-lab");
+const serverLogPath = path.join(windowLogDirectory, "mcpServer.mcp.config.ws14.sm6-to-sm5.log");
+fs.mkdirSync(extensionLogPath, { recursive: true });
+fs.writeFileSync(serverLogPath, "Stato connessione: Arrestato\n");
+assert.equal(findWindowLogDirectory(extensionLogPath), windowLogDirectory);
+let resolveRunning!: () => void;
+let rejectRunning!: (error: Error) => void;
+const runningObserved = new Promise<void>((resolve, reject) => {
+  const timeout = setTimeout(() => reject(new Error("timeout monitor stato MCP")), 1500);
+  resolveRunning = () => {
+    clearTimeout(timeout);
+    resolve();
+  };
+  rejectRunning = (error) => {
+    clearTimeout(timeout);
+    reject(error);
+  };
+});
+let observedDefinitionId: string | undefined;
+const logMonitor = createMcpServerLogMonitor(
+  extensionLogPath,
+  "sm6-to-sm5",
+  (state, definitionId) => {
+    observedDefinitionId = definitionId;
+    if (state === "connected") resolveRunning();
+  },
+  rejectRunning,
+);
+try {
+  assert.equal(observedDefinitionId, "mcp.config.ws14.sm6-to-sm5");
+  fs.appendFileSync(serverLogPath, "Stato connessione: In esecuzione\n");
+  await runningObserved;
+  assert.equal(observedDefinitionId, "mcp.config.ws14.sm6-to-sm5");
+} finally {
+  logMonitor.dispose();
+  fs.rmSync(monitorRoot, { recursive: true, force: true });
+}
+const fake = [
+  '; Note: shader requires additional functionality:',
+  ';       64-bit Atomics on Typed Resources',
+  '; Resource Bindings:',
+  '; Name                                 Type  Format         Dim      ID      HLSL Bind  Count',
+  '; ------------------------------ ---------- ------- ----------- ------- -------------- ------',
+  ';                                   cbuffer      NA          NA     CB0            cb0     1',
+  ';                                   cbuffer      NA          NA     CB5     cb0,space3     1',
+  ';                                   texture  struct         r/o      T0             t0     1',
+  ';                                       UAV     u32          2d      U0             u0     1',
+  '; ViewId state:',
+  '; NumThreads=(64,1,1)',
+  '; EntryFunctionName: MainCS',
+  '!3 = !{!"cs", i32 6, i32 6}',
+  '  %1 = call i64 @dx.op.atomicBinOp.i64(i32 78, %dx.types.Handle %h, i32 7, i32 %a, i32 %b, i32 undef, i64 %c)',
+  '  %2 = call i32 @dx.op.quadOp.i32(i32 123, i32 %v, i8 0)',
+].join("\n");
+const rep = analyzeDisasm(fake);
+assert.equal(rep.bindings.length, 4, "binding (incl. cbuffer)");
+assert(rep.bindings.some((b) => b.cls === "b" && b.slot === 0 && b.space === 3), "cb0,space3");
+assert(rep.findings.some((f) => f.code === "I002") && rep.findings.some((f) => f.code === "W001"), "atomic64 + quad");
+assert.equal(rep.verdict, "not-convertible");
+assert.equal(rep.numThreads, "(64,1,1)", "numthreads letto dal disassemblato");
+assert.equal(rep.entry, "MainCS", "entry originale letto dal disassemblato");
+
+// ---- firme FXC/DXC e validazione delle coppie VS/PS
+const fxcSignatures = [
+  "// Input signature:",
+  "// Name                 Index   Mask Register SysValue  Format   Used",
+  "// -------------------- ----- ------ -------- -------- ------- ------",
+  "// TEXCOORD                 1   xyzw        1     NONE   float   xyzw",
+  "// SV_Position              0   xyzw        0      POS   float   xyzw",

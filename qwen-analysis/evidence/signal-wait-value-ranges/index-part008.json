@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "path": "evidence/signal-wait-value-ranges/part0204.ndjson",
+      "recordStart": 5675,
+      "recordEnd": 5681,
+      "recordCount": 7,
+      "byteCount": 1962,
+      "sha256": "73802d5df793be70031e9fb99256dc85a09d44eef375bc1f6ef4dbdde5c394b6"
+    }
+  ]
+}

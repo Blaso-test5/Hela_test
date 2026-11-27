@@ -1,0 +1,154 @@
+            installed_overrides.mkdir(parents=True)
+            game_exe = game_dir / "Hela-Win64-Shipping.exe"
+            game_exe.write_bytes(b"synthetic executable placeholder")
+            for name in ("d3d12.dll", "dxgi.dll"):
+                (game_dir / name).write_bytes(b"temporary installed proxy")
+            (installed_overrides / "temporary.cso").write_bytes(b"temporary override")
+
+            absent_runtime_manifest = {
+                "schema": "hela-proxy-restore/v1",
+                "game_directory": str(game_dir),
+                "created_utc": "2026-11-11T00:00:00Z",
+                "runtime": {
+                    "d3d12.dll": {"present": False, "sha256": None},
+                    "dxgi.dll": {"present": False, "sha256": None},
+                },
+                "overrides_directory_present": False,
+                "overrides": [],
+            }
+            (restore_root / "restore-manifest.json").write_text(
+                json.dumps(absent_runtime_manifest),
+                encoding="utf-8",
+            )
+
+            absent_restore = _run_proxy_manager_restore(powershell, game_exe, restore_run)
+            self.assertEqual(
+                absent_restore.returncode,
+                0,
+                absent_restore.stdout + "\n" + absent_restore.stderr,
+            )
+            self.assertFalse((game_dir / "d3d12.dll").exists())
+            self.assertFalse((game_dir / "dxgi.dll").exists())
+            self.assertFalse(installed_overrides.exists())
+
+            legacy_run = root / "run-legacy"
+            legacy_restore = legacy_run / "restore-point"
+            legacy_overrides = legacy_restore / "overrides"
+            legacy_overrides.mkdir(parents=True)
+            legacy_runtime = {}
+            for name in ("d3d12.dll", "dxgi.dll"):
+                content = f"original {name}".encode("ascii")
+                (legacy_restore / name).write_bytes(content)
+                legacy_runtime[name] = hashlib.sha256(content).hexdigest()
+            original_shader = b"original shader"
+            (legacy_overrides / "original.cso").write_bytes(original_shader)
+            (legacy_restore / "restore-manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "hela-proxy-restore/v1",
+                        "game_directory": str(game_dir),
+                        "created_utc": "2026-11-11T00:00:00Z",
+                        "runtime": legacy_runtime,
+                        "overrides": [
+                            {
+                                "path": "original.cso",
+                                "bytes": len(original_shader),
+                                "sha256": hashlib.sha256(original_shader).hexdigest(),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            legacy_restore_result = _run_proxy_manager_restore(powershell, game_exe, legacy_run)
+            self.assertEqual(
+                legacy_restore_result.returncode,
+                0,
+                legacy_restore_result.stdout + "\n" + legacy_restore_result.stderr,
+            )
+            self.assertEqual((game_dir / "d3d12.dll").read_bytes(), b"original d3d12.dll")
+            self.assertEqual((game_dir / "dxgi.dll").read_bytes(), b"original dxgi.dll")
+            self.assertEqual((installed_overrides / "original.cso").read_bytes(), original_shader)
+            self.assertFalse((installed_overrides / "temporary.cso").exists())
+
+    def test_bmp_incomplete_vs_complete_inspection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bmp_path = Path(tmpdir) / "source_100.bmp"
+            full_bytes = _make_24bit_bmp_bytes(4, 4, fill_bgr=b"\x00\x00\x00")
+
+            # Write only the first 60 bytes (incomplete pixel payload)
+            bmp_path.write_bytes(full_bytes[:60])
+            self.assertIsNone(lfm.try_inspect_complete_bmp(bmp_path, label="source"))
+
+            # Now write the full BMP
+            bmp_path.write_bytes(full_bytes)
+            info = lfm.try_inspect_complete_bmp(bmp_path, label="source")
+            self.assertIsNotNone(info)
+            assert info is not None
+            self.assertEqual(info.width, 4)
+            self.assertEqual(info.height, 4)
+            self.assertEqual(info.total_pixels, 16)
+            self.assertEqual(info.non_black_pixels, 0)
+
+            # Non-black BMP check (red pixels: BGR = 0, 0, 255)
+            red_bmp_path = Path(tmpdir) / "bb_red.bmp"
+            red_bmp_path.write_bytes(_make_24bit_bmp_bytes(2, 2, fill_bgr=b"\x00\x00\xff"))
+            red_info = lfm.try_inspect_complete_bmp(red_bmp_path, label="backbuffer")
+            self.assertIsNotNone(red_info)
+            assert red_info is not None
+            self.assertEqual(red_info.non_black_pixels, 4)
+            self.assertEqual(red_info.first_non_black_rgb, (255, 0, 0))
+
+    def test_fixture_once_mode_and_epistemic_separation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            json_out = tmp_path / "live_report.json"
+            src_bmp = tmp_path / "src.bmp"
+            bb_bmp = tmp_path / "bb.bmp"
+            src_bmp.write_bytes(_make_24bit_bmp_bytes(4, 2, fill_bgr=b"\x00\x00\x00"))
+            bb_bmp.write_bytes(_make_24bit_bmp_bytes(4, 2, fill_bgr=b"\x00\x00\x00"))
+
+            rc = lfm.main(
+                [
+                    str(FIXTURE_LOG),
+                    "--once",
+                    "--source-bmp",
+                    str(src_bmp),
+                    "--backbuffer-bmp",
+                    str(bb_bmp),
+                    "--json",
+                    str(json_out),
+                    "--quiet-events",
+                ]
+            )
+            self.assertEqual(rc, 0)
+            self.assertTrue(json_out.is_file())
+
+            report = json.loads(json_out.read_text(encoding="utf-8"))
+            self.assertEqual(report["schema"], "hela.live_frame_monitor")
+            p100 = report["present_100"]
+            self.assertEqual(p100["source_readback"]["source"], "0000024096331C38")
+            self.assertEqual(p100["matched_source_history"]["resource"], "0000024096331C38")
+            self.assertEqual(p100["matched_source_history"]["draws"], 66)
+            self.assertEqual(report["bmp_verification"]["source"]["non_black_pixels"], 0)
+            self.assertEqual(report["bmp_verification"]["backbuffer"]["non_black_pixels"], 0)
+
+            # Verify epistemic guardrails
+            hyps = "\n".join(report["hypotheses_and_open_questions"])
+            self.assertIn("does NOT validate CopyResource", hyps)
+            self.assertIn("does NOT by itself prove whether their Dispatch calls were skipped", hyps)
+
+    def test_bounded_memory_caps(self) -> None:
+        state = lfm.LiveMonitorState()
+        state.feed_line("Resource 0000024096331C38 operations=100 draws=100 skipped=0 clears=0")
+        for i in range(50):
+            state.feed_line(
+                f"  DrawIndexedInstanced VS=20e0826b236597a1 PS=44b0a992c2304254 elements=6 instances=1 RTV slot=0 viewport=1280x720"
+            )
+        hist = state.resources_by_ptr["0000024096331C38"]
+        self.assertEqual(len(hist.retained_draws), lfm.MAX_RETAINED_DRAWS_PER_RESOURCE)
+
+
+if __name__ == "__main__":
+    unittest.main()

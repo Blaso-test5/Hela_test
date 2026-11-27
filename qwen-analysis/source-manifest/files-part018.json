@@ -1,0 +1,168 @@
+[
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/tests/smoke.cpp",
+    "totalLineCount": 1263,
+    "sourceByteCount": 55051,
+    "sha256": "6c8f559dbeab8338fedfa59c82de2ccf4a563ee09cb543cedb993afed0f4b7b7",
+    "publishedSha256": "6c8f559dbeab8338fedfa59c82de2ccf4a563ee09cb543cedb993afed0f4b7b7",
+    "publishedByteCount": 55051,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/d3d12on11/tests/smoke.cpp.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 177,
+        "byteCount": 7959,
+        "sha256": "2918f3692aad7f5ef8a089cd1d02d9162e2c17fade964303fc0564bc5ad4b28e"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/tests/smoke.cpp.part002.txt",
+        "lineStart": 178,
+        "lineEnd": 343,
+        "byteCount": 7959,
+        "sha256": "99f1421a0f8add84fdca2376d025b02f3bdd32b2a4ad0aae500ff1a21fdf8a83"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/tests/smoke.cpp.part003.txt",
+        "lineStart": 344,
+        "lineEnd": 511,
+        "byteCount": 7978,
+        "sha256": "e7472eeedd148637222fd126c486b3f01457efdff3e00db043f43c577ab2c022"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/tests/smoke.cpp.part004.txt",
+        "lineStart": 512,
+        "lineEnd": 702,
+        "byteCount": 7984,
+        "sha256": "d67a4c191ebc9cd8283ea78e3e9504f65987e82fa95135dbdd14dec858688d50"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/tests/smoke.cpp.part005.txt",
+        "lineStart": 703,
+        "lineEnd": 900,
+        "byteCount": 7965,
+        "sha256": "939a74ca7f34d331f20219f1ef5564574549c722efce655d482c1b28434ccf6c"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/tests/smoke.cpp.part006.txt",
+        "lineStart": 901,
+        "lineEnd": 1091,
+        "byteCount": 7952,
+        "sha256": "9ac1f2c50c6a060623256d42e8f4986724bc77fdd50d34398cd5fd0069a08006"
+      },
+      {
+        "path": "files/shader-lab/d3d12on11/tests/smoke.cpp.part007.txt",
+        "lineStart": 1092,
+        "lineEnd": 1263,
+        "byteCount": 7254,
+        "sha256": "ff8f8e8acdeb0d7f9ff8b6e583de2a4fe41eaef4764d5e5903dfd4e65ec686f9"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "d3d12on11/tests/structured_buffer_copy_smoke.cpp",
+    "totalLineCount": 107,
+    "sourceByteCount": 4124,
+    "sha256": "32e509dc434c39ff591a5e49e21a53d11bca5fa4daa1550c78c7ee32ba6d79f6",
+    "publishedSha256": "32e509dc434c39ff591a5e49e21a53d11bca5fa4daa1550c78c7ee32ba6d79f6",
+    "publishedByteCount": 4124,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tests/structured_buffer_copy_smoke.cpp",
+        "lineStart": 1,
+        "lineEnd": 107,
+        "byteCount": 4124,
+        "sha256": "32e509dc434c39ff591a5e49e21a53d11bca5fa4daa1550c78c7ee32ba6d79f6"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "docs/HELA_SHADER_PRECOMPILATION.md",
+    "totalLineCount": 159,
+    "sourceByteCount": 14748,
+    "sha256": "8824c784b40b877cc6ab9efb187f2a3475b06675bb501fd73e23ac4f14c4e5b1",
+    "publishedSha256": "8824c784b40b877cc6ab9efb187f2a3475b06675bb501fd73e23ac4f14c4e5b1",
+    "publishedByteCount": 14748,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/docs/HELA_SHADER_PRECOMPILATION.md.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 91,
+        "byteCount": 7543,
+        "sha256": "bc79fe8bafb91334e170e4c561b64504199b08ac25c6bea581d4e32b0a830422"
+      },
+      {
+        "path": "files/shader-lab/docs/HELA_SHADER_PRECOMPILATION.md.part002.txt",
+        "lineStart": 92,
+        "lineEnd": 159,
+        "byteCount": 7205,
+        "sha256": "285e3c43abd34f0620d1c0868ea3ef07d86e7f24bbea02a5d539770057805af0"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "docs/hela-cycle-plan.md",
+    "totalLineCount": 247,
+    "sourceByteCount": 14952,
+    "sha256": "1b30ef01ab19073990f5c967b4da93459508e262c0c5f6bab030f46e4e9a59e5",
+    "publishedSha256": "1b30ef01ab19073990f5c967b4da93459508e262c0c5f6bab030f46e4e9a59e5",
+    "publishedByteCount": 14952,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/docs/hela-cycle-plan.md.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 127,
+        "byteCount": 7953,
+        "sha256": "b08b878bc967dc8c3a6e57319fbcbac164ccba2370a34bba095d8ad4a7ef367e"
+      },
+      {
+        "path": "files/shader-lab/docs/hela-cycle-plan.md.part002.txt",
+        "lineStart": 128,
+        "lineEnd": 247,
+        "byteCount": 6999,
+        "sha256": "080fa0422b177faa0f56040c5088490aa7a3bf5467cecbc64ab9b324d817a915"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "docs/hela-e2e-audit.md",
+    "totalLineCount": 69,
+    "sourceByteCount": 2600,
+    "sha256": "fea4b229f642e73283a0f39b01c801db4b070f975c20f1b4849441c764c334de",
+    "publishedSha256": "fea4b229f642e73283a0f39b01c801db4b070f975c20f1b4849441c764c334de",
+    "publishedByteCount": 2600,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/docs/hela-e2e-audit.md",
+        "lineStart": 1,
+        "lineEnd": 69,
+        "byteCount": 2600,
+        "sha256": "fea4b229f642e73283a0f39b01c801db4b070f975c20f1b4849441c764c334de"
+      }
+    ]
+  }
+]

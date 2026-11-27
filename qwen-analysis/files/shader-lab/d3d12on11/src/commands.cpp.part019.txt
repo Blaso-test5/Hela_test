@@ -1,0 +1,43 @@
+    Ptr<ID3D11Query> query;
+    HRESULT result = dev->d11->CreateQuery(&desc, query.Put());
+    if (FAILED(result)) {
+        Log("GetClockCalibration could not create D3D11 timestamp query: hr=0x%08lx", result);
+        return result;
+    }
+
+    dev->ctx->End(query.Get());
+    LARGE_INTEGER cpuSample{};
+    if (!QueryPerformanceCounter(&cpuSample)) {
+        Log("GetClockCalibration QueryPerformanceCounter failed");
+        return E_FAIL;
+    }
+    dev->ctx->Flush();
+
+    UINT64 gpuSample = 0;
+    result = WaitForQuery(dev, query.Get(), &gpuSample, sizeof(gpuSample));
+    if (FAILED(result)) {
+        Log("GetClockCalibration D3D11 timestamp query failed: hr=0x%08lx", result);
+        return result;
+    }
+
+    *gpuTimestamp = gpuSample;
+    *cpuTimestamp = static_cast<UINT64>(cpuSample.QuadPart);
+    Log("GetClockCalibration result=S_OK gpu=%llu cpu-qpc=%llu",
+        static_cast<unsigned long long>(*gpuTimestamp),
+        static_cast<unsigned long long>(*cpuTimestamp));
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE CommandQueue::GetTimestampFrequency(UINT64* frequency) {
+    D3D12ON11_TRACE_CALLER("CommandQueue::GetTimestampFrequency");
+    if (!frequency) {
+        Log("GetTimestampFrequency rejected null output pointer");
+        return E_INVALIDARG;
+    }
+
+    std::lock_guard<std::recursive_mutex> lock(dev->ctxLock);
+    const HRESULT result = GetDeviceTimestampFrequency(dev, frequency);
+    Log("GetTimestampFrequency result=0x%08lx frequency=%llu", result,
+        static_cast<unsigned long long>(SUCCEEDED(result) ? *frequency : 0));
+    return result;
+}

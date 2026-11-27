@@ -1,0 +1,175 @@
+        try {
+            $sha = [System.Security.Cryptography.SHA256]::Create()
+            try { $hash = $sha.ComputeHash($fs) } finally { $sha.Dispose() }
+            $r.bytes = $fs.Length
+            $r.sha256 = (($hash | ForEach-Object { $_.ToString('x2') }) -join '')
+            $r.state = 'File'
+        } finally {
+            $fs.Dispose()
+        }
+    } catch {
+        $r.state = 'Error'
+        $r.sha256 = $null
+        $r.bytes = $null
+        $r.error = $_.Exception.Message
+    }
+    return $r
+}
+
+function ConvertTo-ActualState {
+    param($State)
+    $kind = 'error'
+    if ($State.state -eq 'File') { $kind = 'file' }
+    elseif ($State.state -eq 'Absent') { $kind = 'absent' }
+    elseif ($State.state -eq 'Directory') { $kind = 'directory' }
+    return [ordered]@{ kind = $kind; sha256 = $State.sha256; bytes = $State.bytes; error = $State.error }
+}
+
+# ----------------------------------------------------------------------------------------------
+# Findings
+# ----------------------------------------------------------------------------------------------
+
+function New-Finding {
+    param([string]$Category, [string]$Name, [string]$Status, [string]$Reason, $Expected, $Actual, $Required = $null)
+    return [ordered]@{
+        category = $Category
+        name     = $Name
+        status   = $Status
+        required = $Required
+        expected = $Expected
+        actual   = $Actual
+        reason   = $Reason
+    }
+}
+
+function Compare-FileToExpectation {
+    param([string]$Category, [string]$Name, $Exp, $Act, $Required = $null)
+    $expected = [ordered]@{ present = $Exp.present; sha256 = $Exp.sha256; bytes = $Exp.bytes }
+    $actual = ConvertTo-ActualState $Act
+    $status = 'NotAttestable'
+    $reason = ''
+
+    if ($Act.state -eq 'Error') {
+        $reason = 'Live path could not be inspected: ' + $Act.error
+    } elseif ($null -eq $Exp.present) {
+        $reason = 'The reference has no attestable entry for this item, so no comparison is possible.'
+    } elseif ($Exp.present -eq $false) {
+        if ($Act.state -eq 'Absent') {
+            $status = 'Match'
+            $reason = 'Absent, as recorded by the reference.'
+        } else {
+            $status = 'Extra'
+            $reason = 'Present on disk, but the reference records it as absent.'
+        }
+    } else {
+        switch ($Act.state) {
+            'Absent' {
+                $status = 'Missing'
+                $reason = 'Recorded as present by the reference, but not found on disk.'
+            }
+            'Directory' {
+                $status = 'Mismatch'
+                $reason = 'A directory exists where the reference expects a file.'
+            }
+            'File' {
+                if ($null -eq $Exp.sha256) {
+                    $reason = 'The file exists, but the reference does not record its hash.'
+                } else {
+                    $hashOk = [string]::Equals($Act.sha256, $Exp.sha256, [System.StringComparison]::OrdinalIgnoreCase)
+                    $bytesOk = ($null -eq $Exp.bytes) -or ($Act.bytes -eq $Exp.bytes)
+                    if ($hashOk -and $bytesOk) {
+                        $status = 'Match'
+                        $reason = 'SHA-256 matches the reference.'
+                    } elseif (-not $hashOk) {
+                        $status = 'Mismatch'
+                        $reason = 'SHA-256 differs from the reference.'
+                    } else {
+                        $status = 'Mismatch'
+                        $reason = 'File size differs from the reference.'
+                    }
+                }
+            }
+        }
+    }
+    return (New-Finding -Category $Category -Name $Name -Status $status -Reason $reason -Expected $expected -Actual $actual -Required $Required)
+}
+
+function New-ObservedFinding {
+    param([string]$Category, [string]$Name, $Act)
+    $reason = 'Observed (inventory mode, no reference to compare).'
+    return (New-Finding -Category $Category -Name $Name -Status 'Observed' -Reason $reason -Expected $null -Actual (ConvertTo-ActualState $Act))
+}
+
+# ----------------------------------------------------------------------------------------------
+# Reference manifests
+# ----------------------------------------------------------------------------------------------
+
+function ConvertFrom-RunManifest {
+    param($M, [string]$Path)
+    $ctx = "Run manifest '$Path'"
+
+    $schema = Get-JsonProp $M 'schema'
+    if (-not $schema.Exists -or $schema.Value -isnot [string] -or $schema.Value -cne 'hela-run-manifest/v1') {
+        throw "$ctx`: schema must be 'hela-run-manifest/v1'."
+    }
+    $att = Get-JsonProp $M 'runtimeAttestation'
+    if (-not $att.Exists -or $att.Value -isnot [string] -or $att.Value -cne 'module-and-shader-sha256') {
+        throw "$ctx`: runtimeAttestation must be 'module-and-shader-sha256'."
+    }
+    $testVersion = $null
+    $tv = Get-JsonProp $M 'testVersion'
+    if ($tv.Exists) {
+        if ($tv.Value -isnot [string] -or [string]::IsNullOrWhiteSpace($tv.Value)) { throw "$ctx`: testVersion must be a non-empty string." }
+        $testVersion = $tv.Value
+    }
+
+    $rt = Get-JsonProp $M 'runtime'
+    if (-not $rt.Exists -or -not (Test-IsObject $rt.Value)) { throw "$ctx`: runtime must be an object with d3d12 and dxgi hashes." }
+    $runtime = [ordered]@{}
+    foreach ($n in @('d3d12', 'dxgi')) {
+        $p = Get-JsonProp $rt.Value $n
+        if (-not $p.Exists) { throw "$ctx`: runtime.$n is required." }
+        $h = Assert-Sha256 $p.Value "$ctx`: runtime.$n"
+        $runtime["$n.dll"] = @{ present = $true; sha256 = $h; bytes = $null; basis = 'run-manifest' }
+    }
+
+    $ov = Get-JsonProp $M 'overrides'
+    if (-not $ov.Exists -or -not (Test-IsObject $ov.Value)) { throw "$ctx`: overrides must be an object mapping relative .cso path to SHA-256." }
+    $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $entries = New-Object System.Collections.Generic.List[object]
+    foreach ($prop in $ov.Value.PSObject.Properties) {
+        $rel = ConvertTo-SafeRelativePath $prop.Name "$ctx`: overrides key"
+        if (-not $rel.EndsWith('.cso', [System.StringComparison]::OrdinalIgnoreCase)) { throw "$ctx`: overrides key '$($prop.Name)' must end with .cso." }
+        if (-not $seen.Add($rel)) { throw "$ctx`: duplicate overrides key '$rel'." }
+        $v = $prop.Value
+        $sha = $null
+        $bytes = $null
+        if ($v -is [string]) {
+            $sha = Assert-Sha256 $v "$ctx`: overrides['$rel']"
+        } elseif (Test-IsObject $v) {
+            $s = Get-JsonProp $v 'sha256'
+            if (-not $s.Exists) { throw "$ctx`: overrides['$rel'].sha256 is required." }
+            $sha = Assert-Sha256 $s.Value "$ctx`: overrides['$rel'].sha256"
+            $b = Get-JsonProp $v 'bytes'
+            if ($b.Exists -and $null -ne $b.Value) {
+                if (($b.Value -isnot [int] -and $b.Value -isnot [long]) -or $b.Value -lt 0) { throw "$ctx`: overrides['$rel'].bytes must be a non-negative integer." }
+                $bytes = $b.Value
+            }
+        } else {
+            throw "$ctx`: overrides['$rel'] must be a SHA-256 string or an object with sha256."
+        }
+        $entries.Add([pscustomobject]@{ path = $rel; sha256 = $sha; bytes = $bytes; required = $false })
+    }
+
+    $req = Get-JsonProp $M 'requiredOverrides'
+    if (-not $req.Exists -or $req.Value -isnot [System.Array]) { throw "$ctx`: requiredOverrides must be an array." }
+    foreach ($r in $req.Value) {
+        if ($r -isnot [string]) { throw "$ctx`: requiredOverrides entries must be strings." }
+        $rel = ConvertTo-SafeRelativePath $r "$ctx`: requiredOverrides entry"
+        $hit = $null
+        foreach ($e in $entries) { if ($e.path -ieq $rel) { $hit = $e } }
+        if ($null -eq $hit) { throw "$ctx`: requiredOverrides entry '$rel' is not listed in overrides." }
+        $hit.required = $true
+    }
+
+    $notes = New-Object System.Collections.Generic.List[string]

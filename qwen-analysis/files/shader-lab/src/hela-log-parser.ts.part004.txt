@@ -1,0 +1,203 @@
+          line: lineNo,
+        };
+        computeShaderUse.push(rec);
+        presentProgress.maxSummaryPresent = Math.max(
+          presentProgress.maxSummaryPresent,
+          rec.lastObservedPresentCountProcessWide,
+        );
+      }
+      continue;
+    }
+
+    // 7. [SHADER_USE_EVENT] (util.cpp:278-299)
+    if (line.includes("[SHADER_USE_EVENT]")) {
+      const kv = parseKvTokens(line);
+      if (kv.kind === "draw" || kv.kind === "dispatch") {
+        shaderUseEvents.push({
+          ordinal: Number(kv.ordinal) || 0,
+          observedPresentCallsReturned: Number(kv.observed_present_calls_returned) || 0,
+          kind: kv.kind,
+          outcome: kv.outcome ?? "unknown",
+          executionCount: Number(kv.execution_count) || 0,
+          vsHash: normalizeHash(kv.vs),
+          psHash: normalizeHash(kv.ps),
+          gsHash: normalizeHash(kv.gs),
+          hsHash: normalizeHash(kv.hs),
+          dsHash: normalizeHash(kv.ds),
+          csHash: normalizeHash(kv.cs),
+          missingMask: parseHexMask(kv.missing_mask),
+          graphicsPsoBound: kv.graphics_pso_bound !== undefined ? kv.graphics_pso_bound === "1" : undefined,
+          rtvIsBackbuffer: kv.rtv_is_backbuffer !== undefined ? kv.rtv_is_backbuffer === "1" : undefined,
+          line: lineNo,
+        });
+      }
+      continue;
+    }
+
+    // 8. [READBACK_IDENTITY] (dxgi_proxy.cpp:342 — nomi campo esatti!)
+    if (line.includes("[READBACK_IDENTITY]")) {
+      const kv = parseKvTokens(line);
+      if (kv.readback_present_count !== undefined && kv.copy_sequence !== undefined && kv.copy_source !== undefined) {
+        const rec: ReadbackIdentityRecord = {
+          readbackPresentCount: Number(kv.readback_present_count) || 0,
+          bufferIndex: Number(kv.buffer_index) || 0,
+          nativeBackbuffer: normalizePointer(kv.native_backbuffer),
+          width: Number(kv.width) || 0,
+          height: Number(kv.height) || 0,
+          format: Number(kv.format) || 0,
+          copySequence: Number(kv.copy_sequence) || 0,
+          copySource: normalizePointer(kv.copy_source),
+          line: lineNo,
+        };
+        readbackIdentities.push(rec);
+        presentProgress.maxReadbackPresent = Math.max(presentProgress.maxReadbackPresent, rec.readbackPresentCount);
+      }
+      continue;
+    }
+
+    // 9. [READBACK_SRC] / [READBACK] sampled non-black counts (dxgi_proxy.cpp:240-260)
+    const rbHeaderMatch = line.match(/\[(READBACK_SRC|READBACK)\]\s+Present #(\d+)\s+size=\d+x\d+/);
+    if (rbHeaderMatch) {
+      const presentCount = Number(rbHeaderMatch[2]);
+      activeReadbackSampleCtx = {
+        kind: rbHeaderMatch[1] === "READBACK_SRC" ? "source" : "backbuffer",
+        presentCount,
+      };
+      presentProgress.maxReadbackPresent = Math.max(presentProgress.maxReadbackPresent, presentCount);
+      continue;
+    }
+
+    const rbNonBlackMatch = line.match(/\[(READBACK_SRC|READBACK)\]\s+Non-black pixels:\s*(\d+)\/(\d+)/);
+    if (rbNonBlackMatch && activeReadbackSampleCtx) {
+      const kind = rbNonBlackMatch[1] === "READBACK_SRC" ? "source" : "backbuffer";
+      if (activeReadbackSampleCtx.kind === kind) {
+        sampledReadbacks.push({
+          kind,
+          presentCount: activeReadbackSampleCtx.presentCount,
+          nonBlackSamples: Number(rbNonBlackMatch[2]),
+          totalSamples: Number(rbNonBlackMatch[3]),
+          line: lineNo,
+        });
+      }
+      continue;
+    }
+
+    // 10. [TARGET_DRAW_COPY] (commands.cpp:821 — nomi campo esatti!)
+    if (line.includes("[TARGET_DRAW_COPY]")) {
+      const kv = parseKvTokens(line);
+      if (
+        kv.draw_index !== undefined &&
+        kv.tracked_rtv_resource !== undefined &&
+        kv.latest_copy_sequence_at_draw !== undefined &&
+        kv.latest_copy_source_at_draw !== undefined
+      ) {
+        targetDrawCopies.push({
+          drawIndex: Number(kv.draw_index) || 0,
+          api: kv.api ?? "unknown",
+          rtvSlot: Number(kv.rtv_slot) || 0,
+          trackedRtvResource: normalizePointer(kv.tracked_rtv_resource),
+          vsHash: normalizeHash(kv.vs),
+          psHash: normalizeHash(kv.ps),
+          latestCopySequenceAtDraw: Number(kv.latest_copy_sequence_at_draw) || 0,
+          latestCopySourceAtDraw: normalizePointer(kv.latest_copy_source_at_draw),
+          line: lineNo,
+        });
+      }
+      continue;
+    }
+
+    // 11. [COPY_TO_BB] (commands.cpp:2202)
+    if (line.includes("[COPY_TO_BB]")) {
+      const kv = parseKvTokens(line);
+      if (kv.sequence !== undefined) {
+        copyToBackbufferRecords.push({
+          sourceResource: kv.source ? normalizePointer(kv.source) : kv.resource ? normalizePointer(kv.resource) : undefined,
+          sourceTexture: kv.source_texture ? normalizePointer(kv.source_texture) : undefined,
+          dimension: kv.dimension !== undefined ? Number(kv.dimension) : undefined,
+          width: kv.width !== undefined ? Number(kv.width) : undefined,
+          height: kv.height !== undefined ? Number(kv.height) : undefined,
+          format: kv.format !== undefined ? Number(kv.format) : undefined,
+          sequence: Number(kv.sequence) || 0,
+          line: lineNo,
+        });
+      }
+      continue;
+    }
+
+    // 12. [BB_SOURCE_HISTORY_SNAPSHOT] & [BB_SOURCE_HISTORY] (commands.cpp:913-938)
+    const bbSnapMatch = line.match(/\[BB_SOURCE_HISTORY_SNAPSHOT\]\s+present=(\d+)\s+resources=(\d+)/);
+    if (bbSnapMatch) {
+      const present = Number(bbSnapMatch[1]);
+      activeBbSnapshot = {
+        present,
+        declaredResources: Number(bbSnapMatch[2]),
+        resources: [],
+        line: lineNo,
+      };
+      activeBbResource = undefined;
+      bbSourceHistorySnapshots.push(activeBbSnapshot);
+      presentProgress.maxReadbackPresent = Math.max(presentProgress.maxReadbackPresent, present);
+      continue;
+    }
+
+    if (line.includes("[BB_SOURCE_HISTORY]") && activeBbSnapshot) {
+      const resMatch = line.match(
+        /\[BB_SOURCE_HISTORY\]\s+Resource\s+(\S+)\s+operations=(\d+)\s+draws=(\d+)\s+skipped=(\d+)\s+clears=(\d+)/,
+      );
+      if (resMatch) {
+        activeBbResource = {
+          resource: normalizePointer(resMatch[1]),
+          operations: Number(resMatch[2]),
+          draws: Number(resMatch[3]),
+          skipped: Number(resMatch[4]),
+          clears: Number(resMatch[5]),
+          entries: [],
+        };
+        activeBbSnapshot.resources.push(activeBbResource);
+        continue;
+      }
+      const noHistMatch = line.match(/\[BB_SOURCE_HISTORY\]\s+Resource\s+(\S+)\s+has NO draw\/clear history/);
+      if (noHistMatch) {
+        activeBbResource = {
+          resource: normalizePointer(noHistMatch[1]),
+          operations: 0,
+          draws: 0,
+          skipped: 0,
+          clears: 0,
+          entries: [],
+        };
+        activeBbSnapshot.resources.push(activeBbResource);
+        continue;
+      }
+      const entryMatch = line.match(/\[BB_SOURCE_HISTORY\]\s{2,}(.+)$/);
+      if (entryMatch && activeBbResource) {
+        activeBbResource.entries.push(entryMatch[1].trim());
+      }
+    }
+  }
+
+  presentProgress.maxObservedPresent = Math.max(
+    presentProgress.maxHeartbeatPresent,
+    presentProgress.maxSummaryPresent,
+    presentProgress.maxReadbackPresent,
+  );
+
+  // Build VS <-> PS pairing graph from PSOs + DRAW_SHADER_USE + SHADER_USE_EVENT
+  const psToVsSet = new Map<string, Set<string>>();
+  const vsToPsSet = new Map<string, Set<string>>();
+  const psoCountByHash = new Map<string, number>();
+
+  const linkPair = (vsHash?: string, psHash?: string) => {
+    if (!vsHash || !psHash) return;
+    if (!psToVsSet.has(psHash)) psToVsSet.set(psHash, new Set());
+    if (!vsToPsSet.has(vsHash)) vsToPsSet.set(vsHash, new Set());
+    psToVsSet.get(psHash)!.add(vsHash);
+    vsToPsSet.get(vsHash)!.add(psHash);
+  };
+
+  for (const pso of graphicsPsos) {
+    for (const ref of [pso.vs, pso.ps, pso.gs, pso.hs, pso.ds]) {
+      if (ref) psoCountByHash.set(ref.hash, (psoCountByHash.get(ref.hash) ?? 0) + 1);
+    }
+    linkPair(pso.vs?.hash, pso.ps?.hash);
+  }

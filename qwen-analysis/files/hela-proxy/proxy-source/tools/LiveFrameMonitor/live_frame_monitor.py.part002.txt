@@ -1,0 +1,209 @@
+            raise ValueError(f"Invalid shader override entry in '{manifest_path}': {name}")
+    if any(not isinstance(name, str) or name not in overrides for name in required_overrides):
+        raise ValueError(f"Invalid requiredOverrides in '{manifest_path}'")
+
+    return {
+        "test_version": manifest["testVersion"],
+        "manifest_path": str(manifest_path.resolve()),
+        "expected_modules": expected_modules,
+        "expected_overrides": {name: digest.lower() for name, digest in overrides.items()},
+        "required_overrides": list(required_overrides),
+    }
+
+
+def is_rgba_non_black(rgba: Tuple[int, int, int, int]) -> bool:
+    """
+    Black/alpha semantics:
+    Consistent with `try_inspect_complete_bmp` (where a pixel is non-black iff R != 0 or G != 0 or B != 0),
+    an RGBA sample is considered non-black iff any visible color channel (R, G, or B) is non-zero.
+    Alpha (channel index 3) alone does not make a pixel non-black (e.g. RGBA=(0,0,0,255) is opaque black),
+    while `all_samples_zero` strictly reports whether all 4 channels `(R, G, B, A) == (0, 0, 0, 0)`.
+    """
+    return rgba[0] != 0 or rgba[1] != 0 or rgba[2] != 0
+
+
+@dataclasses.dataclass
+class DrawSample:
+    draw_type: str
+    vs: Optional[str] = None
+    ps: Optional[str] = None
+    elements: Optional[int] = None
+    instances: Optional[int] = None
+    rtv_slot: Optional[int] = None
+    viewport: Optional[str] = None
+    line_no: int = 0
+
+
+@dataclasses.dataclass
+class ResourceHistory:
+    resource: str
+    operations: int
+    draws: int
+    skipped: int
+    clears: int
+    line_no: int
+    retained_draws: Deque[DrawSample] = dataclasses.field(
+        default_factory=lambda: deque(maxlen=MAX_RETAINED_DRAWS_PER_RESOURCE)
+    )
+
+    def unique_vs(self) -> List[str]:
+        return sorted({d.vs for d in self.retained_draws if d.vs})
+
+    def unique_ps(self) -> List[str]:
+        return sorted({d.ps for d in self.retained_draws if d.ps})
+
+    def unique_viewports(self) -> List[str]:
+        return sorted({d.viewport for d in self.retained_draws if d.viewport})
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "resource": self.resource,
+            "operations": self.operations,
+            "draws": self.draws,
+            "skipped": self.skipped,
+            "clears": self.clears,
+            "line_no": self.line_no,
+            "unique_vs": self.unique_vs(),
+            "unique_ps": self.unique_ps(),
+            "unique_viewports": self.unique_viewports(),
+            "retained_draw_count": len(self.retained_draws),
+            "retained_draws": [dataclasses.asdict(d) for d in self.retained_draws],
+        }
+
+
+@dataclasses.dataclass
+class ReadbackRecord:
+    kind: str  # "source" or "backbuffer"
+    present: int
+    line_no: int
+    source: Optional[str] = None
+    dimension: Optional[int] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    format: Optional[int] = None
+    sequence: Optional[int] = None
+    buffer: Optional[int] = None
+    sample_pixels_rgba: List[Tuple[int, int, int, int]] = dataclasses.field(default_factory=list)
+    non_black_count: Optional[int] = None
+    total_sampled: Optional[int] = None
+    non_black_pct: Optional[float] = None
+    has_explicit_summary: bool = False
+    emitted_complete_event: bool = False
+
+    @property
+    def all_samples_zero(self) -> Optional[bool]:
+        if not self.sample_pixels_rgba:
+            return None
+        return all(rgba == (0, 0, 0, 0) for rgba in self.sample_pixels_rgba)
+
+    @property
+    def all_samples_rgb_black(self) -> Optional[bool]:
+        if not self.sample_pixels_rgba:
+            return None
+        return all(not is_rgba_non_black(rgba) for rgba in self.sample_pixels_rgba)
+
+    def recompute_from_samples_if_needed(self) -> None:
+        """
+        When the native log emits the 5-point RGBA samples without a `Non-black pixels: X/100`
+        summary line, compute `non_black_count`, `total_sampled`, and `non_black_pct` directly
+        from `sample_pixels_rgba` using RGB non-black semantics (R!=0 or G!=0 or B!=0).
+        If an explicit `Non-black pixels:` line arrives later, it overrides these values.
+        """
+        if self.has_explicit_summary or not self.sample_pixels_rgba:
+            return
+        total = len(self.sample_pixels_rgba)
+        nb = sum(1 for rgba in self.sample_pixels_rgba if is_rgba_non_black(rgba))
+        self.non_black_count = nb
+        self.total_sampled = total
+        self.non_black_pct = round((nb * 100.0) / total, 1) if total > 0 else 0.0
+
+    def is_complete(self) -> bool:
+        return self.has_explicit_summary or len(self.sample_pixels_rgba) >= EXPECTED_POINT_SAMPLES
+
+
+@dataclasses.dataclass
+class ShaderStatus:
+    shader_hash: str
+    status: str  # "READY" or "PLACEHOLDER"
+    stage: Optional[str] = None
+    reason: Optional[str] = None
+    occurrences: int = 1
+    first_line: int = 0
+
+
+@dataclasses.dataclass
+class BmpInspection:
+    label: str
+    path: str
+    file_size_bytes: int
+    expected_min_bytes: int
+    width: int
+    height: int
+    bits_per_pixel: int
+    total_pixels: int
+    non_black_pixels: int
+    first_non_black_xy: Optional[Tuple[int, int]] = None
+    first_non_black_rgb: Optional[Tuple[int, int, int]] = None
+
+
+def try_inspect_complete_bmp(bmp_path: Path, label: str = "bmp") -> Optional[BmpInspection]:
+    """
+    Checks if `bmp_path` exists and has been completely written to disk by verifying its
+    actual byte size against the BMP header's pixel offset + padded row stride * height.
+    Returns `None` if the file does not exist yet or is still being flushed/written.
+    Raises `ValueError` if the header is permanently malformed (non-BM or unsupported bpp).
+    """
+    if not bmp_path.is_file():
+        return None
+    try:
+        actual_size = bmp_path.stat().st_size
+        if actual_size < 54:
+            return None  # Still writing header
+
+        with bmp_path.open("rb") as f:
+            header = f.read(54)
+            if len(header) < 54:
+                return None
+            if header[:2] != b"BM":
+                raise ValueError(f"Invalid BMP signature in {bmp_path}")
+
+            declared_size = struct.unpack_from("<I", header, 2)[0]
+            pixel_offset = struct.unpack_from("<I", header, 10)[0]
+            width, height = struct.unpack_from("<ii", header, 18)
+            bpp = struct.unpack_from("<H", header, 28)[0]
+            compression = struct.unpack_from("<I", header, 30)[0]
+
+            if compression not in (0, 3) or bpp not in (24, 32) or width == 0 or height == 0:
+                raise ValueError(
+                    f"Unsupported BMP geometry/format (w={width}, h={height}, bpp={bpp}, comp={compression})"
+                )
+
+            abs_w = abs(width)
+            abs_h = abs(height)
+            bytes_per_pixel = bpp // 8
+            row_stride = ((abs_w * bytes_per_pixel + 3) // 4) * 4
+            expected_min_size = pixel_offset + (row_stride * abs_h)
+            if declared_size > expected_min_size:
+                expected_min_size = declared_size
+
+            if actual_size < expected_min_size:
+                return None  # File is still incomplete on disk
+
+            f.seek(pixel_offset)
+            non_black = 0
+            first_xy: Optional[Tuple[int, int]] = None
+            first_rgb: Optional[Tuple[int, int, int]] = None
+
+            for row_idx in range(abs_h):
+                row = f.read(row_stride)
+                if len(row) < abs_w * bytes_per_pixel:
+                    return None
+                y = (abs_h - 1 - row_idx) if height > 0 else row_idx
+                limit = abs_w * bytes_per_pixel
+                for col_byte in range(0, limit, bytes_per_pixel):
+                    b_val = row[col_byte]
+                    g_val = row[col_byte + 1]
+                    r_val = row[col_byte + 2]
+                    if b_val != 0 or g_val != 0 or r_val != 0:
+                        non_black += 1
+                        if first_xy is None:

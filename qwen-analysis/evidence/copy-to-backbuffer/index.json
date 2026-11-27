@@ -1,0 +1,21 @@
+{
+  "schema": "qwen.evidence.dataset-index",
+  "dataset": "copy-to-backbuffer",
+  "recordCount": 1993,
+  "byteCount": 308728,
+  "sha256": "2b6de421b096b986d722e5e4d7ce020a57a85e285eb8685784618d192d75ed4b",
+  "indexParts": [
+    {
+      "path": "evidence/copy-to-backbuffer/index-part001.json",
+      "itemCount": 30,
+      "byteCount": 7747,
+      "sha256": "dd0787ce9d9f7bb38957adc482ee94078a3cc94e3472139520fa2452425d9afe"
+    },
+    {
+      "path": "evidence/copy-to-backbuffer/index-part002.json",
+      "itemCount": 10,
+      "byteCount": 2608,
+      "sha256": "af29878e49e65f60efe7467b0c085a4267143fef86721db7033a21e48870136c"
+    }
+  ]
+}

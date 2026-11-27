@@ -1,0 +1,159 @@
+  "// Output signature:",
+  "// Name                 Index   Mask Register SysValue  Format   Used",
+  "// -------------------- ----- ------ -------- -------- ------- ------",
+  "// SV_Position              0   xyzw        0      POS   float   xyzw",
+].join("\n");
+assert.deepEqual(parseInputSignature(fxcSignatures), [
+  { name: "TEXCOORD", index: 1, register: 1, sysValue: "NONE", mask: "xyzw", format: "float" },
+  { name: "SV_Position", index: 0, register: 0, sysValue: "POS", mask: "xyzw", format: "float" },
+], "la firma input FXC viene letta con maschera e tipo");
+assert.deepEqual(parseOutputSignature(fxcSignatures), [
+  { name: "SV_Position", index: 0, register: 0, sysValue: "POS", mask: "xyzw", format: "float" },
+], "la firma output FXC viene letta separatamente");
+const dxcSignatures = [
+  "; Input signature:",
+  "; Name                 Index   Mask Register SysValue  Format   Used",
+  "; -------------------- ----- ------ -------- -------- ------- ------",
+  ";    TEXCOORD                 1   xy          0     NONE   float     xy",
+  "; Output signature:",
+  "; SV_Position              0   xyzw        0      POS   float   xyzw",
+].join("\n");
+assert.equal(parseInputSignature(dxcSignatures)[0].mask, "xy", "il formato DXC precedente resta supportato");
+assert.equal(parseOutputSignature(dxcSignatures)[0].sysValue, "POS", "output DXC letto correttamente");
+const compatiblePair = compareShaderSignatures(
+  [{ name: "TEXCOORD", index: 1, register: 1, sysValue: "NONE", mask: "xyzw", format: "float" }],
+  [{ name: "TEXCOORD", index: 1, register: 0, sysValue: "NONE", mask: "xy", format: "float" }],
+);
+assert.equal(compatiblePair.compatible, true, "maschera output più ampia è compatibile");
+const incompatiblePair = compareShaderSignatures(
+  [{ name: "TEXCOORD", index: 1, register: 1, sysValue: "NONE", mask: "xy", format: "float" }],
+  [
+    { name: "TEXCOORD", index: 1, register: 0, sysValue: "NONE", mask: "xyzw", format: "float" },
+    { name: "TEXCOORD", index: 2, register: 1, sysValue: "NONE", mask: "xyzw", format: "float" },
+  ],
+);
+assert.equal(incompatiblePair.compatible, false, "maschere input eccedenti e semantiche mancanti falliscono");
+assert(incompatiblePair.mismatches.some((mismatch) => mismatch.includes("TEXCOORD1") && mismatch.includes("PS richiede")));
+assert(incompatiblePair.mismatches.some((mismatch) => mismatch.includes("TEXCOORD2") && mismatch.includes("Manca")));
+const typeMismatch = compareShaderSignatures(
+  [{ name: "COLOR", index: 0, register: 0, sysValue: "NONE", mask: "xyzw", format: "uint" }],
+  [{ name: "COLOR", index: 0, register: 0, sysValue: "NONE", mask: "xyzw", format: "float" }],
+);
+assert.equal(typeMismatch.compatible, false, "tipi di componente differenti falliscono");
+
+// ---- ripristino metadati compute persi nel passaggio DXIL -> SPIR-V -> HLSL
+const computePost = postprocessHlsl(
+  "uint _1 = 2u;\nuint _2 = (-_1) & 31u;\nvoid comp_main()\n{\n    return;\n}\n",
+  undefined,
+  undefined,
+  { stage: "cs", numThreads: "(64,1,1)" },
+);
+assert.equal(computePost.entryPoint, "comp_main", "entry point compute SPIRV-Cross");
+assert(computePost.hlsl.includes("[numthreads(64,1,1)]\nvoid comp_main()"), "attributo numthreads ripristinato");
+assert(computePost.changes.some((change) => change.toLowerCase().includes("numthreads")), "ripristino riportato tra le modifiche");
+assert(computePost.hlsl.includes("(0u - _1) & 31u"), "negazione uint resa esplicita senza cambiare l'aritmetica unsigned");
+const pixelEntryPost = postprocessHlsl(
+  "float4 frag_main() : SV_Target { return 0; }",
+  undefined,
+  undefined,
+  { stage: "ps" },
+);
+assert.equal(pixelEntryPost.entryPoint, "frag_main", "riconosce l'entry point pixel con return type non void");
+const invalidComputePost = postprocessHlsl(
+  "void comp_main() {}",
+  undefined,
+  undefined,
+  { stage: "cs", numThreads: "(0,1,1)" },
+);
+assert(!invalidComputePost.hlsl.includes("[numthreads"), "metadati compute invalidi non applicati");
+assert(invalidComputePost.warnings.length > 0, "metadati compute invalidi segnalati");
+const oversizedComputePost = postprocessHlsl(
+  "void comp_main() {}",
+  undefined,
+  undefined,
+  { stage: "cs", numThreads: "(1024,2,1)" },
+);
+assert(!oversizedComputePost.hlsl.includes("[numthreads"), "gruppi compute oltre i limiti D3D11 non applicati");
+const vertexWrapperPost = postprocessHlsl(
+  "struct SPIRV_Cross_Input { float4 position : ATTRIBUTE0; };\n" +
+  "struct SPIRV_Cross_Output { float4 position : SV_Position; };\n" +
+  "void vert_main() {}\n" +
+  "SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input) { vert_main(); return (SPIRV_Cross_Output)0; }\n",
+  undefined,
+  undefined,
+  { stage: "vs" },
+);
+assert.equal(vertexWrapperPost.entryPoint, "main", "lo shader deve essere compilato tramite il wrapper che trasferisce gli input");
+const pixelSemanticPost = postprocessHlsl(
+  "struct SPIRV_Cross_Input { float4 color : TEXCOORD0; float2 uv : TEXCOORD1; float4 missing : TEXCOORD2; };",
+  undefined,
+  undefined,
+  { stage: "ps" },
+  [
+    { name: "COLOR", index: 0, register: 0, sysValue: "NONE" },
+    { name: "TEXCOORD", index: 3, register: 1, sysValue: "NONE" },
+  ],
+);
+assert(pixelSemanticPost.hlsl.includes("color : COLOR0"), "semantic PS rinominata secondo l'output VS");
+assert(pixelSemanticPost.hlsl.includes("uv : TEXCOORD3"), "indice semantic VS ripristinato");
+assert(pixelSemanticPost.hlsl.includes("missing : TEXCOORD2"), "semantica senza output VS lasciata invariata");
+assert(pixelSemanticPost.warnings.some((warning) => warning.includes("registri 2")), "semantic PS senza output VS segnalata");
+const computeWrapperPost = postprocessHlsl(
+  "void comp_main() {}\nvoid main() { comp_main(); }\n",
+  undefined,
+  undefined,
+  { stage: "cs", numThreads: "(8,8,1)" },
+);
+assert.equal(computeWrapperPost.entryPoint, "main", "numthreads va applicato al wrapper compilabile");
+assert(computeWrapperPost.hlsl.includes("[numthreads(8,8,1)]\nvoid main()"), "numthreads sul wrapper entry point");
+
+// ---- ispezione PIX read-only con limiti di lettura verificabili
+const noPixTool = { pixtoolPath: null } as const;
+const knownHeader = Buffer.alloc(64);
+knownHeader.write("GFXA", 0, "latin1");
+knownHeader.write("GFXB", 16, "latin1");
+knownHeader.write("GFXC", 32, "latin1");
+const knownPix = await analyzeSource(
+  { size: knownHeader.length, async read(position, length) { return knownHeader.subarray(position, position + length); } },
+  "GPU 1.wpix",
+  noPixTool,
+);
+assert.equal(knownPix.status, "known_markers_in_header");
+assert.equal(knownPix.decoded, false);
+assert.deepEqual(knownPix.header.knownMarkers.map(({ marker }) => marker), ["GFXA", "GFXB", "GFXC"]);
+assert.equal(resolveLimits().maxScanBytes, DEFAULT_LIMITS.maxScanBytes, "default scan limit matches documented default");
+
+const unknownPix = await analyzeSource(
+  { size: 64, async read(position, length) { return Buffer.from("ABCD".padEnd(64, "\0"), "latin1").subarray(position, position + length); } },
+  "unknown.wpix",
+  noPixTool,
+);
+assert.equal(unknownPix.status, "unrecognized_header");
+assert.equal(unknownPix.decoded, false);
+
+const truncatedPix = await analyzeSource(
+  { size: 8, async read(position, length) { return Buffer.from("GFXA1234", "latin1").subarray(position, position + length); } },
+  "truncated.wpix",
+  noPixTool,
+);
+assert.equal(truncatedPix.status, "truncated_header");
+
+const largePixReads: { position: number; length: number }[] = [];
+const largePixSize = 932_490_260;
+const pixBlockBytes = 64 * 1024;
+const pixMaxScanBytes = pixBlockBytes * 2;
+const largePixSource: ByteSource = {
+  size: largePixSize,
+  async read(position, length) {
+    largePixReads.push({ position, length });
+    const block = Buffer.alloc(length);
+    if (position === 0) knownHeader.copy(block, 0);
+    return block;
+  },
+};
+const largePix = await analyzeSource(largePixSource, "large.wpix", {
+  ...noPixTool,
+  headerBytes: 64,
+  blockBytes: pixBlockBytes,
+  maxScanBytes: pixMaxScanBytes,
+});

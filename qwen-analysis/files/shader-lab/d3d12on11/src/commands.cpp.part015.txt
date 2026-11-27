@@ -1,0 +1,155 @@
+        }
+    }
+}
+
+void STDMETHODCALLTYPE CommandList::ExecuteBundle(ID3D12GraphicsCommandList* list) {
+    auto* bundle = dynamic_cast<CommandList*>(list);
+    if (!bundle) {
+        Unimpl("ID3D12GraphicsCommandList::ExecuteBundle");
+        return;
+    }
+    Ptr<IUnknown> keep(static_cast<ID3D12GraphicsCommandList*>(bundle));
+    Add([keep](ExecState& state) {
+        auto* commandList = dynamic_cast<CommandList*>(keep.Get());
+        if (commandList && commandList->closed) commandList->Run(state);
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::SetComputeRootSignature(ID3D12RootSignature* signature) {
+    comp.rs = dynamic_cast<RootSignature*>(signature);
+    comp.keep = signature ? Ptr<IUnknown>(signature) : Ptr<IUnknown>();
+    comp.args.clear();
+    comp.snap.reset();
+}
+
+void STDMETHODCALLTYPE CommandList::SetGraphicsRootSignature(ID3D12RootSignature* signature) {
+    gfx.rs = dynamic_cast<RootSignature*>(signature);
+    gfx.keep = signature ? Ptr<IUnknown>(signature) : Ptr<IUnknown>();
+    gfx.args.clear();
+    gfx.snap.reset();
+}
+
+void STDMETHODCALLTYPE CommandList::SetComputeRootDescriptorTable(UINT index, D3D12_GPU_DESCRIPTOR_HANDLE handle) {
+    RootArg arg{}; arg.kind = 5; arg.value = handle.ptr;
+    UINT descriptorIndex = 0;
+    if (auto* heap = FindHeapByGpu(handle.ptr, &descriptorIndex)) arg.keep = Ptr<IUnknown>(static_cast<ID3D12DescriptorHeap*>(heap));
+    SetRootArg(comp, index, std::move(arg));
+}
+void STDMETHODCALLTYPE CommandList::SetGraphicsRootDescriptorTable(UINT index, D3D12_GPU_DESCRIPTOR_HANDLE handle) {
+    RootArg arg{}; arg.kind = 5; arg.value = handle.ptr;
+    UINT descriptorIndex = 0;
+    if (auto* heap = FindHeapByGpu(handle.ptr, &descriptorIndex)) arg.keep = Ptr<IUnknown>(static_cast<ID3D12DescriptorHeap*>(heap));
+    SetRootArg(gfx, index, std::move(arg));
+}
+void STDMETHODCALLTYPE CommandList::SetComputeRoot32BitConstant(UINT index, UINT value, UINT offset) {
+    SetRootConstants(comp, index, 1, &value, offset);
+}
+void STDMETHODCALLTYPE CommandList::SetGraphicsRoot32BitConstant(UINT index, UINT value, UINT offset) {
+    SetRootConstants(gfx, index, 1, &value, offset);
+}
+void STDMETHODCALLTYPE CommandList::SetComputeRoot32BitConstants(UINT index, UINT count, const void* values, UINT offset) {
+    SetRootConstants(comp, index, count, values, offset);
+}
+void STDMETHODCALLTYPE CommandList::SetGraphicsRoot32BitConstants(UINT index, UINT count, const void* values, UINT offset) {
+    SetRootConstants(gfx, index, count, values, offset);
+}
+
+void CommandList::SetRootConstants(BindState& bind, UINT index, UINT count, const void* values, UINT offset) {
+    if (!values || !count || !bind.rs || index >= bind.rs->params.size() ||
+        bind.rs->params[index].type != D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS ||
+        offset > bind.rs->params[index].num32 || count > bind.rs->params[index].num32 - offset) {
+        Log("Rejected invalid root-constant write at parameter %u", index);
+        return;
+    }
+    RootArg arg{};
+    if (index < bind.args.size() && bind.args[index].kind == 1) arg = bind.args[index];
+    if (arg.consts.size() < bind.rs->params[index].num32)
+        arg.consts.resize(bind.rs->params[index].num32, 0);
+    std::copy_n(static_cast<const UINT*>(values), count, arg.consts.begin() + offset);
+    arg.kind = 1;
+    arg.value = 0;
+    SetRootArg(bind, index, std::move(arg));
+}
+
+namespace {
+void SetRootAddress(BindState& state, UINT index, UINT64 address, uint8_t kind) {
+    RootArg arg{};
+    arg.kind = kind;
+    arg.value = address;
+    UINT64 offset = 0;
+    if (Resource* resource = ResolveVA(address, &offset))
+        arg.keep = Ptr<IUnknown>(static_cast<ID3D12Resource*>(resource));
+    else
+        Log("Root descriptor address 0x%llx does not resolve to a live resource",
+            static_cast<unsigned long long>(address));
+    if (state.args.size() <= index) state.args.resize(static_cast<size_t>(index) + 1);
+    state.args[index] = std::move(arg);
+    state.snap.reset();
+}
+}
+
+void STDMETHODCALLTYPE CommandList::SetComputeRootConstantBufferView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) { SetRootAddress(comp, i, a, 2); }
+void STDMETHODCALLTYPE CommandList::SetGraphicsRootConstantBufferView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) { SetRootAddress(gfx, i, a, 2); }
+void STDMETHODCALLTYPE CommandList::SetComputeRootShaderResourceView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) { SetRootAddress(comp, i, a, 3); }
+void STDMETHODCALLTYPE CommandList::SetGraphicsRootShaderResourceView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) { SetRootAddress(gfx, i, a, 3); }
+void STDMETHODCALLTYPE CommandList::SetComputeRootUnorderedAccessView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) { SetRootAddress(comp, i, a, 4); }
+void STDMETHODCALLTYPE CommandList::SetGraphicsRootUnorderedAccessView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) { SetRootAddress(gfx, i, a, 4); }
+
+void STDMETHODCALLTYPE CommandList::IASetIndexBuffer(const D3D12_INDEX_BUFFER_VIEW* view) {
+    TraceApi("CommandList::IASetIndexBuffer");
+    if (!view) return;
+    UINT64 offset = 0;
+    Resource* resource = ResolveVA(view->BufferLocation, &offset);
+    if (!resource || offset > UINT_MAX) return;
+    Ptr<ID3D11Buffer> buffer(resource->GpuBuffer());
+    Ptr<ID3D12Resource> resourceRef(resource);
+    const UINT nativeOffset = static_cast<UINT>(offset);
+    const DXGI_FORMAT format = view->Format;
+    const UINT viewSize = view->SizeInBytes;
+    Add([buffer, resourceRef, nativeOffset, format, viewSize](ExecState& state) {
+        auto* uploadResource = dynamic_cast<Resource*>(resourceRef.Get());
+        if (uploadResource && uploadResource->heap == D3D12_HEAP_TYPE_UPLOAD)
+            uploadResource->SyncToGpu(nativeOffset, viewSize);
+        state.c->IASetIndexBuffer(buffer.Get(), format, nativeOffset);
+        state.hasIndexBuffer = buffer.Get() != nullptr;
+        state.indexBufferResource = resourceRef;
+        state.indexBufferViewSize = viewSize;
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::IASetVertexBuffers(UINT startSlot, UINT count, const D3D12_VERTEX_BUFFER_VIEW* views) {
+    TraceApi("CommandList::IASetVertexBuffers");
+    if (!views || startSlot + count > D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT) return;
+    std::vector<Ptr<ID3D11Buffer>> buffers(count);
+    std::vector<Ptr<ID3D12Resource>> resources(count);
+    std::vector<UINT> strides(count), offsets(count);
+    std::vector<UINT64> resourceOffsets(count), sizes(count);
+    for (UINT i = 0; i < count; ++i) {
+        UINT64 offset = 0;
+        Resource* resource = ResolveVA(views[i].BufferLocation, &offset);
+        if (!resource || offset > UINT_MAX) return;
+        buffers[i] = Ptr<ID3D11Buffer>(resource->GpuBuffer());
+        resources[i] = Ptr<ID3D12Resource>(resource);
+        strides[i] = views[i].StrideInBytes;
+        offsets[i] = static_cast<UINT>(offset);
+        resourceOffsets[i] = offset;
+        sizes[i] = views[i].SizeInBytes;
+    }
+    Add([startSlot, buffers = std::move(buffers), resources = std::move(resources),
+        strides = std::move(strides), offsets = std::move(offsets),
+        resourceOffsets = std::move(resourceOffsets), sizes = std::move(sizes)](ExecState& state) {
+        std::vector<ID3D11Buffer*> raw;
+        raw.reserve(buffers.size());
+        for (size_t i = 0; i < buffers.size(); ++i) {
+            auto* uploadResource = dynamic_cast<Resource*>(resources[i].Get());
+            if (uploadResource && uploadResource->heap == D3D12_HEAP_TYPE_UPLOAD)
+                uploadResource->SyncToGpu(resourceOffsets[i], sizes[i]);
+            raw.push_back(buffers[i].Get());
+            state.vertexBuffers[startSlot + static_cast<UINT>(i)] = buffers[i].Get() != nullptr;
+        }
+        state.hasVertexBuffer = std::any_of(state.vertexBuffers.begin(), state.vertexBuffers.end(),
+            [](bool bound) { return bound; });
+        state.c->IASetVertexBuffers(startSlot, static_cast<UINT>(raw.size()), raw.data(), strides.data(), offsets.data());
+    });
+}
+

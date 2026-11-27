@@ -1,0 +1,202 @@
+    $backbufferPath = Join-Path $externalReadbackRoot "HelaReadback_Present$($TargetPresent)_backbuffer.bmp"
+    $previousSourceLength = -1L
+    $previousBackbufferLength = -1L
+    $stableReadbackPolls = 0
+
+    while ([System.DateTime]::UtcNow -lt $deadline) {
+        if ($gameProcess.HasExited) {
+            break
+        }
+        if ([System.IO.File]::Exists($sourcePath) -and
+            [System.IO.File]::Exists($backbufferPath)) {
+            $sourceLength = (Get-Item -LiteralPath $sourcePath).Length
+            $backbufferLength = (Get-Item -LiteralPath $backbufferPath).Length
+            if ($sourceLength -gt 0 -and $backbufferLength -gt 0 -and
+                $sourceLength -eq $previousSourceLength -and
+                $backbufferLength -eq $previousBackbufferLength) {
+                $stableReadbackPolls++
+            }
+            else {
+                $stableReadbackPolls = 0
+            }
+            if ($stableReadbackPolls -ge 2) {
+                $targetReadbackReady = $true
+                break
+            }
+            $previousSourceLength = $sourceLength
+            $previousBackbufferLength = $backbufferLength
+        }
+        else {
+            $stableReadbackPolls = 0
+            $previousSourceLength = -1L
+            $previousBackbufferLength = -1L
+        }
+        Start-Sleep -Milliseconds 500
+    }
+
+    if (-not $gameProcess.HasExited -and -not $targetReadbackReady) {
+        $timeoutReached = $true
+    }
+    if ($ObserveAfterReadbackSeconds -gt 0 -and $targetReadbackReady) {
+        if ($gameProcess.HasExited) {
+            $menuObservation.processExitedBeforeWindow = $true
+        }
+        else {
+            $menuObservation.attempted = $true
+            $observationStartedUtc = [System.DateTime]::UtcNow
+            $observationDeadline = $observationStartedUtc.AddSeconds($ObserveAfterReadbackSeconds)
+            while ([System.DateTime]::UtcNow -lt $observationDeadline) {
+                if ($gameProcess.HasExited) {
+                    break
+                }
+                Start-Sleep -Milliseconds 500
+            }
+            $menuObservation.elapsedSeconds = [Math]::Round(
+                ([System.DateTime]::UtcNow - $observationStartedUtc).TotalSeconds,
+                1)
+            $menuObservation.processExitedDuringWindow = $gameProcess.HasExited
+        }
+    }
+    if (-not $gameProcess.HasExited) {
+        $null = $gameProcess.CloseMainWindow()
+        if (-not $gameProcess.WaitForExit(10000)) {
+            Stop-Process -Id $gameProcess.Id -Force
+            $gameProcess.WaitForExit()
+        }
+    }
+    $gameExitCode = $gameProcess.ExitCode
+
+    if ([System.IO.File]::Exists($gameLog)) {
+        Copy-Item -LiteralPath $gameLog -Destination (Join-Path $RunDirectory 'd3d12on11.log')
+        $runLogText = [System.IO.File]::ReadAllText((Join-Path $RunDirectory 'd3d12on11.log'))
+        $presentCount = [regex]::Matches(
+            $runLogText,
+            'IDXGISwapChain::Present hr=0x00000000').Count
+        $sourcePattern = "\[READBACK_FULL\]\s+Present #$TargetPresent saved READBACK_SRC path="
+        $backbufferPattern = "\[READBACK_FULL\]\s+Present #$TargetPresent saved READBACK path="
+        $targetReadbackLogged =
+            ($runLogText -match $sourcePattern) -and
+            ($runLogText -match $backbufferPattern)
+    }
+    $targetReadbackReady = $targetReadbackReady -and $targetReadbackLogged
+    foreach ($name in $externalReadbackNames) {
+        $source = Join-Path $externalReadbackRoot $name
+        if ([System.IO.File]::Exists($source)) {
+            $destination = Join-Path $RunDirectory $name
+            Copy-Item -LiteralPath $source -Destination $destination
+            $readbackFiles += [pscustomobject]@{
+                name = $name
+                length = (Get-Item -LiteralPath $destination).Length
+                sha256 = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash
+            }
+        }
+    }
+}
+catch {
+    $runError = $_.Exception.ToString()
+}
+finally {
+    if ($gameProcess -and -not $gameProcess.HasExited) {
+        try {
+            $null = $gameProcess.CloseMainWindow()
+            if (-not $gameProcess.WaitForExit(10000)) {
+                Stop-Process -Id $gameProcess.Id -Force
+            }
+            $gameProcess.WaitForExit()
+        }
+        catch {
+            $restoreErrors += "Could not stop the test game process: $($_.Exception.Message)"
+        }
+    }
+    if ($gameProcess -and $gameProcess.HasExited -and $null -eq $gameExitCode) {
+        $gameExitCode = $gameProcess.ExitCode
+    }
+
+    try {
+        $remainingProcesses = @(Get-ProcessPaths)
+        foreach ($remaining in $remainingProcesses) {
+            try {
+                Stop-Process -Id ([int]$remaining.ProcessId) -Force
+            }
+            catch {
+                $restoreErrors += "Could not stop process $($remaining.ProcessId): $($_.Exception.Message)"
+            }
+        }
+    }
+    catch {
+        $restoreErrors += "Could not inspect Hela processes during cleanup: $($_.Exception.Message)"
+    }
+
+    if ($watcherProcess -and -not $watcherProcess.HasExited) {
+        try {
+            if (-not $watcherProcess.WaitForExit(15000)) {
+                Stop-Process -Id $watcherProcess.Id -Force
+            }
+        }
+        catch {
+            $restoreErrors += "Could not stop the TCP monitor: $($_.Exception.Message)"
+        }
+    }
+
+    if ($snapshotsReady) {
+        if ($stdoutTask) {
+            try {
+                [System.IO.File]::WriteAllText(
+                    (Join-Path $RunDirectory 'stdout-sanitized.txt'),
+                    (Get-SanitizedLogText $stdoutTask.Result),
+                    [System.Text.UTF8Encoding]::new($false))
+            }
+            catch {
+                $restoreErrors += "Could not save sanitized stdout: $($_.Exception.Message)"
+            }
+        }
+        if ($stderrTask) {
+            try {
+                [System.IO.File]::WriteAllText(
+                    (Join-Path $RunDirectory 'stderr-sanitized.txt'),
+                    (Get-SanitizedLogText $stderrTask.Result),
+                    [System.Text.UTF8Encoding]::new($false))
+            }
+            catch {
+                $restoreErrors += "Could not save sanitized stderr: $($_.Exception.Message)"
+            }
+        }
+
+        $runLogPath = Join-Path $RunDirectory 'd3d12on11.log'
+        if ([System.IO.File]::Exists($gameLog) -and
+            -not [System.IO.File]::Exists($runLogPath)) {
+            try {
+                Copy-Item -LiteralPath $gameLog -Destination $runLogPath
+            }
+            catch {
+                $restoreErrors += "Could not preserve test proxy log: $($_.Exception.Message)"
+            }
+        }
+        foreach ($name in $externalReadbackNames) {
+            $source = Join-Path $externalReadbackRoot $name
+            $destination = Join-Path $RunDirectory $name
+            if ([System.IO.File]::Exists($source) -and
+                -not [System.IO.File]::Exists($destination)) {
+                try {
+                    Copy-Item -LiteralPath $source -Destination $destination
+                    $readbackFiles += [pscustomobject]@{
+                        name = $name
+                        length = (Get-Item -LiteralPath $destination).Length
+                        sha256 = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash
+                    }
+                }
+                catch {
+                    $restoreErrors += "Could not preserve test readback $name`: $($_.Exception.Message)"
+                }
+            }
+        }
+
+        $savedLog = Join-Path $preState 'd3d12on11.log'
+        if ($originalLogExists -and [System.IO.File]::Exists($savedLog)) {
+            try {
+                Copy-Item -LiteralPath $savedLog -Destination $gameLog -Force
+            }
+            catch {
+                $restoreErrors += "Could not restore proxy log: $($_.Exception.Message)"
+            }
+        }

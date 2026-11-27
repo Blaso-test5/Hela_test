@@ -1,0 +1,203 @@
+#!/usr/bin/env node
+/**
+hela-package-gate — gate offline di completezza del package candidato Hela (P0-1).
+Contratto: un package e' consumabile da ProxyManager solo se
+runtime/d3d12.dll e runtime/dxgi.dll esistono su disco E sono dichiarati nel manifest;
+l'inventario degli override corrisponde ESATTAMENTE al manifest
+(biiezione path/id, hash SHA-256 uguali, nessun file extra in overrides/).
+Garanzie:
+solo staging: scrive esclusivamente dentro la directory di staging;
+nessun install, nessun caricamento di DLL, nessun processo figlio, nessuna rete;
+lifecycle sempre "staged-only": la promozione a runtime richiede autorizzazione separata;
+fallimento atomico: inventario scritto solo se ok; inventario stale rimosso se il gate fallisce.
+Node >= 18 (consigliato >= 20). ESM, zero dipendenze.
+*/
+import { createHash } from "node:crypto";
+import { readFile, writeFile, readdir, rm } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+export const TOOL_VERSION = "0.1.0";
+export const MANIFEST_FILE = "candidate-package.json";
+export const INVENTORY_FILE = "override-inventory.json";
+export const REPORT_FILE = "package-report.json";
+export const REQUIRED_RUNTIME = Object.freeze(["runtime/d3d12.dll", "runtime/dxgi.dll"]);
+export const OVERRIDES_PREFIX = "overrides/";
+const SHA256_RE = /^[0-9a-f]{64}$/;
+/** Normalizza un path relativo del manifest (accetta backslash Windows); rifiuta path non sicuri. */
+export function normalizeRelPath(raw) {
+if (typeof raw !== "string" || raw.length === 0) return { ok: false, reason: "empty" };
+if (raw.includes("\u0000")) return { ok: false, reason: "nul" };
+const p = raw.replaceAll("\\", "/");
+if (p.startsWith("/")) return { ok: false, reason: "absolute" };
+if (/^[A-Za-z]:/.test(p)) return { ok: false, reason: "drive-letter" };
+const segs = p.split("/");
+if (segs.some((s) => s.length === 0 || s === "." || s === "..")) {
+return { ok: false, reason: "unsafe-segment" };
+}
+return { ok: true, value: segs.join("/") };
+}
+export function sha256Bytes(buf) {
+return createHash("sha256").update(buf).digest("hex");
+}
+async function measureFile(absPath) {
+const buf = await readFile(absPath);
+return { sha256: sha256Bytes(buf), bytes: buf.length };
+}
+/** Elenca ricorsivamente i file sotto absDir (rel paths con prefisso); false se la dir non esiste. */
+async function walkFiles(absDir, relPrefix, out) {
+let entries;
+try {
+entries = await readdir(absDir, { withFileTypes: true });
+} catch (err) {
+if (err && err.code === "ENOENT") return false;
+throw err;
+}
+entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+for (const e of entries) {
+const rel = relPrefix ? `${relPrefix}/${e.name}` : e.name;
+const abs = path.join(absDir, e.name);
+if (e.isDirectory()) await walkFiles(abs, rel, out);
+else if (e.isFile()) out.push(rel);
+}
+return true;
+}
+function byPath(a, b) {
+return a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
+}
+/** JSON deterministico dell'inventario: nessun timestamp, ordinamento a monte. */
+function inventoryJson(entries, packageId) {
+return JSON.stringify({ schemaVersion: 1, packageId, overrides: entries }, null, 2) + "\n";
+}
+/** Confronto semantico inventario esistente vs atteso (biiezione path/id + hash + bytes). */
+function sameInventory(existing, expected, packageId) {
+if (typeof existing !== "object" || existing === null) return false;
+if (existing.schemaVersion !== 1 || existing.packageId !== packageId) return false;
+if (!Array.isArray(existing.overrides) || existing.overrides.length !== expected.length) return false;
+if (existing.overrides.some((x) => typeof x !== "object" || x === null)) return false;
+const sorted = [...existing.overrides].sort(byPath);
+for (let i = 0; i < expected.length; i++) {
+const a = sorted[i];
+const b = expected[i];
+if (a.id !== b.id || a.path !== b.path || a.sha256 !== b.sha256 || a.bytes !== b.bytes) return false;
+}
+return true;
+}
+/**
+Esegue il gate sullo staging.
+mode "build" (default): scrive override-inventory.json (solo se ok) e package-report.json.
+mode "check": read-only; verifica anche che l'inventario esistente corrisponda al manifest.
+Non scrive mai fuori da stagingDir, non carica DLL, non avvia processi, non usa rete.
+*/
+export async function runPackageGate(stagingDir, opts = {}) {
+const mode = opts.mode === "check" ? "check" : "build";
+const absStage = path.resolve(stagingDir);
+const issues = [];
+const warnings = [];
+const add = (code, message, extra = {}) => issues.push({ code, message, ...extra });
+const warn = (code, message, extra = {}) => warnings.push({ code, message, ...extra });
+const report = {
+schemaVersion: 1,
+tool: "hela-package-gate",
+toolVersion: TOOL_VERSION,
+mode,
+stagingDir: absStage,
+packageId: null,
+ok: false,
+lifecycle: "staged-only",
+installed: false,
+networkUsed: false,
+generatedAt: new Date().toISOString(),
+manifestSha256: null,
+runtime: [],
+inventory: null,
+issues,
+warnings,
+};
+let expectedInventory = null;
+async function finalize() {
+if (mode === "check" && expectedInventory && issues.length === 0) {
+let existingRaw = null;
+try {
+existingRaw = await readFile(path.join(absStage, INVENTORY_FILE), "utf8");
+} catch (err) {
+if (!err || err.code !== "ENOENT") throw err;
+}
+if (existingRaw === null) {
+add("INVENTORY_MISSING", `${INVENTORY_FILE} assente: package non verificabile`);
+} else {
+let parsed = null;
+try { parsed = JSON.parse(existingRaw); } catch { /* trattato come mismatch */ }
+if (!parsed || !sameInventory(parsed, expectedInventory, report.packageId)) {
+add("INVENTORY_MISMATCH", "l'inventario esistente non e' valido o non corrisponde esattamente al manifest");
+} else {
+report.inventory = {
+path: INVENTORY_FILE,
+sha256: sha256Bytes(Buffer.from(existingRaw, "utf8")),
+entryCount: expectedInventory.length,
+};
+}
+}
+}
+report.ok = issues.length === 0;
+if (mode === "build") {
+const invPath = path.join(absStage, INVENTORY_FILE);
+if (report.ok) {
+const json = inventoryJson(expectedInventory ?? [], report.packageId);
+await writeFile(invPath, json, "utf8");
+report.inventory = {
+path: INVENTORY_FILE,
+sha256: sha256Bytes(Buffer.from(json, "utf8")),
+entryCount: (expectedInventory ?? []).length,
+};
+} else {
+// Mai lasciare un inventario consumabile quando il gate fallisce.
+try {
+await rm(invPath);
+report.staleInventoryRemoved = true;
+} catch (err) {
+if (!err || err.code !== "ENOENT") throw err;
+}
+}
+try {
+await writeFile(path.join(absStage, REPORT_FILE), JSON.stringify(report, null, 2) + "\n", "utf8");
+} catch (err) {
+if (!err || err.code !== "ENOENT") throw err;
+}
+}
+return report;
+}
+// 1) Manifest.
+let manifestRaw;
+try {
+manifestRaw = await readFile(path.join(absStage, MANIFEST_FILE));
+} catch (err) {
+if (err && err.code === "ENOENT") add("MANIFEST_MISSING", `${MANIFEST_FILE} assente nello staging`);
+else add("IO_ERROR", `lettura manifest fallita: ${err && err.message ? err.message : err}`);
+return finalize();
+}
+report.manifestSha256 = sha256Bytes(manifestRaw);
+let manifest;
+try {
+manifest = JSON.parse(manifestRaw.toString("utf8").replace(/^\uFEFF/, ""));
+} catch {
+add("MANIFEST_INVALID", "manifest non e' JSON valido");
+return finalize();
+}
+if (typeof manifest !== "object" || manifest === null || Array.isArray(manifest)) {
+add("MANIFEST_INVALID", "manifest deve essere un oggetto");
+return finalize();
+}
+if (manifest.schemaVersion !== 1) add("MANIFEST_INVALID", "schemaVersion deve essere 1");
+if (typeof manifest.packageId !== "string" || manifest.packageId.length === 0) {
+add("MANIFEST_INVALID", "packageId mancante");
+} else {
+report.packageId = manifest.packageId;
+}
+if (!Array.isArray(manifest.runtime)) add("MANIFEST_INVALID", "runtime deve essere un array");
+if (!Array.isArray(manifest.overrides)) add("MANIFEST_INVALID", "overrides deve essere un array");
+if (issues.length > 0) return finalize();
+// 2) Normalizzazione entry (path safety, hash/bytes opzionali ben formati, unicita').
+const seenPaths = new Set();
+const seenIds = new Set();
+function normalizeEntry(e, label) {
+if (typeof e !== "object" || e === null) {

@@ -1,0 +1,181 @@
+[
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/tools/LiveFrameMonitor/test_live_frame_monitor.py",
+    "totalLineCount": 693,
+    "sourceByteCount": 31268,
+    "sha256": "88abdae393e30545406a80f1e7cd3b2cbeaae94fb658193948feae2b02e3c676",
+    "publishedSha256": "6efd7c3373ff29ebc542947b8c76b3f651098153cf6d419baff14c4f34d6a413",
+    "publishedByteCount": 31237,
+    "byteFaithful": false,
+    "redactions": [
+      {
+        "rule": "replaced machine-local Hela test log path with <game-root>",
+        "occurrences": 1
+      }
+    ],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/test_live_frame_monitor.py.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 199,
+        "byteCount": 7962,
+        "sha256": "ec696cc1ac3c778dc60874968e1b78a274bf0f7c80a260ad66ba31ded1262c9e"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/test_live_frame_monitor.py.part002.txt",
+        "lineStart": 200,
+        "lineEnd": 362,
+        "byteCount": 7962,
+        "sha256": "b56edf4933aeaa5331f87d8888a1f8790b993e986f21b46797844f0396dd618f"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/test_live_frame_monitor.py.part003.txt",
+        "lineStart": 363,
+        "lineEnd": 539,
+        "byteCount": 7937,
+        "sha256": "96c7bded0cd0048fdf589a91cd53c73ac58175eec0bc48fd79a5182a45f7e505"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/LiveFrameMonitor/test_live_frame_monitor.py.part004.txt",
+        "lineStart": 540,
+        "lineEnd": 693,
+        "byteCount": 7376,
+        "sha256": "b1946c87d5822db2b5278020db3d33a1b8b1b4928f27bfa4cf53a98f25acecd7"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/tools/Run-HelaCandidateReadback.ps1",
+    "totalLineCount": 751,
+    "sourceByteCount": 30203,
+    "sha256": "200c84db6555a83986cd9a232c34877d8064563dccf18543027c0fb529d8a5d1",
+    "publishedSha256": "200c84db6555a83986cd9a232c34877d8064563dccf18543027c0fb529d8a5d1",
+    "publishedByteCount": 30203,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tools/Run-HelaCandidateReadback.ps1.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 199,
+        "byteCount": 7936,
+        "sha256": "89a239843d1d24ae7baec2549e2f104e1dfb8fb802fc2fa9febe634c11c9e8c5"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/Run-HelaCandidateReadback.ps1.part002.txt",
+        "lineStart": 200,
+        "lineEnd": 393,
+        "byteCount": 7918,
+        "sha256": "666c0261cd98d2a636d3cc93c07f83069a0753c127e338283474595451a7139b"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/Run-HelaCandidateReadback.ps1.part003.txt",
+        "lineStart": 394,
+        "lineEnd": 595,
+        "byteCount": 7963,
+        "sha256": "c1e3e573bf94d6b0579b0ea6a98d5be224629f1186030b747727ee438c1e01cf"
+      },
+      {
+        "path": "files/hela-proxy/proxy-source/tools/Run-HelaCandidateReadback.ps1.part004.txt",
+        "lineStart": 596,
+        "lineEnd": 751,
+        "byteCount": 6386,
+        "sha256": "221d57ec82912c75761f083a5ae82f5ab7d04beae2eef7f585d66bd3c31be5af"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/tools/gen_stubs.py",
+    "totalLineCount": 145,
+    "sourceByteCount": 6071,
+    "sha256": "f4b37db0605071a801e061fcd05152a8bd0cb733282b7944f035ca539d6e3a89",
+    "publishedSha256": "f4b37db0605071a801e061fcd05152a8bd0cb733282b7944f035ca539d6e3a89",
+    "publishedByteCount": 6071,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tools/gen_stubs.py",
+        "lineStart": 1,
+        "lineEnd": 145,
+        "byteCount": 6071,
+        "sha256": "f4b37db0605071a801e061fcd05152a8bd0cb733282b7944f035ca539d6e3a89"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/tools/nvapi_trace.cpp",
+    "totalLineCount": 113,
+    "sourceByteCount": 3618,
+    "sha256": "8629680e6615d053d1a96b81fa147d460d4b7b17a39964a53fc51e8b80c4180c",
+    "publishedSha256": "8629680e6615d053d1a96b81fa147d460d4b7b17a39964a53fc51e8b80c4180c",
+    "publishedByteCount": 3618,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tools/nvapi_trace.cpp",
+        "lineStart": 1,
+        "lineEnd": 113,
+        "byteCount": 3618,
+        "sha256": "8629680e6615d053d1a96b81fa147d460d4b7b17a39964a53fc51e8b80c4180c"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/tools/nvapi_trace.def",
+    "totalLineCount": 3,
+    "sourceByteCount": 52,
+    "sha256": "60978d4c4985388e7644fffd0f6d1ef160a1263b40d8c6227bc1f1ea4117305c",
+    "publishedSha256": "60978d4c4985388e7644fffd0f6d1ef160a1263b40d8c6227bc1f1ea4117305c",
+    "publishedByteCount": 52,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tools/nvapi_trace.def",
+        "lineStart": 1,
+        "lineEnd": 3,
+        "byteCount": 52,
+        "sha256": "60978d4c4985388e7644fffd0f6d1ef160a1263b40d8c6227bc1f1ea4117305c"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso-test5/Hela_test",
+    "commit": "4450b7d5b7da77dea2139c68897c37e2d0ab7f9f",
+    "path": "Hela_AI_20261109_1045/proxy-source/tools/nvapi_trace_README.md",
+    "totalLineCount": 18,
+    "sourceByteCount": 1018,
+    "sha256": "4b404b850955156cf0cece09fc6cca1bdf2179d284f7b74b7bb5b18be39ffbbe",
+    "publishedSha256": "4b404b850955156cf0cece09fc6cca1bdf2179d284f7b74b7bb5b18be39ffbbe",
+    "publishedByteCount": 1018,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/hela-proxy/proxy-source/tools/nvapi_trace_README.md",
+        "lineStart": 1,
+        "lineEnd": 18,
+        "byteCount": 1018,
+        "sha256": "4b404b850955156cf0cece09fc6cca1bdf2179d284f7b74b7bb5b18be39ffbbe"
+      }
+    ]
+  }
+]

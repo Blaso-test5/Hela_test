@@ -1,0 +1,15 @@
+{
+  "schema": "qwen.evidence.dataset-index",
+  "dataset": "graphics-psos",
+  "recordCount": 144,
+  "byteCount": 32151,
+  "sha256": "f06598ffdb7ed6a493a99dcb4024873d231a7e42d17ac96893f9c312e3c03667",
+  "indexParts": [
+    {
+      "path": "evidence/graphics-psos/index-part001.json",
+      "itemCount": 5,
+      "byteCount": 1272,
+      "sha256": "44834dc51c93b586f0965cebdd713487f1137bbfbfc758eed1b71f5a3aec8f63"
+    }
+  ]
+}

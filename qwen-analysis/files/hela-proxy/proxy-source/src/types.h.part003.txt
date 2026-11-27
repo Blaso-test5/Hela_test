@@ -1,0 +1,113 @@
+    void STDMETHODCALLTYPE SetGraphicsRoot32BitConstants(UINT i, UINT n, const void* d, UINT off) override;
+    void STDMETHODCALLTYPE SetComputeRootConstantBufferView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) override;
+    void STDMETHODCALLTYPE SetGraphicsRootConstantBufferView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) override;
+    void STDMETHODCALLTYPE SetComputeRootShaderResourceView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) override;
+    void STDMETHODCALLTYPE SetGraphicsRootShaderResourceView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) override;
+    void STDMETHODCALLTYPE SetComputeRootUnorderedAccessView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) override;
+    void STDMETHODCALLTYPE SetGraphicsRootUnorderedAccessView(UINT i, D3D12_GPU_VIRTUAL_ADDRESS a) override;
+    void STDMETHODCALLTYPE IASetIndexBuffer(const D3D12_INDEX_BUFFER_VIEW* v) override;
+    void STDMETHODCALLTYPE IASetVertexBuffers(UINT s, UINT n, const D3D12_VERTEX_BUFFER_VIEW* v) override;
+    void STDMETHODCALLTYPE OMSetRenderTargets(UINT n, const D3D12_CPU_DESCRIPTOR_HANDLE* r, BOOL single,
+                                              const D3D12_CPU_DESCRIPTOR_HANDLE* d) override;
+    void STDMETHODCALLTYPE ClearDepthStencilView(D3D12_CPU_DESCRIPTOR_HANDLE h, D3D12_CLEAR_FLAGS f, FLOAT d, UINT8 s, UINT n, const D3D12_RECT* r) override;
+    void STDMETHODCALLTYPE ClearRenderTargetView(D3D12_CPU_DESCRIPTOR_HANDLE h, const FLOAT c[4], UINT n, const D3D12_RECT* r) override;
+    void STDMETHODCALLTYPE ClearUnorderedAccessViewUint(D3D12_GPU_DESCRIPTOR_HANDLE g, D3D12_CPU_DESCRIPTOR_HANDLE c, ID3D12Resource* r, const UINT v[4], UINT n, const D3D12_RECT* rc) override;
+    void STDMETHODCALLTYPE ClearUnorderedAccessViewFloat(D3D12_GPU_DESCRIPTOR_HANDLE g, D3D12_CPU_DESCRIPTOR_HANDLE c, ID3D12Resource* r, const float v[4], UINT n, const D3D12_RECT* rc) override;
+    void STDMETHODCALLTYPE DiscardResource(ID3D12Resource*, const D3D12_DISCARD_REGION*) override {
+        Unimpl("ID3D12GraphicsCommandList::DiscardResource");
+    }
+    void STDMETHODCALLTYPE BeginQuery(ID3D12QueryHeap*, D3D12_QUERY_TYPE, UINT) override;
+    void STDMETHODCALLTYPE EndQuery(ID3D12QueryHeap*, D3D12_QUERY_TYPE, UINT) override;
+    void STDMETHODCALLTYPE ResolveQueryData(ID3D12QueryHeap* h, D3D12_QUERY_TYPE t, UINT s, UINT n, ID3D12Resource* dst, UINT64 off) override;
+    void STDMETHODCALLTYPE SetPredication(ID3D12Resource*, UINT64, D3D12_PREDICATION_OP) override {
+        Unimpl("ID3D12GraphicsCommandList::SetPredication");
+    }
+    void STDMETHODCALLTYPE SetMarker(UINT, const void*, UINT) override {}
+    void STDMETHODCALLTYPE BeginEvent(UINT, const void*, UINT) override {}
+    void STDMETHODCALLTYPE EndEvent() override {}
+};
+
+void DumpBackbufferSourceHistory(UINT64 readbackPresentCount);
+
+struct CommandQueue : Stub_ID3D12CommandQueue {
+    D3D12_COMMAND_QUEUE_DESC qd{};
+    CommandQueue(Device* d, const D3D12_COMMAND_QUEUE_DESC& x) : Stub_ID3D12CommandQueue(d), qd(x) {}
+    void STDMETHODCALLTYPE UpdateTileMappings(ID3D12Resource*, UINT, const D3D12_TILED_RESOURCE_COORDINATE*,
+        const D3D12_TILE_REGION_SIZE*, ID3D12Heap*, UINT, const D3D12_TILE_RANGE_FLAGS*,
+        const UINT*, const UINT*, D3D12_TILE_MAPPING_FLAGS) override;
+    void STDMETHODCALLTYPE CopyTileMappings(ID3D12Resource* dst,
+        const D3D12_TILED_RESOURCE_COORDINATE* dstCoordinate, ID3D12Resource* src,
+        const D3D12_TILED_RESOURCE_COORDINATE* srcCoordinate, const D3D12_TILE_REGION_SIZE* region,
+        D3D12_TILE_MAPPING_FLAGS flags) override;
+    void STDMETHODCALLTYPE ExecuteCommandLists(UINT n, ID3D12CommandList* const* lists) override;
+    void STDMETHODCALLTYPE SetMarker(UINT, const void*, UINT) override {}
+    void STDMETHODCALLTYPE BeginEvent(UINT, const void*, UINT) override {}
+    void STDMETHODCALLTYPE EndEvent() override {}
+    HRESULT STDMETHODCALLTYPE Signal(ID3D12Fence* f, UINT64 v) override;
+    HRESULT STDMETHODCALLTYPE Wait(ID3D12Fence* f, UINT64 v) override;
+    HRESULT STDMETHODCALLTYPE GetTimestampFrequency(UINT64* f) override;
+    HRESULT STDMETHODCALLTYPE GetClockCalibration(UINT64* g, UINT64* c) override;
+    D3D12_COMMAND_QUEUE_DESC STDMETHODCALLTYPE GetDesc() override { return qd; }
+};
+
+// ------------------------------------------------------------------ device
+struct PendingSignal {
+    Ptr<ID3D11Query> q;
+    Ptr<IUnknown> fence;
+    UINT64 value = 0;
+    std::vector<Ptr<IUnknown>> readbacks;
+};
+
+struct Device : Stub_ID3D12Device2 {
+    Ptr<ID3D11Device> d11;
+    Ptr<ID3D11Device1> d11_1;
+    Ptr<ID3D11Device2> d11_2;
+    Ptr<ID3D11DeviceContext> ctx;
+    Ptr<ID3D11DeviceContext2> ctx2;
+    D3D11_TILED_RESOURCES_TIER tiledTier = D3D11_TILED_RESOURCES_NOT_SUPPORTED;
+    Ptr<IDXGIAdapter> adapter;
+    D3D_FEATURE_LEVEL fl = D3D_FEATURE_LEVEL_11_0;
+    std::recursive_mutex ctxLock;
+    UINT64 timestampFrequency = 0;
+    std::mutex pendLock;
+    std::deque<PendingSignal> pending;
+    std::thread poller;
+    std::condition_variable_any pollCv;
+    std::atomic<bool> stopPoll{false};
+    std::atomic<UINT> rootSigCounter{0};
+    std::mutex swapLock;
+    std::set<Resource*> backbuffers;   // wrapper dei backbuffer attivi (identita')
+    std::mutex backbufferCopyLock;
+    Ptr<ID3D11Resource> lastBackbufferCopySource;
+    D3D12_RESOURCE_DESC lastBackbufferCopySourceDesc{};
+    uint64_t lastBackbufferCopySequence = 0;
+
+    explicit Device(IDXGIAdapter* a) : Stub_ID3D12Device2(this), adapter(a) {}
+    ~Device() override;
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** out) override;
+    HRESULT Init(D3D_FEATURE_LEVEL minFl);
+    void PollFences();
+    void AddPending(PendingSignal&& p);
+    void ReleaseBackbufferViews();
+
+    UINT STDMETHODCALLTYPE GetNodeCount() override {
+        D3D12ON11_TRACE_CALLER("GetNodeCount");
+        return 1;
+    }
+    HRESULT STDMETHODCALLTYPE CreateCommandQueue(const D3D12_COMMAND_QUEUE_DESC* d, REFIID riid, void** p) override;
+    HRESULT STDMETHODCALLTYPE CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE t, REFIID riid, void** p) override;
+    HRESULT STDMETHODCALLTYPE CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC* d, REFIID riid, void** p) override;
+    HRESULT STDMETHODCALLTYPE CreateComputePipelineState(const D3D12_COMPUTE_PIPELINE_STATE_DESC* d, REFIID riid, void** p) override;
+    HRESULT STDMETHODCALLTYPE CreatePipelineState(const D3D12_PIPELINE_STATE_STREAM_DESC* d, REFIID riid, void** p) override;
+    HRESULT STDMETHODCALLTYPE CreateCommandSignature(const D3D12_COMMAND_SIGNATURE_DESC* d,
+        ID3D12RootSignature* r, REFIID riid, void** p) override;
+    HRESULT STDMETHODCALLTYPE CreateCommandList(UINT node, D3D12_COMMAND_LIST_TYPE t, ID3D12CommandAllocator* a, ID3D12PipelineState* ps, REFIID riid, void** p) override;
+    HRESULT STDMETHODCALLTYPE CheckFeatureSupport(D3D12_FEATURE f, void* data, UINT size) override;
+    HRESULT STDMETHODCALLTYPE CreateDescriptorHeap(const D3D12_DESCRIPTOR_HEAP_DESC* d, REFIID riid, void** p) override;
+    UINT STDMETHODCALLTYPE GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE) override { return kDescStride; }
+    HRESULT STDMETHODCALLTYPE CreateRootSignature(UINT node, const void* b, SIZE_T len, REFIID riid, void** p) override;
+    void STDMETHODCALLTYPE CreateConstantBufferView(const D3D12_CONSTANT_BUFFER_VIEW_DESC* d, D3D12_CPU_DESCRIPTOR_HANDLE h) override;
+    void STDMETHODCALLTYPE CreateShaderResourceView(ID3D12Resource* r, const D3D12_SHADER_RESOURCE_VIEW_DESC* d, D3D12_CPU_DESCRIPTOR_HANDLE h) override;
+    void STDMETHODCALLTYPE CreateUnorderedAccessView(ID3D12Resource* r, ID3D12Resource* c, const D3D12_UNORDERED_ACCESS_VIEW_DESC* d, D3D12_CPU_DESCRIPTOR_HANDLE h) override;
+    void STDMETHODCALLTYPE CreateRenderTargetView(ID3D12Resource* r, const D3D12_RENDER_TARGET_VIEW_DESC* d, D3D12_CPU_DESCRIPTOR_HANDLE h) override;
+    void STDMETHODCALLTYPE CreateDepthStencilView(ID3D12Resource* r, const D3D12_DEPTH_STENCIL_VIEW_DESC* d, D3D12_CPU_DESCRIPTOR_HANDLE h) override;

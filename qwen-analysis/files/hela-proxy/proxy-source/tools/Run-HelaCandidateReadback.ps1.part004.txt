@@ -1,0 +1,156 @@
+        elseif (-not $originalLogExists -and [System.IO.File]::Exists($gameLog)) {
+            try {
+                Remove-Item -LiteralPath $gameLog -Force
+            }
+            catch {
+                $restoreErrors += "Could not remove test proxy log: $($_.Exception.Message)"
+            }
+        }
+
+        foreach ($name in $externalReadbackNames) {
+            $destination = Join-Path $externalReadbackRoot $name
+            $saved = Join-Path (Join-Path $preState 'external-readbacks') $name
+            try {
+                if ([System.IO.File]::Exists($saved)) {
+                    Copy-Item -LiteralPath $saved -Destination $destination -Force
+                }
+                elseif ([System.IO.File]::Exists($destination)) {
+                    Remove-Item -LiteralPath $destination -Force
+                }
+            }
+            catch {
+                $restoreErrors += "Could not restore readback $name`: $($_.Exception.Message)"
+            }
+        }
+    }
+}
+
+$originalLogRestored = if ($originalLogExists) {
+    $savedLog = Join-Path $preState 'd3d12on11.log'
+    [System.IO.File]::Exists($gameLog) -and
+        [System.IO.File]::Exists($savedLog) -and
+        (Get-FileHash -LiteralPath $gameLog -Algorithm SHA256).Hash -eq
+        (Get-FileHash -LiteralPath $savedLog -Algorithm SHA256).Hash
+}
+else {
+    -not [System.IO.File]::Exists($gameLog)
+}
+
+$readbacksRestored = $true
+foreach ($name in $externalReadbackNames) {
+    $destination = Join-Path $externalReadbackRoot $name
+    $saved = Join-Path (Join-Path $preState 'external-readbacks') $name
+    if ([System.IO.File]::Exists($saved)) {
+        if (-not [System.IO.File]::Exists($destination) -or
+            (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -ne
+            (Get-FileHash -LiteralPath $saved -Algorithm SHA256).Hash) {
+            $readbacksRestored = $false
+        }
+    }
+    elseif ([System.IO.File]::Exists($destination)) {
+        $readbacksRestored = $false
+    }
+}
+
+$dllsUnchanged = $true
+foreach ($dllName in $expectedDllHashes.Keys) {
+    $dllPath = Join-Path $gameBin $dllName
+    if (-not [System.IO.File]::Exists($dllPath) -or
+        (Get-FileHash -LiteralPath $dllPath -Algorithm SHA256).Hash -ne $dllHashesBefore[$dllName]) {
+        $dllsUnchanged = $false
+    }
+}
+$sharedOverridesUnchanged = (ConvertTo-Json -InputObject @(Get-OverrideManifest $sharedOverrides) -Compress) -eq
+    (ConvertTo-Json -InputObject $sharedOverrideManifest -Compress)
+$gameProcessesRunning = $true
+try {
+    $gameProcessesRunning = (Get-ProcessPaths).Count -gt 0
+}
+catch {
+    $restoreErrors += "Could not verify final game process state: $($_.Exception.Message)"
+}
+$resultStatus = if ($runError) {
+    'failed'
+}
+elseif ($targetReadbackReady) {
+    'readback-captured'
+}
+elseif ($timeoutReached) {
+    'timeout-before-target-readback'
+}
+else {
+    'process-exited-before-target-readback'
+}
+$networkSummary = Get-HelaNetworkObservationSummary -Path $networkLog
+$firewallVerdict = Get-HelaFirewallVerdict `
+    -ConfigurationVerified ($blockExitCode -eq 0 -and $null -ne $blockVerification) `
+    -NetworkSummary $networkSummary
+$firewallDetail = [ordered]@{
+    verdict = $firewallVerdict
+    configurationVerification = $blockVerification
+    trafficObservation = $networkSummary
+    limitation = 'No TCP connection observed is not proof of zero egress. The monitor is process-scoped, polling-based, and does not observe UDP or payload; Established indicates a TCP handshake, not payload delivery or remote acceptance.'
+}
+$result = [ordered]@{
+    runId = [System.IO.Path]::GetFileName($RunDirectory)
+    gpu = 'GTX 1050 Ti'
+    status = $resultStatus
+    startedAt = if ($gameProcess) { $gameProcess.StartTime.ToString('o') } else { $null }
+    targetPresent = $TargetPresent
+    timeoutSeconds = $TimeoutSeconds
+    timeoutReached = $timeoutReached
+    successfulPresentCalls = $presentCount
+    postReadbackObservation = $menuObservation
+    targetReadbackLogged = $targetReadbackLogged
+    targetReadbackSourceSaved = [System.IO.File]::Exists((Join-Path $RunDirectory "HelaReadback_Present$($TargetPresent)_source.bmp"))
+    targetReadbackBackbufferSaved = [System.IO.File]::Exists((Join-Path $RunDirectory "HelaReadback_Present$($TargetPresent)_backbuffer.bmp"))
+    readbackFiles = $readbackFiles
+    gameExitCode = $gameExitCode
+    gameRootDllsUnchanged = $dllsUnchanged
+    sharedOverridesUnchanged = $sharedOverridesUnchanged
+    originalProxyLogRestored = $originalLogRestored
+    externalReadbacksRestored = $readbacksRestored
+    gameProcessesRunning = $gameProcessesRunning
+    firewallCheck = $firewallVerdict
+    firewall = $firewallDetail
+    networkLog = $networkLog
+    runError = $runError
+    restoreErrors = $restoreErrors
+    realGraphicsVisuallyValidated = $false
+}
+$result | ConvertTo-Json -Depth 7 |
+    Set-Content -LiteralPath (Join-Path $RunDirectory 'run-result.json') -Encoding UTF8
+$result | ConvertTo-Json -Depth 7
+
+if ($runError -or $restoreErrors.Count -gt 0 -or
+    -not $originalLogRestored -or -not $readbacksRestored -or
+    -not $dllsUnchanged -or -not $sharedOverridesUnchanged -or
+    $gameProcessesRunning) {
+    throw 'Run or restoration verification failed; inspect run-result.json and restoreErrors.'
+}
+}
+catch {
+    $errorRecord = $_
+    $diagnostic = [ordered]@{
+        schema = 'hela-powershell-error/v1'
+        timestampUtc = [System.DateTime]::UtcNow.ToString('o')
+        stage = $diagnosticStage
+        message = $errorRecord.Exception.Message
+        exceptionType = $errorRecord.Exception.GetType().FullName
+        fullyQualifiedErrorId = $errorRecord.FullyQualifiedErrorId
+        category = [string]$errorRecord.CategoryInfo
+        scriptStackTrace = $errorRecord.ScriptStackTrace
+        positionMessage = if ($errorRecord.InvocationInfo) { $errorRecord.InvocationInfo.PositionMessage } else { $null }
+    }
+    try {
+        if ([System.IO.Directory]::Exists($RunDirectory)) {
+            $diagnostic | ConvertTo-Json -Depth 6 |
+                Set-Content -LiteralPath $diagnosticPath -Encoding UTF8
+        }
+    }
+    catch {
+        [Console]::Error.WriteLine("Could not save PowerShell diagnostic '$diagnosticPath': $($_.Exception.Message)")
+    }
+    [Console]::Error.WriteLine("Hela runner failed at stage '$diagnosticStage'. See '$diagnosticPath'. $($errorRecord.Exception.Message)")
+    throw
+}

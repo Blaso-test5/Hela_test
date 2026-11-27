@@ -1,0 +1,205 @@
+  /** Mappa VS hash -> lista univoca di PS hash abbinati nelle PSO GRAPHICS o nei draw osservati. */
+  vsToPsMap: Record<string, string[]>;
+  /**
+   * Placeholder catalogati nel log. Come da policy `runs/20261121/README.md`, il numero
+   * di placeholder non è una metrica di completamento e `rtv_is_backbuffer=1` non dimostra
+   * da solo che lo shader abbia prodotto pixel visibili.
+   */
+  placeholdersRanked: RankedPlaceholderShader[];
+  summary: {
+    uniqueShaders: number;
+    nativeSm5: number;
+    overrideReady: number;
+    placeholders: number;
+    blockedOrFailed: number;
+    graphicsPsosTotal: number;
+    graphicsPsosPlaceholder: number;
+    computePsosTotal: number;
+    computePsosPlaceholder: number;
+    executedGraphicsPairsCount: number;
+    inputLayoutFailures: number;
+  };
+}
+
+const ZERO_HASH = "0000000000000000";
+
+function normalizeHash(raw?: string): string | undefined {
+  if (!raw) return undefined;
+  const clean = raw.toLowerCase().replace(/^0x/, "");
+  if (!/^[0-9a-f]{16}$/.test(clean) || clean === ZERO_HASH) return undefined;
+  return clean;
+}
+
+function normalizePointer(raw?: string): string {
+  if (!raw) return "0x0";
+  const clean = raw.trim().toLowerCase();
+  if (clean === "(null)" || clean === "0" || clean === "0x0" || /^0x0+$/.test(clean) || /^0+$/.test(clean)) {
+    return "0x0";
+  }
+  return clean.startsWith("0x") ? clean : `0x${clean}`;
+}
+
+function parseKvTokens(line: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const re = /\b([A-Za-z0-9_.-]+)=([^\s;,]+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(line)) !== null) {
+    out[m[1].toLowerCase()] = m[2];
+  }
+  return out;
+}
+
+function parseStageRef(raw: string | undefined): { hash: string; bytes: number } | undefined {
+  if (!raw) return undefined;
+  const m = raw.match(/^([0-9a-fA-F]{16})\/(\d+)$/);
+  if (!m) return undefined;
+  const hash = normalizeHash(m[1]);
+  if (!hash) return undefined;
+  return { hash, bytes: Number(m[2]) };
+}
+
+function ensureShader(
+  map: Record<string, ShaderObservation>,
+  hash: string,
+  stage: ShaderStage,
+  lineNumber: number,
+): ShaderObservation {
+  const existing = map[hash];
+  if (existing) return existing;
+  const created: ShaderObservation = {
+    hash,
+    stage,
+    status: "seen",
+    firstLine: lineNumber,
+  };
+  map[hash] = created;
+  return created;
+}
+
+function isStage(value: string): value is ShaderStage {
+  return value === "VS" || value === "PS" || value === "GS" || value === "HS" || value === "DS" || value === "CS";
+}
+
+function parseHexMask(raw?: string): number {
+  if (!raw) return 0;
+  return raw.startsWith("0x") || raw.startsWith("0X") ? parseInt(raw.slice(2), 16) : Number(raw) || 0;
+}
+
+/**
+ * Parser allineato ai formati reali emessi dai sorgenti C++ del proxy Hela:
+ * - `pipeline.cpp` (`SHADER *`, `PSO GRAPHICS/COMPUTE`, `[TARGET_INPUT_LAYOUT]`, `INPUT_LAYOUT_FAILED`)
+ * - `util.cpp` (`MODULE_FINGERPRINT`, `Config`, `[HEARTBEAT]`, `[SHADER_USE_SUMMARY]`,
+ *   `[DRAW_SHADER_USE]`, `[COMPUTE_SHADER_USE]`, `[SHADER_USE_EVENT]`)
+ * - `commands.cpp` (`[TARGET_DRAW_COPY]`, `[COPY_TO_BB]`, `[BB_SOURCE_HISTORY_SNAPSHOT]`, `[BB_SOURCE_HISTORY]`)
+ * - `dxgi_proxy.cpp` (`DIAGNOSTIC_MASK_NVIDIA`, `[READBACK_IDENTITY]`, `[READBACK_SRC]`, `[READBACK]`)
+ */
+export function parseHelaProxyLog(logText: string): HelaProxyLogReport {
+  const lines = logText.split(/\r?\n/);
+  const attestation: LaunchAttestationSummary = {
+    modules: {},
+    maskedNvidiaAdapter: false,
+  };
+  const presentProgress = {
+    swapChainsCreated: 0,
+    maxHeartbeatPresent: 0,
+    maxSummaryPresent: 0,
+    maxReadbackPresent: 0,
+    maxObservedPresent: 0,
+  };
+
+  const shaders: Record<string, ShaderObservation> = {};
+  const graphicsPsos: GraphicsPsoRecord[] = [];
+  const computePsos: ComputePsoRecord[] = [];
+  const targetInputLayoutElements: TargetInputLayoutElement[] = [];
+  const inputLayoutFailures: InputLayoutFailure[] = [];
+  const drawShaderUse: DrawShaderUseRecord[] = [];
+  const computeShaderUse: ComputeShaderUseRecord[] = [];
+  const shaderUseEvents: ShaderUseEventRecord[] = [];
+  const readbackIdentities: ReadbackIdentityRecord[] = [];
+  const sampledReadbacks: SampledReadbackRecord[] = [];
+  const targetDrawCopies: TargetDrawCopyRecord[] = [];
+  const copyToBackbufferRecords: CopyToBackbufferRecord[] = [];
+  const bbSourceHistorySnapshots: BackbufferSourceHistorySnapshot[] = [];
+
+  let activeReadbackSampleCtx: { kind: "source" | "backbuffer"; presentCount: number } | undefined;
+  let activeBbSnapshot: BackbufferSourceHistorySnapshot | undefined;
+  let activeBbResource: BackbufferSourceHistorySnapshot["resources"][number] | undefined;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lineNo = i + 1;
+    if (!line.trim()) continue;
+
+    // 1. Runtime & launch profile attestation markers
+    const modMatch = line.match(/MODULE_FINGERPRINT\s+role=(\S+).*?\bsha256=([0-9a-fA-F]{64})(?:\s|$)/);
+    if (modMatch) {
+      attestation.modules[modMatch[1]] = modMatch[2].toLowerCase();
+      continue;
+    }
+
+    const maskMatch = line.match(/DIAGNOSTIC_MASK_NVIDIA:.*?exposed-vendor=(0x[0-9a-fA-F]+)/);
+    if (maskMatch) {
+      attestation.exposedVendor = maskMatch[1].toLowerCase();
+      if (attestation.exposedVendor === "0xffff" && attestation.adapterSource === "proxy-unwrap") {
+        attestation.maskedNvidiaAdapter = true;
+      }
+      continue;
+    }
+
+    const adapterMatch = line.match(/D3D12CreateDevice\s+adapter\s+source=(\S+)/);
+    if (adapterMatch) {
+      attestation.adapterSource = adapterMatch[1];
+      if (attestation.exposedVendor === "0xffff" && attestation.adapterSource === "proxy-unwrap") {
+        attestation.maskedNvidiaAdapter = true;
+      }
+      continue;
+    }
+
+    const tierMatch = line.match(/CheckFeatureSupport\s+end\s+feature=D3D12_OPTIONS(?:\(0\))?.*?\btiled-tier=(\d+)/);
+    if (tierMatch) {
+      attestation.tiledResourcesTier = Number(tierMatch[1]);
+      continue;
+    }
+
+    const traceMatch = line.match(/Config\s+caller-trace=([01])(?:\s|$)/);
+    if (traceMatch) {
+      attestation.callerTrace = traceMatch[1] === "1";
+      continue;
+    }
+
+    // 2. Heartbeat & ShaderUseSummary Present counters (util.cpp)
+    if (line.includes("[HEARTBEAT]")) {
+      const swapM = line.match(/\bswap=(\d+)/);
+      const presM = line.match(/\bpresent=(\d+)/);
+      if (swapM) presentProgress.swapChainsCreated = Math.max(presentProgress.swapChainsCreated, Number(swapM[1]));
+      if (presM) presentProgress.maxHeartbeatPresent = Math.max(presentProgress.maxHeartbeatPresent, Number(presM[1]));
+      continue;
+    }
+
+    if (line.includes("[SHADER_USE_SUMMARY]")) {
+      const presM = line.match(/\bpresent_calls_process_wide=(\d+)/);
+      if (presM) presentProgress.maxSummaryPresent = Math.max(presentProgress.maxSummaryPresent, Number(presM[1]));
+      continue;
+    }
+
+    // 3. Shader lifecycle (pipeline.cpp)
+    const beginMatch = line.match(
+      /SHADER BEGIN\s+stage=(VS|PS|GS|HS|DS|CS)\s+hash=([0-9a-fA-F]{16})\s+bytes=(\d+)\s+DXBC=(\d+)\s+DXIL=(\d+)\s+legacy=(\d+)\s+model=(\d+_\d+)\s+RTS0=(\d+)/,
+    );
+    if (beginMatch && isStage(beginMatch[1])) {
+      const hash = beginMatch[2].toLowerCase();
+      const entry = ensureShader(shaders, hash, beginMatch[1], lineNo);
+      entry.bytes = Number(beginMatch[3]);
+      entry.isDxbc = beginMatch[4] === "1";
+      entry.hasDxil = beginMatch[5] === "1";
+      entry.hasLegacy = beginMatch[6] === "1";
+      entry.shaderModel = beginMatch[7];
+      entry.hasRts0 = beginMatch[8] === "1";
+      continue;
+    }
+
+    const readyOverrideMatch = line.match(
+      /SHADER READY\s+stage=(VS|PS|GS|HS|DS|CS)\s+hash=([0-9a-fA-F]{16})\s+source=SM5-override\s+path=(.+?)\s+bytes=(\d+)\s+sha256=([0-9a-fA-F]{64})(?:\s+model=(\d+_\d+))?/,
+    );
+    if (readyOverrideMatch && isStage(readyOverrideMatch[1])) {
+      const hash = readyOverrideMatch[2].toLowerCase();

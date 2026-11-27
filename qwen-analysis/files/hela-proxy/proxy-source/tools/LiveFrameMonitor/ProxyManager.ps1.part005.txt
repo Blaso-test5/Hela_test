@@ -1,0 +1,109 @@
+            $launcherStarted = $true
+            & $LiveMonitorLauncher @launcherArgs
+
+            $report = Assert-MonitorReport -ReportPath $reportPath `
+                -TargetPresent $Present -ExpectedVersion ([string]$manifest.testVersion)
+            if ($report.run_identity.attestation_status -ne "verified") {
+                throw "Runtime module fingerprints did not verify."
+            }
+            $runInfo.status = "completed"
+        } catch {
+            $runError = $_.Exception.Message
+            $runInfo.status = "failed"
+            $runInfo.error = $runError
+        } finally {
+            $runInfo.completed_utc = [DateTime]::UtcNow.ToString("o")
+            try {
+                try {
+                    if (($launcherStarted -or $oldLogMoved) -and
+                        (Test-Path -LiteralPath $LogPath -PathType Leaf)) {
+                        Move-IfPresent -Path $LogPath `
+                            -Destination (Join-Path $runDirectoryPath "d3d12on11.log") | Out-Null
+                    }
+                } catch {
+                    $runError = if ($runError) { "$runError; log archive failed: $($_.Exception.Message)" } `
+                        else { "Log archive failed: $($_.Exception.Message)" }
+                }
+                foreach ($path in Get-RunCapturePaths -TargetPresent $Present) {
+                    try {
+                        if ($launcherStarted -and (Test-Path -LiteralPath $path -PathType Leaf)) {
+                            Move-IfPresent -Path $path `
+                                -Destination (Join-Path $readbackDir (Split-Path -Leaf $path)) | Out-Null
+                        }
+                    } catch {
+                        $runError = if ($runError) { "$runError; readback archive failed: $($_.Exception.Message)" } `
+                            else { "Readback archive failed: $($_.Exception.Message)" }
+                    }
+                    if ($oldReadbacks.ContainsKey($path) -and $oldReadbacks[$path]) {
+                        try {
+                            Move-IfPresent -Path (Join-Path $previousFilesDir (Split-Path -Leaf $path)) `
+                                -Destination $path | Out-Null
+                        } catch {
+                            $runError = if ($runError) { "$runError; previous readback restore failed: $($_.Exception.Message)" } `
+                                else { "Previous readback restore failed: $($_.Exception.Message)" }
+                        }
+                    }
+                }
+                if ($oldLogMoved) {
+                    try {
+                        Move-IfPresent -Path (Join-Path $previousFilesDir "d3d12on11.log") `
+                            -Destination $LogPath | Out-Null
+                    } catch {
+                        $runError = if ($runError) { "$runError; previous log restore failed: $($_.Exception.Message)" } `
+                            else { "Previous log restore failed: $($_.Exception.Message)" }
+                    }
+                }
+            } catch {
+                $runError = if ($runError) { "$runError; output archive failed: $($_.Exception.Message)" } `
+                    else { "Output archive failed: $($_.Exception.Message)" }
+            } finally {
+                if ($EnableCrashDiagnostics) {
+                    try {
+                        $crashDiagnosticsDir = Join-Path $runDirectoryPath "crash-diagnostics"
+                        foreach ($file in Get-ChildItem -LiteralPath $GameDir -File -Filter "d3d12on11-crash-*" -ErrorAction SilentlyContinue) {
+                            if (-not $existingCrashDiagnostics.ContainsKey($file.FullName)) {
+                                if (-not (Test-Path -LiteralPath $crashDiagnosticsDir -PathType Container)) {
+                                    New-Item -ItemType Directory -Path $crashDiagnosticsDir -Force | Out-Null
+                                }
+                                Move-IfPresent -Path $file.FullName `
+                                    -Destination (Join-Path $crashDiagnosticsDir $file.Name) | Out-Null
+                            }
+                        }
+                    } catch {
+                        $runError = if ($runError) { "$runError; crash diagnostics archive failed: $($_.Exception.Message)" } `
+                            else { "Crash diagnostics archive failed: $($_.Exception.Message)" }
+                    }
+                }
+                if ($installationStarted -and (Test-Path -LiteralPath $restoreRoot -PathType Container)) {
+                    try {
+                        Restore-InstalledState -RestoreRoot $restoreRoot
+                        $runInfo.restored = $true
+                    } catch {
+                        $runInfo.restored = $false
+                        $runInfo.status = "restore-failed"
+                        $runInfo.restore_error = $_.Exception.Message
+                        $runError = if ($runError) { "$runError; restore failed: $($_.Exception.Message)" } `
+                            else { "Restore failed: $($_.Exception.Message)" }
+                    }
+                }
+            }
+
+            try {
+                if ($runError -and $runInfo.status -eq "completed") {
+                    $runInfo.status = "failed"
+                }
+                $runInfo | ConvertTo-Json -Depth 6 |
+                    Set-Content -LiteralPath (Join-Path $runDirectoryPath "manager-run.json") -Encoding UTF8
+            } catch {
+                $runError = if ($runError) { "$runError; run metadata save failed: $($_.Exception.Message)" } `
+                    else { "Run metadata save failed: $($_.Exception.Message)" }
+            }
+        }
+
+        if ($runError) {
+            throw "Proxy test run failed. Outputs and restore point are retained at '$runDirectoryPath'. $runError"
+        }
+        Write-Output "Run completed and original installation restored: $runDirectoryPath"
+        return
+    }
+}

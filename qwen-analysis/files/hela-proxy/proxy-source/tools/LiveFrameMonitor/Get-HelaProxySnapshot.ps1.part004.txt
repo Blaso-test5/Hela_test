@@ -1,0 +1,151 @@
+    throw "Ambiguous restore point: $($hits.Count) restore manifests found in $Full. Pass the manifest file explicitly."
+}
+
+# ----------------------------------------------------------------------------------------------
+# -JsonOut validation / writing
+# ----------------------------------------------------------------------------------------------
+
+function Resolve-JsonOutPath {
+    param([string]$Raw, [string]$GameFull, $ProtectedDirs, $ProtectedFiles)
+    if ($Raw.EndsWith('\') -or $Raw.EndsWith('/')) { throw "-JsonOut must be a file path, not a directory: '$Raw'." }
+    $full = Resolve-FullPath $Raw '-JsonOut'
+    if (Test-PathInside -Path $full -Root $GameFull) { throw "-JsonOut must be outside the game directory: '$full'." }
+    foreach ($d in $ProtectedDirs) {
+        if (Test-PathInside -Path $full -Root $d) { throw "-JsonOut must be outside the restore point ('$d'): '$full'." }
+    }
+    foreach ($f in $ProtectedFiles) {
+        if ($full.Equals($f, [System.StringComparison]::OrdinalIgnoreCase)) { throw "-JsonOut must not be the reference manifest itself." }
+    }
+    $parent = [System.IO.Path]::GetDirectoryName($full)
+    if ([string]::IsNullOrEmpty($parent) -or -not [System.IO.Directory]::Exists($parent)) { throw "-JsonOut parent directory does not exist: '$parent'." }
+    if ([System.IO.File]::Exists($full) -or [System.IO.Directory]::Exists($full)) { throw "-JsonOut already exists; refusing to overwrite: '$full'." }
+    return $full
+}
+
+function Write-NewTextFile {
+    param([string]$Path, [string]$Text)
+    $fs = New-Object System.IO.FileStream($Path, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    try {
+        $enc = New-Object System.Text.UTF8Encoding($false)
+        $bytes = $enc.GetBytes($Text)
+        $fs.Write($bytes, 0, $bytes.Length)
+    } finally {
+        $fs.Dispose()
+    }
+}
+
+# ----------------------------------------------------------------------------------------------
+# Overrides inspection
+# ----------------------------------------------------------------------------------------------
+
+function Add-OverrideFindings {
+    param($List, [string]$GameFull, [string]$OvName, $Ref, [string]$Mode)
+    $inventory = ($Mode -eq 'Inventory')
+
+    if ([string]::IsNullOrEmpty($OvName)) {
+        if ($inventory) {
+            $List.Add((New-Finding -Category 'overrides' -Name '(set)' -Status 'NotInspected' -Reason 'OverridesDirectoryName was not provided; override files were not inspected.' -Expected $null -Actual $null))
+        } else {
+            $List.Add((New-Finding -Category 'overrides' -Name '(set)' -Status 'NotAttestable' -Reason 'OverridesDirectoryName was not provided: the overrides directory cannot be located, so override files and the overrides set are not attestable.' -Expected $null -Actual $null))
+        }
+        return
+    }
+
+    $dirFull = Get-ContainedPath -Root $GameFull -Relative $OvName
+    $dirExists = [System.IO.Directory]::Exists($dirFull)
+    $blocked = ((-not $dirExists) -and [System.IO.File]::Exists($dirFull))
+    $dirKind = 'absent'
+    if ($dirExists) { $dirKind = 'directory' } elseif ($blocked) { $dirKind = 'file' }
+    $dirActual = [ordered]@{ kind = $dirKind; sha256 = $null; bytes = $null; error = $null }
+
+    if ($inventory) {
+        $List.Add((New-Finding -Category 'overridesDirectory' -Name $OvName -Status 'Observed' -Reason 'Observed (inventory mode, no reference to compare).' -Expected $null -Actual $dirActual))
+    } elseif ($null -ne $Ref.overridesDir.expectedPresent) {
+        $expPresent = $Ref.overridesDir.expectedPresent
+        $basis = $Ref.overridesDir.basis
+        $suffix = ''
+        if ($basis -eq 'legacy-assumed') { $suffix = ' (legacy manifest: presence is assumed, not attested)' }
+        $status = 'NotAttestable'
+        $reason = ''
+        if ($blocked) {
+            $reason = 'A file, not a directory, exists at the overrides directory path.'
+        } elseif ($expPresent) {
+            if ($dirExists) { $status = 'Match'; $reason = 'Overrides directory present, as expected' + $suffix + '.' }
+            else { $status = 'Missing'; $reason = 'Overrides directory expected but not found' + $suffix + '.' }
+        } else {
+            if ($dirExists) { $status = 'Extra'; $reason = 'Overrides directory exists, but the restore manifest records it as originally absent.' }
+            else { $status = 'Match'; $reason = 'Overrides directory absent, as recorded by the restore manifest.' }
+        }
+        $List.Add((New-Finding -Category 'overridesDirectory' -Name $OvName -Status $status -Reason $reason -Expected ([ordered]@{ present = $expPresent; sha256 = $null; bytes = $null }) -Actual $dirActual))
+    }
+
+    if ($blocked) {
+        $List.Add((New-Finding -Category 'overrides' -Name '(set)' -Status 'NotAttestable' -Reason 'The overrides path is a file, so its content set cannot be enumerated.' -Expected $null -Actual $dirActual))
+        return
+    }
+
+    $liveFiles = New-Object System.Collections.Generic.List[string]
+    if ($dirExists) {
+        try {
+            $all = [System.IO.Directory]::GetFiles($dirFull, '*.cso', [System.IO.SearchOption]::AllDirectories)
+            foreach ($f in $all) {
+                if ($f.EndsWith('.cso', [System.StringComparison]::OrdinalIgnoreCase)) { $liveFiles.Add($f) }
+            }
+            $liveFiles.Sort()
+        } catch {
+            $List.Add((New-Finding -Category 'overrides' -Name '(set)' -Status 'NotAttestable' -Reason ('The overrides directory could not be enumerated: ' + $_.Exception.Message) -Expected $null -Actual $dirActual))
+            return
+        }
+    }
+
+    $expKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    if (-not $inventory) {
+        foreach ($o in ($Ref.overrides | Sort-Object -Property path)) {
+            $full = Get-ContainedPath -Root $dirFull -Relative $o.path
+            [void]$expKeys.Add($o.path)
+            $st = Get-FileState $full
+            $exp = @{ present = $true; sha256 = $o.sha256; bytes = $o.bytes }
+            $List.Add((Compare-FileToExpectation -Category 'override' -Name $o.path -Exp $exp -Act $st -Required $o.required))
+        }
+    }
+    foreach ($f in $liveFiles) {
+        $rel = $f.Substring($dirFull.Length).TrimStart('\', '/')
+        if ($expKeys.Contains($rel)) { continue }
+        $st = Get-FileState $f
+        if ($inventory) {
+            $List.Add((New-ObservedFinding -Category 'override' -Name $rel -Act $st))
+        } else {
+            $List.Add((New-Finding -Category 'override' -Name $rel -Status 'Extra' -Reason 'Present in the overrides directory but not listed by the reference.' -Expected ([ordered]@{ present = $false; sha256 = $null; bytes = $null }) -Actual (ConvertTo-ActualState $st)))
+        }
+    }
+}
+
+# ----------------------------------------------------------------------------------------------
+# Output
+# ----------------------------------------------------------------------------------------------
+
+function Get-StatusColor {
+    param([string]$Status)
+    switch ($Status) {
+        'Match' { return 'Green' }
+        'Mismatch' { return 'Red' }
+        'Missing' { return 'Red' }
+        'Extra' { return 'Red' }
+        'NotAttestable' { return 'Yellow' }
+        default { return 'Gray' }
+    }
+}
+
+function Write-Summary {
+    param($Result)
+    Write-Host ''
+    Write-Host 'Hela Proxy Snapshot (read-only)'
+    Write-Host ('  Mode           : ' + $Result.mode)
+    Write-Host ('  Game directory : ' + $Result.gameDirectory.path + '  [source: ' + $Result.gameDirectory.source + ']')
+    if ($null -ne $Result.reference) {
+        Write-Host ('  Reference      : ' + $Result.reference.path)
+        Write-Host ('  Format         : ' + $Result.reference.format + '  (' + $Result.reference.schema + ')')
+    }
+    foreach ($n in $Result.notes) { Write-Host ('  Note           : ' + $n) -ForegroundColor DarkGray }
+    Write-Host ''
+    foreach ($f in $Result.items) {

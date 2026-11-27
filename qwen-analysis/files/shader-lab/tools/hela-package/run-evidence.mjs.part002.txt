@@ -1,0 +1,61 @@
+    const present = Number(match[1]);
+    if (targetPresent !== undefined && present !== targetPresent) continue;
+    const kind = match[2].toLowerCase();
+    const buffer = await readFile(path.join(runDir, "readbacks", name));
+    readback.push({
+      bmp: await fileRef(runDir, `readbacks/${name}`),
+      targetResourceId: "unresolved",
+      frameIndex: present,
+      copyChainRef: "unresolved",
+      kind,
+      nonBlackFraction: bmpNonBlackFraction(buffer),
+      causalChain: {
+        status: "candidate-only",
+        limitations: ["Resource identity is not stable; no proven draw-copy-readback UID timeline."],
+      },
+    });
+  }
+  if (targetPresent !== undefined && readback.length === 0) add("BMP_MISSING_TARGET", `BMP assenti per Present #${targetPresent}`);
+
+  for (const name of runManifest.requiredOverrides ?? []) {
+    if (!loaded.has(name)) add("REQUIRED_OVERRIDE_NOT_LOADED", `override richiesto non attestato: ${name}`);
+  }
+
+  const bundle = {
+    schemaVersion: 1,
+    runId: runId ?? "unresolved",
+    package: {
+      manifest: await fileRef(packageDir, "candidate-package.json").catch(() => null),
+      inventory: await fileRef(packageDir, "override-inventory.json").catch(() => null),
+      packageReport: await fileRef(packageDir, "package-report.json").catch(() => null),
+    },
+    configuration: {
+      managerRun: await fileRef(runDir, "manager-run.json"),
+      requestedOverrides: [...(runManifest.requiredOverrides ?? [])],
+    },
+    loadedOverrides: {
+      loaderLog: await fileRef(runDir, "d3d12on11.log"),
+      entries: loadedEntries,
+    },
+    monitor: monitor ? { report: await fileRef(runDir, "live-monitor-report.json") } : undefined,
+    logs: [{ kind: "d3d12on11", file: await fileRef(runDir, "d3d12on11.log") }],
+    readback,
+    visual: { menuChecklist: null, baselineRef: null },
+    verdict: { menu: "unverified", notes: "No visual validation." },
+  };
+
+  async function finish() {
+    await mkdir(outDir, { recursive: false });
+    report.ok = issues.length === 0;
+    await writeFile(path.join(outDir, BUNDLE_FILE), JSON.stringify(bundle, null, 2) + "\n", "utf8");
+    await writeFile(path.join(outDir, BUNDLE_REPORT_FILE), JSON.stringify(report, null, 2) + "\n", "utf8");
+    return { bundle, report };
+  }
+
+  try {
+    return await finish();
+  } catch (error) {
+    if (error?.code === "EEXIST") throw new Error(`outDir esiste gia': ${outDir}`);
+    throw error;
+  }
+}

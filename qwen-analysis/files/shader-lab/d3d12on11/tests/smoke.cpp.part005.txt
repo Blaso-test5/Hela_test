@@ -1,0 +1,198 @@
+        return 30;
+    }
+
+    D3D12_RESOURCE_DESC resourceDesc{};
+    resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    resourceDesc.Width = 4096;
+    resourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+    resourceDesc.Height = 1;
+    resourceDesc.DepthOrArraySize = 1;
+    resourceDesc.MipLevels = 1;
+    resourceDesc.SampleDesc.Count = 1;
+    resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+    ID3D12Resource* first = nullptr;
+    result = device->CreatePlacedResource(heap, 0, &resourceDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, __uuidof(ID3D12Resource),
+        reinterpret_cast<void**>(&first));
+    if (FAILED(result)) {
+        std::fprintf(stderr, "CreatePlacedResource at offset 0 failed: 0x%08lx\n", result);
+        heap->Release();
+        return 31;
+    }
+
+    ID3D12Resource* overlap = nullptr;
+    result = device->CreatePlacedResource(heap, 0, &resourceDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, __uuidof(ID3D12Resource),
+        reinterpret_cast<void**>(&overlap));
+    if (result != E_INVALIDARG || overlap) {
+        std::fprintf(stderr, "Overlapping active placement was not rejected: 0x%08lx\n", result);
+        if (overlap) overlap->Release();
+        first->Release();
+        heap->Release();
+        return 32;
+    }
+
+    ID3D12Resource* second = nullptr;
+    result = device->CreatePlacedResource(heap, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT,
+        &resourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+        __uuidof(ID3D12Resource), reinterpret_cast<void**>(&second));
+    if (FAILED(result)) {
+        std::fprintf(stderr, "Non-overlapping placed resource failed: 0x%08lx\n", result);
+        first->Release();
+        heap->Release();
+        return 33;
+    }
+
+    D3D12_HEAP_PROPERTIES properties{};
+    D3D12_HEAP_FLAGS flags{};
+    if (FAILED(first->GetHeapProperties(&properties, &flags)) ||
+        properties.Type != D3D12_HEAP_TYPE_UPLOAD || flags != heapDesc.Flags) {
+        std::fprintf(stderr, "Placed resource returned incorrect heap properties\n");
+        second->Release();
+        first->Release();
+        heap->Release();
+        return 34;
+    }
+
+    first->Release();
+    ID3D12Resource* reused = nullptr;
+    result = device->CreatePlacedResource(heap, 0, &resourceDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, __uuidof(ID3D12Resource),
+        reinterpret_cast<void**>(&reused));
+    if (FAILED(result)) {
+        std::fprintf(stderr, "Released placement range was not reusable: 0x%08lx\n", result);
+        second->Release();
+        heap->Release();
+        return 35;
+    }
+
+    reused->Release();
+    second->Release();
+    heap->Release();
+    return 0;
+}
+
+static int RunIndirectDispatchSmoke(ID3D12Device* device) {
+    D3D12_INDIRECT_ARGUMENT_DESC argument{};
+    argument.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
+    D3D12_COMMAND_SIGNATURE_DESC signatureDesc{};
+    signatureDesc.ByteStride = sizeof(UINT) * 3;
+    signatureDesc.NumArgumentDescs = 1;
+    signatureDesc.pArgumentDescs = &argument;
+
+    D3D12_COMMAND_SIGNATURE_DESC invalidDesc = signatureDesc;
+    invalidDesc.ByteStride = sizeof(UINT) * 2;
+    ID3D12CommandSignature* invalidSignature = nullptr;
+    HRESULT result = device->CreateCommandSignature(&invalidDesc, nullptr,
+        __uuidof(ID3D12CommandSignature), reinterpret_cast<void**>(&invalidSignature));
+    if (result != E_INVALIDARG || invalidSignature) {
+        std::fprintf(stderr, "Invalid command signature was not rejected: 0x%08lx\n", result);
+        if (invalidSignature) invalidSignature->Release();
+        return 36;
+    }
+
+    ID3D12CommandSignature* signature = nullptr;
+    result = device->CreateCommandSignature(&signatureDesc, nullptr,
+        __uuidof(ID3D12CommandSignature), reinterpret_cast<void**>(&signature));
+    if (FAILED(result) || !signature) {
+        std::fprintf(stderr, "Dispatch command signature creation failed: 0x%08lx\n", result);
+        return 37;
+    }
+
+    D3D12_HEAP_PROPERTIES uploadHeap{};
+    uploadHeap.Type = D3D12_HEAP_TYPE_UPLOAD;
+    uploadHeap.CreationNodeMask = uploadHeap.VisibleNodeMask = 1;
+    D3D12_RESOURCE_DESC argumentBufferDesc{};
+    argumentBufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    argumentBufferDesc.Width = 256;
+    argumentBufferDesc.Height = 1;
+    argumentBufferDesc.DepthOrArraySize = 1;
+    argumentBufferDesc.MipLevels = 1;
+    argumentBufferDesc.SampleDesc.Count = 1;
+    argumentBufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    ID3D12Resource* argumentBuffer = nullptr;
+    result = device->CreateCommittedResource(&uploadHeap, D3D12_HEAP_FLAG_NONE,
+        &argumentBufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+        __uuidof(ID3D12Resource), reinterpret_cast<void**>(&argumentBuffer));
+    if (FAILED(result)) {
+        std::fprintf(stderr, "Indirect argument buffer creation failed: 0x%08lx\n", result);
+        signature->Release();
+        return 38;
+    }
+    void* mapped = nullptr;
+    D3D12_RANGE noReads{0, 0};
+    result = argumentBuffer->Map(0, &noReads, &mapped);
+    if (FAILED(result) || !mapped) {
+        std::fprintf(stderr, "Indirect argument buffer map failed: 0x%08lx\n", result);
+        argumentBuffer->Release();
+        signature->Release();
+        return 39;
+    }
+    const UINT dispatchArgs[3] = {1, 1, 1};
+    std::memcpy(mapped, dispatchArgs, sizeof(dispatchArgs));
+    D3D12_RANGE written{0, sizeof(dispatchArgs)};
+    argumentBuffer->Unmap(0, &written);
+
+    ID3D12CommandAllocator* allocator = nullptr;
+    ID3D12CommandQueue* queue = nullptr;
+    ID3D12GraphicsCommandList* commandList = nullptr;
+    ID3D12Fence* fence = nullptr;
+    D3D12_COMMAND_QUEUE_DESC queueDesc{};
+    result = device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+        __uuidof(ID3D12CommandAllocator), reinterpret_cast<void**>(&allocator));
+    if (SUCCEEDED(result))
+        result = device->CreateCommandQueue(&queueDesc, __uuidof(ID3D12CommandQueue),
+            reinterpret_cast<void**>(&queue));
+    if (SUCCEEDED(result))
+        result = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator,
+            nullptr, __uuidof(ID3D12GraphicsCommandList),
+            reinterpret_cast<void**>(&commandList));
+    if (SUCCEEDED(result))
+        result = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence),
+            reinterpret_cast<void**>(&fence));
+    if (FAILED(result)) {
+        std::fprintf(stderr, "Indirect command objects creation failed: 0x%08lx\n", result);
+        if (fence) fence->Release();
+        if (commandList) commandList->Release();
+        if (queue) queue->Release();
+        if (allocator) allocator->Release();
+        argumentBuffer->Release();
+        signature->Release();
+        return 40;
+    }
+
+    commandList->ExecuteIndirect(signature, 1, argumentBuffer, 0, nullptr, 0);
+    result = commandList->Close();
+    if (SUCCEEDED(result)) {
+        ID3D12CommandList* lists[] = {commandList};
+        queue->ExecuteCommandLists(1, lists);
+        result = queue->Signal(fence, 1);
+        if (SUCCEEDED(result)) result = queue->Wait(fence, 1);
+    }
+    if (FAILED(result) || fence->GetCompletedValue() != 1) {
+        std::fprintf(stderr, "Indirect dispatch execution failed: 0x%08lx\n", result);
+        fence->Release();
+        commandList->Release();
+        queue->Release();
+        allocator->Release();
+        argumentBuffer->Release();
+        signature->Release();
+        return 41;
+    }
+
+    fence->Release();
+    commandList->Release();
+    queue->Release();
+    allocator->Release();
+    argumentBuffer->Release();
+    signature->Release();
+    return 0;
+}
+
+int main() {
+    HMODULE proxy = GetModuleHandleW(L"d3d12.dll");
+    if (!proxy || !GetProcAddress(proxy, MAKEINTRESOURCEA(101))
+        || !GetProcAddress(proxy, MAKEINTRESOURCEA(102))
+        || !GetProcAddress(proxy, MAKEINTRESOURCEA(116))
+        || !GetProcAddress(proxy, MAKEINTRESOURCEA(117))

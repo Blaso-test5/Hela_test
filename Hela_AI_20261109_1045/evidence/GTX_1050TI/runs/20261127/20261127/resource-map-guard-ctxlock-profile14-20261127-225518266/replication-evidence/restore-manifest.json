@@ -1,0 +1,43 @@
+{
+  "schema": "hela-proxy-restore/v1",
+  "game_directory": "<GAME_BIN>",
+  "created_utc": "2026-11-27T22:55:18.4369542Z",
+  "runtime": {
+    "d3d12.dll": {
+      "present": true,
+      "sha256": "23e2c8ba52a1cba32d01595c505e047b21b2744a3df807cade734f648ccd7fbe"
+    },
+    "dxgi.dll": {
+      "present": true,
+      "sha256": "edd099d49c4b669c05e1fd46f4af0e251cbee7065a9d596aa93c6d4fafca4aad"
+    }
+  },
+  "overrides_directory_present": true,
+  "overrides": [
+    {
+      "path": "25e657206d761172.cso",
+      "bytes": 372,
+      "sha256": "84e92d1475080ac8919f855a2eb6f06e8c0829dad0fe76c5e453b6d1101e99ad"
+    },
+    {
+      "path": "38acdb88bb8801b9.cso",
+      "bytes": 58476,
+      "sha256": "0724669de377f5bcd07ccb96f3b3172e955d1fa7c56c99e09c997601d12df9cc"
+    },
+    {
+      "path": "74867736557b00e8.cso",
+      "bytes": 1540,
+      "sha256": "fd8dbefb9aba6699fa8bfed527a6388ed65682b8e9ce28cd529f1f7112fc3e40"
+    },
+    {
+      "path": "a7f30e5d1d5fc6fb.cso",
+      "bytes": 692,
+      "sha256": "5a993c0d07474aa541ab5436fcd7dadc6bda5a312a00a4c88b82f8aa81e83eb5"
+    },
+    {
+      "path": "f79b80f0f2f58f68.cso",
+      "bytes": 796,
+      "sha256": "bf56dd5f681dd2fa8f483f5e1fa308dd432b39e78af032ace10634255fc15711"
+    }
+  ]
+}

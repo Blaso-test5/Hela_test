@@ -1,0 +1,134 @@
+                    static_cast<unsigned long long>(heap ? heap->gpuBase : 0));
+            if (!heap) {
+                Log("Root descriptor table handle 0x%llx is not in a live heap",
+                    static_cast<unsigned long long>(arg.value));
+                continue;
+            }
+            const bool isBound = std::any_of(snapshot->descriptorHeaps.begin(), snapshot->descriptorHeaps.end(),
+                [heap](const Ptr<IUnknown>& item) {
+                    return dynamic_cast<ID3D12DescriptorHeap*>(item.Get()) == static_cast<ID3D12DescriptorHeap*>(heap);
+                });
+            if (logTarget)
+                Log("[TARGET_ROOT_HEAP] draw=%u index=%u bound=%u",
+                    targetDraw, i, isBound ? 1u : 0u);
+            if (!isBound) {
+                Log("Root descriptor table references a heap that was not set on the command list");
+                continue;
+            }
+            for (const auto& range : param.ranges) {
+                if (logTarget)
+                    Log("[TARGET_ROOT_RANGE] draw=%u index=%u type=%u base_reg=%u space=%u "
+                        "offset=%u count=%u first_slot=%u",
+                        targetDraw, i, static_cast<unsigned int>(range.type), range.baseReg,
+                        range.space, range.offset, range.num,
+                        range.slots.empty() ? UINT_MAX : range.slots.front());
+                for (UINT n = 0; n < range.num; ++n) {
+                    if (baseIndex + range.offset + n >= heap->items.size()) {
+                        Log("Descriptor table range exceeds its heap");
+                        break;
+                    }
+                    const Descriptor& descriptor = heap->items[baseIndex + range.offset + n];
+                    if (descriptor.diagnosticFailureId &&
+                        failedSrvBindingLogCount.fetch_add(1, std::memory_order_relaxed) < 16) {
+                        Log("[SRV_CREATE_FAIL_BOUND] fail_id=%u hr=0x%08lx compute=%u "
+                            "pso=%p vs=%016llx ps=%016llx cs=%016llx heap=%p heap_index=%u "
+                            "root_param=%u range_type=%u register=%u stages=0x%x",
+                            descriptor.diagnosticFailureId, descriptor.diagnosticFailureResult,
+                            compute ? 1u : 0u,
+                            reinterpret_cast<void*>(state.graphicsPipelineIdentity),
+                            static_cast<unsigned long long>(state.graphicsShaderHash),
+                            static_cast<unsigned long long>(state.graphicsPixelShaderHash),
+                            static_cast<unsigned long long>(state.computeShaderHash),
+                            heap, baseIndex + range.offset + n, i,
+                            static_cast<unsigned int>(range.type), range.slots[n], stages);
+                    }
+                    if (logTarget && range.slots[n] == 0 &&
+                        (range.type == D3D12_DESCRIPTOR_RANGE_TYPE_SRV ||
+                         range.type == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER)) {
+                        ID3D11Resource* rawSrvResource = nullptr;
+                        if (descriptor.srv) descriptor.srv->GetResource(&rawSrvResource);
+                        Ptr<ID3D11Resource> srvResource =
+                            Ptr<ID3D11Resource>::Attach(rawSrvResource);
+                        Log("[TARGET_ROOT_SLOT0] draw=%u range_type=%u descriptor=%p kind=%u "
+                            "srv=%p srv_resource=%p sampler=%p resource=%p",
+                            targetDraw, static_cast<unsigned int>(range.type), &descriptor,
+                            static_cast<unsigned int>(descriptor.kind), descriptor.srv.Get(),
+                            srvResource.Get(), descriptor.smp.Get(), descriptor.keep.Get());
+                    }
+                    BindDescriptor(state, descriptor, range.slots[n], stages);
+                }
+            }
+        } else if (param.type == D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS && arg.kind == 1) {
+            std::vector<UINT> values(param.num32, 0);
+            if (arg.value < param.num32) {
+                const size_t count = std::min<size_t>(arg.consts.size(), param.num32 - static_cast<UINT>(arg.value));
+                std::copy_n(arg.consts.begin(), count, values.begin() + static_cast<size_t>(arg.value));
+            }
+            state.c->UpdateSubresource(param.cb.Get(), 0, nullptr, values.data(), 0, 0);
+            BindCb(state, stages, param.slot, param.cb.Get());
+        } else if ((param.type == D3D12_ROOT_PARAMETER_TYPE_CBV && arg.kind == 2) ||
+                   (param.type == D3D12_ROOT_PARAMETER_TYPE_SRV && arg.kind == 3) ||
+                   (param.type == D3D12_ROOT_PARAMETER_TYPE_UAV && arg.kind == 4)) {
+            if (logTarget && param.type == D3D12_ROOT_PARAMETER_TYPE_CBV) {
+                UINT64 offset = 0;
+                Resource* resource = ResolveVA(arg.value, &offset);
+                std::array<uint32_t, 4> words{};
+                std::array<float, 4> values{};
+                bool shadowAvailable = false;
+                if (resource) {
+                    std::lock_guard<std::mutex> lock(resource->mu);
+                    if (offset <= resource->shadow.size() &&
+                        resource->shadow.size() - static_cast<size_t>(offset) >= sizeof(words)) {
+                        memcpy(words.data(), resource->shadow.data() + offset, sizeof(words));
+                        memcpy(values.data(), resource->shadow.data() + offset, sizeof(values));
+                        shadowAvailable = true;
+                    }
+                }
+                const UINT64 remaining = resource && resource->desc.Width >= offset
+                    ? resource->desc.Width - offset : 0;
+                const UINT64 cbSize = std::min<UINT64>(remaining,
+                    D3D11_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16) & ~UINT64_C(15);
+                Log("[TARGET_ROOT_CBV] draw=%u index=%u stages=0x%x gpu_va=0x%llx "
+                    "resource=%p resource_va=0x%llx offset=%llu width=%llu heap=%u "
+                    "cb_bytes=%llu shadow_bytes=%zu shadow_status=%s "
+                    "words=%08x,%08x,%08x,%08x floats=%.9g,%.9g,%.9g,%.9g",
+                    targetDraw, i, stages, static_cast<unsigned long long>(arg.value),
+                    resource, static_cast<unsigned long long>(resource ? resource->va : 0),
+                    static_cast<unsigned long long>(offset),
+                    static_cast<unsigned long long>(resource ? resource->desc.Width : 0),
+                    static_cast<unsigned int>(resource ? resource->heap : D3D12_HEAP_TYPE_DEFAULT),
+                    static_cast<unsigned long long>(cbSize),
+                    resource ? resource->shadow.size() : 0,
+                    shadowAvailable ? "ok" : "unavailable",
+                    words[0], words[1], words[2], words[3],
+                    values[0], values[1], values[2], values[3]);
+            }
+            BindDirectDescriptor(state, param, arg, stages);
+        }
+    }
+}
+
+void FlushStructWrites(ExecState& state) {
+    for (const auto& write : state.structWrites) {
+        auto* resource = dynamic_cast<Resource*>(write.first.Get());
+        if (resource) resource->WriteBackStruct(write.second);
+    }
+    state.structWrites.clear();
+}
+
+void ApplyPipeline(ExecState& state, PipelineState* pipeline) {
+    if (!pipeline) {
+        state.skipDraws = false;
+        state.skipDispatches = false;
+        state.hasGraphicsPipeline = false;
+        state.hasComputePipeline = false;
+        state.graphicsPlaceholderVs = false;
+        state.computePlaceholderCs = false;
+        state.graphicsMissingShaderStages = 0;
+        state.computeMissingShaderStages = 0;
+        state.graphicsPipelineIdentity = 0;
+        state.graphicsShaderHash = 0;
+        state.graphicsPixelShaderHash = 0;
+        state.graphicsGeometryShaderHash = 0;
+        state.graphicsHullShaderHash = 0;
+        state.graphicsDomainShaderHash = 0;

@@ -1,0 +1,204 @@
+    throw new Error("stagingDir non può risiedere dentro baselineOverridesDir.");
+  }
+  if (fs.existsSync(stagingDir)) {
+    throw new Error(`stagingDir esiste già (rifiuto sovrascrittura): ${stagingDir}`);
+  }
+
+  const baselineManifest = options.baselineManifestPath
+    ? readAndValidateManifest(options.baselineManifestPath)
+    : undefined;
+  if (baselineManifest && Object.keys(baselineManifest.overrides).length > 0) {
+    const baselineOverridesDir = options.baselineOverridesDir
+      ? path.resolve(options.baselineOverridesDir)
+      : undefined;
+    if (!baselineOverridesDir || !fs.existsSync(baselineOverridesDir) || !fs.statSync(baselineOverridesDir).isDirectory()) {
+      throw new Error("baselineOverridesDir è obbligatoria e deve contenere tutti gli override elencati nel manifest baseline.");
+    }
+    for (const [name, expectedSha] of Object.entries(baselineManifest.overrides)) {
+      const source = path.join(baselineOverridesDir, name);
+      if (!fs.existsSync(source) || !fs.statSync(source).isFile()) {
+        throw new Error(`Override baseline mancante: ${source}`);
+      }
+      const actualSha = sha256Buffer(fs.readFileSync(source));
+      if (actualSha.toLowerCase() !== expectedSha.toLowerCase()) {
+        throw new Error(`Hash override baseline non corrispondente per ${name}: atteso ${expectedSha}, trovato ${actualSha}`);
+      }
+    }
+  }
+
+  const overridesDir = path.join(stagingDir, "overrides");
+  const rejectedDir = path.join(stagingDir, "rejected");
+  const disasmDir = path.join(stagingDir, "disasm");
+  const hlslDir = path.join(stagingDir, "hlsl");
+  fs.mkdirSync(overridesDir, { recursive: true });
+  fs.mkdirSync(rejectedDir, { recursive: true });
+  fs.mkdirSync(disasmDir, { recursive: true });
+  fs.mkdirSync(hlslDir, { recursive: true });
+
+  const converter = deps.converter ?? convertDxilToHlsl;
+  const runner = deps.runner ?? run;
+  const getFxc = deps.fxcPath ?? findFxc;
+  const getDxc = deps.dxcPath ?? (() => findDxc(options.dxcPath));
+  const autoDisassemble = options.autoDisassemble ?? true;
+  const requirePairValidationForPs = options.requirePairValidationForPs ?? true;
+
+  const logReport = options.logPath ? parseHelaProxyLogFile(path.resolve(options.logPath)) : undefined;
+  const onlySet = options.onlyHashes?.length
+    ? new Set(options.onlyHashes.map((h) => h.toLowerCase().replace(/^0x/, "")))
+    : undefined;
+
+  interface DiscoveredShader {
+    hash: string;
+    filePath: string;
+    stage: string;
+    disasmPath?: string;
+    autoDisassembled: boolean;
+    report?: ReturnType<typeof analyzeFiles>;
+    error?: string;
+  }
+
+  const discoveredByHash = new Map<string, DiscoveredShader>();
+  const rawFiles = walkShaderFiles(dumpDir);
+
+  for (const filePath of rawFiles) {
+    const bytes = fs.readFileSync(filePath);
+    const container = dxilAnalyzer.parseContainer(bytes);
+    if (!container?.hasDxil) continue;
+    const hash = fnv1a64(bytes);
+    if (onlySet && !onlySet.has(hash)) continue;
+    if (discoveredByHash.has(hash)) continue;
+
+    let disasmPath = findExistingDisasm(filePath);
+    let autoDisassembled = false;
+    let error: string | undefined;
+
+    if (!disasmPath && autoDisassemble) {
+      const targetDisasm = path.join(disasmDir, `${hash}_dxil.txt`);
+      const dxcRes: RunResult = await runner(getDxc(), ["-dumpbin", filePath]);
+      if (dxcRes.missing) {
+        error = `DXC non trovato (${getDxc()}): impossibile disassemblare ${path.basename(filePath)}.`;
+      } else if (dxcRes.code !== 0 || !dxcRes.stdout.trim()) {
+        error = `dxc -dumpbin fallito per ${path.basename(filePath)}: ${dxcRes.stderr || dxcRes.stdout}`;
+      } else {
+        fs.writeFileSync(targetDisasm, dxcRes.stdout, "utf8");
+        disasmPath = targetDisasm;
+        autoDisassembled = true;
+      }
+    }
+
+    const report = disasmPath ? analyzeFiles(filePath, disasmPath) : analyzeFiles(filePath);
+    const stage = (report.stage ?? container.program?.type ?? "unknown").toLowerCase();
+    discoveredByHash.set(hash, {
+      hash,
+      filePath,
+      stage,
+      disasmPath,
+      autoDisassembled,
+      report,
+      error,
+    });
+  }
+
+  const ordered = [...discoveredByHash.values()].sort((a, b) => {
+    const oa = STAGE_ORDER[a.stage] ?? 99;
+    const ob = STAGE_ORDER[b.stage] ?? 99;
+    return oa - ob || a.hash.localeCompare(b.hash);
+  });
+
+  const compiledCsoByHash = new Map<string, string>();
+  const unmappedRegisterSpaces: Array<{ hash: string; stage: string; bindings: string[] }> = [];
+  const entries: StagedShaderEntry[] = [];
+
+  const findVsCsoPath = (vsHash: string): string | undefined => {
+    const staged = compiledCsoByHash.get(vsHash);
+    if (staged && fs.existsSync(staged)) return staged;
+    if (options.baselineOverridesDir) {
+      const base = path.join(path.resolve(options.baselineOverridesDir), `${vsHash}.cso`);
+      if (fs.existsSync(base)) return base;
+    }
+    return undefined;
+  };
+
+  for (const item of ordered) {
+    const pairedVsHashes = item.stage === "ps" ? (logReport?.psToVsMap[item.hash] ?? []) : [];
+    const baseEntry: Omit<StagedShaderEntry, "status" | "includedInManifest" | "message"> = {
+      hash: item.hash,
+      stage: item.stage,
+      inputPath: item.filePath,
+      disasmPath: item.disasmPath,
+      autoDisassembled: item.autoDisassembled,
+      sharedByMultipleVs: pairedVsHashes.length > 1,
+      pairedVsHashes,
+      validatedAgainstVs: [],
+      missingPairedVsDisasm: [],
+      missingPairedVsCso: [],
+      inputLayoutCheck: "not-covered-by-proxy-log",
+      registerMap: [],
+      warnings: [],
+    };
+
+    if (item.error) {
+      entries.push({ ...baseEntry, status: "failed", includedInManifest: false, message: item.error });
+      continue;
+    }
+    if (!item.disasmPath || !item.report) {
+      entries.push({
+        ...baseEntry,
+        status: "blocked",
+        includedInManifest: false,
+        message: "Disassemblato DXC assente; abilita autoDisassemble o fornisci *_dxil.txt.",
+      });
+      continue;
+    }
+
+    const report = item.report;
+    if (report.container?.program && report.stage && report.container.program.type !== report.stage) {
+      entries.push({
+        ...baseEntry,
+        status: "blocked",
+        includedInManifest: false,
+        message: `Stage disassemblato (${report.stage}) diverso da container (${report.container.program.type}).`,
+      });
+      continue;
+    }
+    const blockers = report.findings.filter((f) => f.sev === "blocker");
+    if (blockers.length) {
+      entries.push({
+        ...baseEntry,
+        status: "blocked",
+        includedInManifest: false,
+        message: `Feature SM6 bloccanti: ${blockers.map((b) => `[${b.code}] ${b.message}`).join(" | ")}`,
+      });
+      continue;
+    }
+    const profile = PROFILE_BY_STAGE[item.stage];
+    if (!profile) {
+      entries.push({
+        ...baseEntry,
+        status: "blocked",
+        includedInManifest: false,
+        message: `Stage non supportato per SM5: ${item.stage}`,
+      });
+      continue;
+    }
+
+    // Per i PS: verifica rigorosa di TUTTI i VS abbinati (incluso fan-in multi-VS e VS mancanti)
+    let vsOutputDisasmPath: string | undefined;
+    if (item.stage === "ps" && pairedVsHashes.length > 0) {
+      const vsDisasms: Array<{ vsHash: string; path: string; sigKey: string }> = [];
+      for (const vsHash of pairedVsHashes) {
+        const vsDiscovered = discoveredByHash.get(vsHash);
+        const candidateDisasm =
+          vsDiscovered?.disasmPath ??
+          findExistingDisasm(path.join(dumpDir, `${vsHash}.dxil`));
+        if (!candidateDisasm || !fs.existsSync(candidateDisasm)) {
+          baseEntry.missingPairedVsDisasm.push(vsHash);
+          continue;
+        }
+        const vsText = fs.readFileSync(candidateDisasm, "utf8");
+        if (analyzeDisasm(vsText).stage !== "vs") {
+          baseEntry.missingPairedVsDisasm.push(vsHash);
+          continue;
+        }
+        const sig = parseOutputSignature(vsText);
+        if (!sig.length) {

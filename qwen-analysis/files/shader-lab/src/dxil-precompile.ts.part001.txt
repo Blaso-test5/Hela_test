@@ -1,0 +1,191 @@
+import { createHash } from "node:crypto";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import * as dxilAnalyzer from "./dxil-analyzer.js";
+import { analyzeDisasm, analyzeFiles, formatReport, parseInputSignature, parseOutputSignature, type SigElement } from "./dxil-analyzer.js";
+import { dxilSpirvPath, findFxc, run, spirvCrossPath, type RunResult } from "./external.js";
+import { postprocessHlsl, type PostResult } from "./hlsl-post.js";
+
+export interface DxilConversionOptions {
+  inputPath: string;
+  disasmPath?: string;
+  vsOutputDisasmPath?: string;
+  bindingMapPath?: string;
+  bufferMode?: "raw" | "typed";
+  force?: boolean;
+  shouldCancel?: () => boolean;
+}
+
+export interface DxilConversionResult {
+  hlsl: string;
+  post: PostResult;
+  notes: string[];
+}
+
+export interface PrecompileFileResult {
+  file: string;
+  status: "compiled" | "blocked" | "failed" | "skipped" | "cancelled";
+  message: string;
+  outputPath?: string;
+}
+
+export interface PrecompileProgress {
+  total: number;
+  settled: number;
+  currentFile?: string;
+  currentStatus?: "converting" | PrecompileFileResult["status"];
+  latestResult?: PrecompileFileResult;
+  counts: Omit<PrecompileReport, "inputDir" | "outputDir" | "total" | "results">;
+}
+
+export interface PrecompileReport {
+  inputDir: string;
+  outputDir: string;
+  total: number;
+  compiled: number;
+  blocked: number;
+  failed: number;
+  skipped: number;
+  cancelled: number;
+  results: PrecompileFileResult[];
+}
+
+export interface PrecompileOptions {
+  inputDir: string;
+  outputDir: string;
+  bindingMapPath?: string;
+  shouldCancel?: () => boolean;
+  onProgress?: (progress: PrecompileProgress) => void;
+  onSnapshotProgress?: (phase: "enumerating" | "hashing", scanned: number, total?: number) => void;
+}
+
+export interface PrecompileDependencies {
+  converter?: typeof convertDxilToHlsl;
+  runner?: typeof run;
+  fxcPath?: () => string;
+}
+
+export class PrecompileCancelledError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PrecompileCancelledError";
+  }
+}
+
+const PROFILE_BY_STAGE: Record<string, string> = {
+  vs: "vs_5_0",
+  ps: "ps_5_0",
+  gs: "gs_5_0",
+  hs: "hs_5_0",
+  ds: "ds_5_0",
+  cs: "cs_5_0",
+};
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function disassemblyPathFor(inputPath: string): string | undefined {
+  const parsed = path.parse(inputPath);
+  const candidates = [
+    path.join(parsed.dir, `${parsed.name}_dxil.txt`),
+    `${inputPath}.txt`,
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
+
+export async function convertDxilToHlsl(options: DxilConversionOptions): Promise<DxilConversionResult> {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dxil2sm5-"));
+  try {
+    const spv = path.join(tmp, "shader.spv");
+    const notes: string[] = [];
+    let sig: SigElement[] = [];
+    let vsOutputSig: SigElement[] | undefined;
+    let metadata: { stage?: string; numThreads?: string } = {};
+    if (options.disasmPath) {
+      const report = analyzeFiles(options.inputPath, options.disasmPath);
+      metadata = { stage: report.stage, numThreads: report.numThreads };
+      sig = parseInputSignature(fs.readFileSync(options.disasmPath, "utf8"));
+      const blockers = report.findings.filter((finding) => finding.sev === "blocker");
+      if (blockers.length && !options.force)
+        throw new Error(`Conversione NON tentata: feature SM6 senza equivalente SM5.\n${formatReport(report, path.basename(options.inputPath))}\n(force=true per provare comunque; il risultato non sarà valido in D3D11.)`);
+      if (blockers.length) notes.push("ATTENZIONE: force=true con bloccanti presenti: l'output non è utilizzabile così com'è.");
+    }
+
+    if (options.vsOutputDisasmPath) {
+      if (!options.disasmPath)
+        throw new Error("vsOutputDisasmPath richiede disasmPath per verificare che lo shader convertito sia un pixel shader.");
+      if (metadata.stage !== "ps")
+        throw new Error("vsOutputDisasmPath è valido solo convertendo un pixel shader (stadio PS).");
+      const vsText = fs.readFileSync(options.vsOutputDisasmPath, "utf8");
+      if (analyzeDisasm(vsText).stage !== "vs")
+        throw new Error("vsOutputDisasmPath non contiene un disassemblato di vertex shader.");
+      vsOutputSig = parseOutputSignature(vsText);
+      if (!vsOutputSig.length) throw new Error("Nessuna Output signature trovata nel disassemblato VS.");
+    }
+
+    const dxArgs = [options.inputPath, "--output", spv, ...((options.bufferMode ?? "raw") === "raw" ? ["--ssbo-srv", "--ssbo-uav"] : [])];
+    const dxResult = await run(dxilSpirvPath(), dxArgs);
+    if (dxResult.missing)
+      throw new Error(`${dxResult.stderr}\nInstalla dxil-spirv e imposta DXIL_SPIRV_PATH.`);
+    if (dxResult.code !== 0) throw new Error(`dxil-spirv fallito:\n${dxResult.stderr || dxResult.stdout}`);
+    if (options.shouldCancel?.()) throw new PrecompileCancelledError("Annullato dopo dxil-spirv.");
+
+    const rawHlsl = path.join(tmp, "raw.hlsl");
+    const scArgs = [spv, "--hlsl", "--shader-model", "50", "--output", rawHlsl];
+    if (metadata.stage === "vs")
+      for (const element of sig)
+        if (element.sysValue.toUpperCase() === "NONE" && element.register !== null)
+          scArgs.push("--set-hlsl-vertex-input-semantic", String(element.register), `${element.name}${element.index}`);
+    if (options.shouldCancel?.()) throw new PrecompileCancelledError("Annullato prima di SPIRV-Cross.");
+    const crossResult = await run(spirvCrossPath(), scArgs);
+    if (crossResult.missing)
+      throw new Error(`${crossResult.stderr}\nInstalla SPIRV-Cross e imposta SPIRV_CROSS_PATH.`);
+    if (crossResult.code !== 0 || !fs.existsSync(rawHlsl))
+      throw new Error(`spirv-cross fallito (tipico per feature non rappresentabili in HLSL SM5, es. immagini 64-bit):\n${crossResult.stderr || crossResult.stdout}`);
+
+    const bindingMap = options.bindingMapPath
+      ? JSON.parse(fs.readFileSync(options.bindingMapPath, "utf8")) as Record<string, number>
+      : undefined;
+    const post = postprocessHlsl(fs.readFileSync(rawHlsl, "utf8"), fs.readFileSync(spv), bindingMap, metadata, vsOutputSig);
+    return { hlsl: post.hlsl, post, notes };
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+function isWithin(parent: string, child: string): boolean {
+  const relative = path.relative(path.resolve(parent), path.resolve(child));
+  return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
+}
+
+async function enumerateInputs(
+  inputDir: string,
+  shouldCancel?: () => boolean,
+  onProgress?: PrecompileOptions["onSnapshotProgress"],
+): Promise<Array<{ file: string; sha256: string; hasDxil: boolean; malformed: boolean }>> {
+  const files: string[] = [];
+  const pendingDirs = [inputDir];
+  let scanned = 0;
+  while (pendingDirs.length) {
+    if (shouldCancel?.()) throw new PrecompileCancelledError("Annullato durante l'enumerazione; snapshot non completato.");
+    const dir = pendingDirs.pop();
+    if (!dir) continue;
+    const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (shouldCancel?.()) throw new PrecompileCancelledError("Annullato durante l'enumerazione; snapshot non completato.");
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory() && entry.name !== "node_modules" && entry.name !== ".git")
+        pendingDirs.push(fullPath);
+      else if (entry.isFile() && [".dxil", ".cso"].includes(path.extname(entry.name).toLowerCase()))
+        files.push(fullPath);
+      scanned++;
+      if (scanned % 64 === 0) {
+        onProgress?.("enumerating", scanned);
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    }
+  }
+  onProgress?.("enumerating", scanned);
+  files.sort((a, b) => a.localeCompare(b));

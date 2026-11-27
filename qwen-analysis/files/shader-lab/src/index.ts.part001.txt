@@ -1,0 +1,145 @@
+#!/usr/bin/env node
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { analyze, formatFindings } from "./analyzer.js";
+import { convert } from "./converter.js";
+import { run, findFxc, dxilSpirvPath, spirvCrossPath } from "./external.js";
+import {
+  analyzeDisasm, analyzeFiles, compareShaderSignatures, formatReport,
+  parseInputSignature, parseOutputSignature,
+} from "./dxil-analyzer.js";
+import { convertDxilToHlsl } from "./dxil-precompile.js";
+import { registerPixTool } from "./pix-tool.js";
+import { registerHelaPipelineTools } from "./hela-mcp-tools.js";
+
+const server = new McpServer({ name: "sm6-to-sm5", version: "0.1.0" });
+const ok = (t: string) => ({ content: [{ type: "text" as const, text: t }] });
+const fail = (t: string) => ({ isError: true, content: [{ type: "text" as const, text: t }] });
+
+const PROFILE = /^(vs|ps|gs|hs|ds|cs)_5_[01]$/;
+const DEFAULT_EXT = [".hlsl", ".hlsli", ".fx"];
+
+function load(p?: string, source?: string): string {
+  if (source !== undefined) return source;
+  if (!p) throw new Error("Specificare 'path' oppure 'source'.");
+  return fs.readFileSync(p, "utf8");
+}
+
+function walk(dir: string, exts: string[], recursive: boolean): string[] {
+  const out: string[] = [];
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory() && recursive && e.name !== "node_modules" && e.name !== ".git") out.push(...walk(full, exts, recursive));
+    else if (e.isFile() && exts.includes(path.extname(e.name).toLowerCase())) out.push(full);
+  }
+  return out;
+}
+
+const fmtMap = (m: { from: string; to: string }[]) =>
+  m.length ? "\nMappa binding (da riportare nel codice C++ D3D11):\n" + m.map((x) => `  ${x.from}  ->  ${x.to}`).join("\n") : "";
+
+// ---------------------------------------------------------------- analyze_shader
+server.registerTool("analyze_shader", {
+  title: "Analizza shader SM6",
+  description: "Analizza un file HLSL (o testo) e elenca le feature SM6 incompatibili con SM5/D3D11, distinguendo bloccanti, avvisi e correzioni automatiche.",
+  inputSchema: { path: z.string().optional().describe("Percorso del file HLSL"), source: z.string().optional().describe("Codice HLSL inline") },
+}, async ({ path: p, source }) => {
+  try { return ok(formatFindings(analyze(load(p, source)))); } catch (e) { return fail(String(e)); }
+});
+
+// ---------------------------------------------------------------- analyze_directory
+server.registerTool("analyze_directory", {
+  title: "Analizza cartella di shader",
+  description: "Scansiona una cartella di shader HLSL e produce un report di convertibilità per ogni file.",
+  inputSchema: {
+    dir: z.string(), recursive: z.boolean().default(true),
+    extensions: z.array(z.string()).optional().describe("Default: .hlsl .hlsli .fx"),
+  },
+}, async ({ dir, recursive, extensions }) => {
+  try {
+    const files = walk(dir, extensions ?? DEFAULT_EXT, recursive);
+    let clean = 0, fixable = 0, blocked = 0;
+    const lines: string[] = [];
+    for (const f of files) {
+      const fs_ = analyze(fs.readFileSync(f, "utf8"));
+      const b = fs_.filter((x) => x.severity === "blocker");
+      if (b.length) { blocked++; lines.push(`✖ ${path.relative(dir, f)}  bloccanti: ${[...new Set(b.map((x) => x.code))].join(",")}`); }
+      else if (fs_.some((x) => x.severity !== "info")) { fixable++; lines.push(`⚠ ${path.relative(dir, f)}  convertibile con avvisi`); }
+      else clean++;
+    }
+    return ok(`File analizzati: ${files.length}\nGià compatibili: ${clean} | Auto-convertibili: ${fixable} | Con bloccanti: ${blocked}\n\n${lines.join("\n")}`);
+  } catch (e) { return fail(String(e)); }
+});
+
+// ---------------------------------------------------------------- convert_shader
+server.registerTool("convert_shader", {
+  title: "Converti shader HLSL SM6 -> SM5",
+  description: "Riscrive un HLSL SM6 in HLSL compatibile SM5.0 (FXC). Applica solo trasformazioni sicure e segnala ciò che resta incompatibile. Se si passa outPath scrive il file.",
+  inputSchema: { path: z.string().optional(), source: z.string().optional(), outPath: z.string().optional() },
+}, async ({ path: p, source, outPath }) => {
+  try {
+    const r = convert(load(p, source));
+    if (outPath) { fs.mkdirSync(path.dirname(outPath), { recursive: true }); fs.writeFileSync(outPath, r.output, "utf8"); }
+    const rep =
+      `Modifiche applicate:\n${r.changes.length ? r.changes.map((c) => "  - " + c).join("\n") : "  (nessuna)"}` +
+      fmtMap(r.registerMap) +
+      `\n\nProblemi residui:\n${formatFindings(r.remaining)}` +
+      (outPath ? `\n\nFile scritto: ${outPath}` : `\n\n---- HLSL convertito ----\n${r.output}`);
+    return ok(rep);
+  } catch (e) { return fail(String(e)); }
+});
+
+// ---------------------------------------------------------------- convert_directory
+server.registerTool("convert_directory", {
+  title: "Converti cartella di shader",
+  description: "Converte in batch tutti gli shader di una cartella in outDir, mantenendo la struttura. Genera anche binding_map.json con le rimappature dei register.",
+  inputSchema: { dir: z.string(), outDir: z.string(), recursive: z.boolean().default(true), extensions: z.array(z.string()).optional() },
+}, async ({ dir, outDir, recursive, extensions }) => {
+  try {
+    const files = walk(dir, extensions ?? DEFAULT_EXT, recursive);
+    const maps: Record<string, unknown> = {};
+    const lines: string[] = [];
+    let done = 0, withIssues = 0;
+    for (const f of files) {
+      const rel = path.relative(dir, f);
+      const r = convert(fs.readFileSync(f, "utf8"));
+      const dest = path.join(outDir, rel);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, r.output, "utf8");
+      if (r.registerMap.length) maps[rel] = r.registerMap;
+      done++;
+      const blockers = r.remaining.filter((x) => x.severity === "blocker");
+      if (blockers.length) { withIssues++; lines.push(`✖ ${rel}: ${[...new Set(blockers.map((x) => x.code))].join(",")}`); }
+    }
+    fs.writeFileSync(path.join(outDir, "binding_map.json"), JSON.stringify(maps, null, 2));
+    return ok(`Convertiti ${done} file in ${outDir}\nCon bloccanti residui: ${withIssues}\n${lines.join("\n")}\nMappa binding: ${path.join(outDir, "binding_map.json")}`);
+  } catch (e) { return fail(String(e)); }
+});
+
+// ---------------------------------------------------------------- compile_sm5
+server.registerTool("compile_sm5", {
+  title: "Verifica compilazione con FXC (SM5)",
+  description: "Compila un HLSL con fxc.exe (Windows SDK) per validare che il risultato sia davvero valido in SM5.0. Restituisce errori/avvisi del compilatore.",
+  inputSchema: {
+    path: z.string(), profile: z.string().default("ps_5_0").describe("vs_5_0, ps_5_0, cs_5_0, ..."),
+    entry: z.string().default("main"), includeDirs: z.array(z.string()).optional(),
+    defines: z.array(z.string()).optional().describe("Es. [\"USE_FOO=1\"]"),
+    outPath: z.string().optional().describe("Se indicato salva il bytecode DXBC (.cso)"),
+  },
+}, async ({ path: p, profile, entry, includeDirs, defines, outPath }) => {
+  if (!PROFILE.test(profile)) return fail("Profilo non valido. Per D3D11 usare *_5_0 (o *_5_1 solo se necessario).");
+  const args = ["/nologo", "/T", profile, "/E", entry];
+  includeDirs?.forEach((d) => args.push("/I", d));
+  defines?.forEach((d) => args.push("/D", d));
+  args.push("/Fo", outPath ?? path.join(os.tmpdir(), `sm5_${Date.now()}.cso`), p);
+  const r = await run(findFxc(), args);
+  if (r.missing) return fail(`${r.stderr}\nImposta FXC_PATH in .vscode/mcp.json (fxc.exe è nel Windows SDK).`);
+  return r.code === 0
+    ? ok(`✔ Compilazione riuscita (${profile}).\n${r.stderr || r.stdout}`.trim())
+    : fail(`✖ Compilazione fallita:\n${r.stderr || r.stdout}`);
+});
+

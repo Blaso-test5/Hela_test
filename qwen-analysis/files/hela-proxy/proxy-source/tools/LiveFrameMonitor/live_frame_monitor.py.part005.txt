@@ -1,0 +1,196 @@
+            if self.dispatch_clue_total <= 5:
+                self._emit("DISPATCH_CLUE", f"[DISPATCH_CLUE] line {line_no}: {line[:120]}", clue)
+
+    def _extract_readback_continuation(self, line: str, rb: ReadbackRecord) -> bool:
+        matched = False
+        m_nb = RE_NON_BLACK.search(line)
+        if m_nb:
+            rb.non_black_count = int(m_nb.group(1))
+            rb.total_sampled = int(m_nb.group(2))
+            rb.non_black_pct = float(m_nb.group(3))
+            rb.has_explicit_summary = True
+            matched = True
+
+        for m_rgba in RE_RGBA_TUPLE.finditer(line):
+            groups = m_rgba.groups()
+            if groups[0] is not None:
+                rgba = (int(groups[0]), int(groups[1]), int(groups[2]), int(groups[3]))
+            elif groups[4] is not None:
+                rgba = (int(groups[4]), int(groups[5]), int(groups[6]), int(groups[7]))
+            else:
+                rgba = (int(groups[8]), int(groups[9]), int(groups[10]), int(groups[11]))
+            if len(rb.sample_pixels_rgba) < 16:
+                rb.sample_pixels_rgba.append(rgba)
+            matched = True
+
+        if matched:
+            rb.recompute_from_samples_if_needed()
+
+        if rb.is_complete() and not rb.emitted_complete_event:
+            rb.emitted_complete_event = True
+            self._emit_readback_complete(rb)
+
+        return matched
+
+    def _emit_readback_complete(self, rb: ReadbackRecord) -> None:
+        rb.recompute_from_samples_if_needed()
+        if rb.kind == "source":
+            matched_hist = self.resources_by_ptr.get(rb.source or "")
+            corr = (
+                f"matches RTV history (draws={matched_hist.draws}, skipped={matched_hist.skipped}, clears={matched_hist.clears})"
+                if matched_hist
+                else "no matching RTV history key yet"
+            )
+            self._emit(
+                "READBACK_SRC",
+                f"[READBACK_SRC] Present #{rb.present} source={rb.source} "
+                f"non-black={rb.non_black_count}/{rb.total_sampled} ({rb.non_black_pct}%) "
+                f"all_samples_zero={rb.all_samples_zero} [{corr}]",
+                {
+                    "present": rb.present,
+                    "source": rb.source,
+                    "non_black_count": rb.non_black_count,
+                    "total_sampled": rb.total_sampled,
+                    "all_samples_zero": rb.all_samples_zero,
+                },
+            )
+        else:
+            self._emit(
+                "READBACK_BB",
+                f"[READBACK_BB] Present #{rb.present} buffer={rb.buffer} "
+                f"non-black={rb.non_black_count}/{rb.total_sampled} ({rb.non_black_pct}%) "
+                f"all_samples_zero={rb.all_samples_zero}",
+                {
+                    "present": rb.present,
+                    "buffer": rb.buffer,
+                    "non_black_count": rb.non_black_count,
+                    "total_sampled": rb.total_sampled,
+                    "all_samples_zero": rb.all_samples_zero,
+                },
+            )
+
+    def _record_shader(
+        self,
+        line: str,
+        line_no: int,
+        status: str,
+        table: Dict[str, ShaderStatus],
+    ) -> None:
+        if status == "READY":
+            self.total_ready_events += 1
+        else:
+            self.total_placeholder_events += 1
+
+        hashes = [norm_hash(h) for h in RE_ANY_HASH16.findall(line)]
+        if not hashes:
+            return
+        shader_hash = hashes[0]
+        stage_m = RE_SHADER_STAGE.search(line)
+        stage_val = None
+        if stage_m:
+            raw_stage = (stage_m.group(1) or stage_m.group(2) or "").upper()
+            stage_map = {"VERTEX": "VS", "PIXEL": "PS", "COMPUTE": "CS"}
+            stage_val = stage_map.get(raw_stage, raw_stage)
+        reason_m = RE_REASON.search(line)
+        reason_val = reason_m.group(1) if reason_m else None
+
+        if shader_hash in table:
+            existing = table[shader_hash]
+            existing.occurrences += 1
+            if not existing.stage and stage_val:
+                existing.stage = stage_val
+            if not existing.reason and reason_val:
+                existing.reason = reason_val
+        else:
+            if len(table) >= MAX_TRACKED_SHADERS:
+                oldest = next(iter(table))
+                del table[oldest]
+            rec = ShaderStatus(
+                shader_hash=shader_hash,
+                status=status,
+                stage=stage_val,
+                reason=reason_val,
+                occurrences=1,
+                first_line=line_no,
+            )
+            table[shader_hash] = rec
+            if status == "PLACEHOLDER":
+                self._emit(
+                    "SHADER_PLACEHOLDER",
+                    f"[SHADER_PLACEHOLDER] hash={shader_hash} stage={stage_val or '?'} reason={reason_val or '?'}",
+                    dataclasses.asdict(rec),
+                )
+            else:
+                self._emit(
+                    "SHADER_READY",
+                    f"[SHADER_READY] hash={shader_hash} stage={stage_val or '?'}",
+                    dataclasses.asdict(rec),
+                )
+
+    def record_bmp_inspection(self, info: BmpInspection) -> None:
+        self.bmp_results[info.label] = info
+        self._emit(
+            "BMP_COMPLETE",
+            f"[BMP:{info.label.upper()}] {Path(info.path).name} complete ({info.width}x{info.height}, "
+            f"{info.bits_per_pixel}bpp): non-black={info.non_black_pixels}/{info.total_pixels}",
+            dataclasses.asdict(info),
+        )
+
+    def present_reached(self, present_num: int) -> bool:
+        source = self.readbacks_by_key.get(("source", present_num))
+        backbuffer = self.readbacks_by_key.get(("backbuffer", present_num))
+        return bool(
+            source and source.emitted_complete_event
+            and backbuffer and backbuffer.emitted_complete_event
+        )
+
+    def present100_reached(self) -> bool:
+        return self.present_reached(100)
+
+    def run_identity_report(self) -> Dict[str, Any]:
+        if not self.run_manifest:
+            attestation_status = "untracked"
+            expected_modules: Dict[str, str] = {}
+            test_version = None
+            manifest_path = None
+        else:
+            expected_modules = {
+                role: digest.strip().lower()
+                for role, digest in self.run_manifest["expected_modules"].items()
+            }
+            test_version = self.run_manifest["test_version"]
+            manifest_path = self.run_manifest["manifest_path"]
+            has_mismatch = any(
+                observed != expected_modules[role]
+                for role, digests in self.module_fingerprint_observations.items()
+                for observed in digests
+                if role in expected_modules
+            )
+            has_all_fingerprints = bool(expected_modules) and all(
+                expected in self.module_fingerprint_observations.get(role, [])
+                for role, expected in expected_modules.items()
+            )
+            if self.module_fingerprint_failures:
+                attestation_status = "failed"
+            elif has_mismatch:
+                attestation_status = "mismatch"
+            elif has_all_fingerprints:
+                attestation_status = "verified"
+            else:
+                attestation_status = "pending"
+
+        return {
+            "test_version": test_version,
+            "manifest_path": manifest_path,
+            "expected_modules": expected_modules,
+            "observed_modules": {
+                role: digests[-1] for role, digests in self.module_fingerprint_observations.items()
+                if digests
+            },
+            "module_fingerprint_observations": {
+                role: list(digests)
+                for role, digests in self.module_fingerprint_observations.items()
+            },
+            "module_fingerprint_failures": dict(self.module_fingerprint_failures),
+            "attestation_status": attestation_status,
+        }

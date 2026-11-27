@@ -1,0 +1,204 @@
+{
+  "items": [
+    {
+      "type": "dataset",
+      "dataset": "shader-observations",
+      "recordCount": 4880,
+      "index": "evidence/shader-observations/index.json",
+      "indexSha256": "7ac426307f16311fb2b4686b79594da20bdbe7317bbc71d3ea47f020bad810a3",
+      "byteCount": 2769427,
+      "sha256": "287582009d14cb1efa26690987561cf1c072ea1c8d8542d0d776f2b95f23dcf3",
+      "partCount": 349
+    },
+    {
+      "type": "dataset",
+      "dataset": "monitor-placeholder-sample-256",
+      "recordCount": 256,
+      "index": "evidence/monitor-placeholder-sample-256/index.json",
+      "indexSha256": "23616b17a62fa285d912d0f7f64e6fe8d5b57850c5c8714c6b71512659ae9d8c",
+      "byteCount": 94841,
+      "sha256": "83ec33e5dd323c06b06cf943b181793eef375ae7fb1800c69a93c40a12c33c81",
+      "partCount": 13
+    },
+    {
+      "type": "dataset",
+      "dataset": "graphics-psos",
+      "recordCount": 144,
+      "index": "evidence/graphics-psos/index.json",
+      "indexSha256": "6667b57d132846a342990859c2a65fc37c3de96077489d3d3a75b6d5cc86d26f",
+      "byteCount": 32151,
+      "sha256": "f06598ffdb7ed6a493a99dcb4024873d231a7e42d17ac96893f9c312e3c03667",
+      "partCount": 5
+    },
+    {
+      "type": "dataset",
+      "dataset": "compute-psos",
+      "recordCount": 232,
+      "index": "evidence/compute-psos/index.json",
+      "indexSha256": "3765f82387b2bfc4cb68cdedc541898f3e52f29ddbc051094f87db3ced617acf",
+      "byteCount": 40407,
+      "sha256": "c96c455204b8e40413e05720c4a982da6558d2b21a90a51b2144d9ce049fdf35",
+      "partCount": 6
+    },
+    {
+      "type": "dataset",
+      "dataset": "draw-shader-use-groups",
+      "recordCount": 30,
+      "index": "evidence/draw-shader-use-groups/index.json",
+      "indexSha256": "23e76d84b3a837b868f7f2f63b292a15e1ac69ce5ca88d3ce8200ab8bbb76d8a",
+      "byteCount": 7795,
+      "sha256": "79d3389d4379bac69fca8f7aad8800c08ad04c2e563af20a3b8adb0170df439f",
+      "partCount": 1
+    },
+    {
+      "type": "dataset",
+      "dataset": "compute-shader-use-groups",
+      "recordCount": 0,
+      "index": "evidence/compute-shader-use-groups/index.json",
+      "indexSha256": "b108651b9a69f31e51e3fc29f83ab8f495c77d8d754db22bd694e59392117a60",
+      "byteCount": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "partCount": 0
+    },
+    {
+      "type": "dataset",
+      "dataset": "shader-use-events",
+      "recordCount": 1216,
+      "index": "evidence/shader-use-events/index.json",
+      "indexSha256": "3f69099beac08f347f00c88240bb8d40b6e8ae4193eddb8090dff4146f1f1a3c",
+      "byteCount": 291499,
+      "sha256": "07242a2ee01f25e5707dfc85d315995fd4a28517567294db133ce0bc134526f8",
+      "partCount": 37
+    },
+    {
+      "type": "dataset",
+      "dataset": "shader-use-summary",
+      "recordCount": 18,
+      "index": "evidence/shader-use-summary/index.json",
+      "indexSha256": "44374e2cb3724ef11d5a825a70f4957b9d1d66ea4522173150acb025834cf809",
+      "byteCount": 5180,
+      "sha256": "a5d1d99869ebf98fe1719806f6938ce970cb11a534c78a1d879e80cf24e92819",
+      "partCount": 1
+    },
+    {
+      "type": "dataset",
+      "dataset": "cmdlist-summaries",
+      "recordCount": 16202,
+      "index": "evidence/cmdlist-summaries/index.json",
+      "indexSha256": "7e723af9ca474929823be8f53f6bf5c5a6f9b8f76698bfb6e7d1f71bb2b4539c",
+      "byteCount": 1902923,
+      "sha256": "dfa49be24b478d1ef20768e27a1025bd09d7bd523510b876d699516baae14ff5",
+      "partCount": 240
+    },
+    {
+      "type": "dataset",
+      "dataset": "target-marker-records",
+      "recordCount": 2923,
+      "index": "evidence/target-marker-records/index.json",
+      "indexSha256": "45514b2ff8b9040447de6ec2ed5074b0455c122bfc9a6023d12eb5bce62e06b1",
+      "byteCount": 817944,
+      "sha256": "d660cd5462fb45d17f75a520d38ff6070fe0a13b4847d1c2798c8bc9092bd54c",
+      "partCount": 104
+    },
+    {
+      "type": "dataset",
+      "dataset": "target-draw-copies",
+      "recordCount": 2388,
+      "index": "evidence/target-draw-copies/index.json",
+      "indexSha256": "55d476765b71cbb6d30eaa247208a1f55aeaf838b158bb615b7145827508b15d",
+      "byteCount": 585851,
+      "sha256": "0747fdd111363365b37559976b65bca90aa1e4ac13518a75781c2d9f53fe46b3",
+      "partCount": 75
+    },
+    {
+      "type": "dataset",
+      "dataset": "target-captured-hits",
+      "recordCount": 6,
+      "index": "evidence/target-captured-hits/index.json",
+      "indexSha256": "349ac08c30110758db62ea7042475395d40cf0c178b577f707afefec94f3efa1",
+      "byteCount": 6382,
+      "sha256": "5c18d48e748866ece3b5d11301371619ce056db7ee32a3ea6f864145dfb39f77",
+      "partCount": 1
+    },
+    {
+      "type": "dataset",
+      "dataset": "target-input-layout",
+      "recordCount": 204,
+      "index": "evidence/target-input-layout/index.json",
+      "indexSha256": "c93997e7db68b52b72d1f696aa7eda144d7679c69f25aa2538080813d41ce94b",
+      "byteCount": 24412,
+      "sha256": "9df15f9923fef31f2549a40b27e4a08a54fbc50f4ec6c6b27e286a9c7ecee049",
+      "partCount": 4
+    },
+    {
+      "type": "dataset",
+      "dataset": "readback-identities",
+      "recordCount": 19,
+      "index": "evidence/readback-identities/index.json",
+      "indexSha256": "5daaaee892a0b09978804b9e31c8877ea27858707d14c135f49b4c6753519359",
+      "byteCount": 3563,
+      "sha256": "e2d9519baa5dd84f96a1f4bbd2f6b2cc7f1021719283a03a4feeb8aeb59a2dd7",
+      "partCount": 1
+    },
+    {
+      "type": "dataset",
+      "dataset": "sampled-readbacks",
+      "recordCount": 38,
+      "index": "evidence/sampled-readbacks/index.json",
+      "indexSha256": "de02bffac52f7e635bc141335f2f4c5a5d15012a511d18d67791d8168af94c79",
+      "byteCount": 3500,
+      "sha256": "27377f8a97e59cc67b4d204f198fef7de2ea2b222c35d3e13f7208e901cbed5e",
+      "partCount": 1
+    },
+    {
+      "type": "dataset",
+      "dataset": "copy-to-backbuffer",
+      "recordCount": 1993,
+      "index": "evidence/copy-to-backbuffer/index.json",
+      "indexSha256": "b8bf446a90392a62ee8310588deab03eb3bf56ccad4eded4c3561dacbdc9145f",
+      "byteCount": 308728,
+      "sha256": "2b6de421b096b986d722e5e4d7ce020a57a85e285eb8685784618d192d75ed4b",
+      "partCount": 40
+    },
+    {
+      "type": "dataset",
+      "dataset": "readback-correlations",
+      "recordCount": 19,
+      "index": "evidence/readback-correlations/index.json",
+      "indexSha256": "1912ef99b68890ac251ff112f5f28915a4ac59181736655ec3a305a03ea22f0f",
+      "byteCount": 52487,
+      "sha256": "5b72de11d0b1845d35cbfac1a52c20334d87176ad108a67a2d25a996ead408f8",
+      "partCount": 9
+    },
+    {
+      "type": "dataset",
+      "dataset": "source-history-1400-entries",
+      "recordCount": 129,
+      "index": "evidence/source-history-1400-entries/index.json",
+      "indexSha256": "ed1b8b241b5019cf17496d6e1b139092404a93bde2cb07be8865254c5484b590",
+      "byteCount": 53760,
+      "sha256": "32252c556f79258a41ac32fe3b9270379a322bf2a768a95684afbe4f0d11e52e",
+      "partCount": 7
+    },
+    {
+      "type": "dataset",
+      "dataset": "heartbeat-snapshots",
+      "recordCount": 41,
+      "index": "evidence/heartbeat-snapshots/index.json",
+      "indexSha256": "a063d1eeb92d6219e0647b92ad7e0698b42892b5d9674c7a0812e979f2ba62fa",
+      "byteCount": 16643,
+      "sha256": "5ef409ebe994b097be54eeb1c0d32b972f9b60834b65e89fab8e955420a222d9",
+      "partCount": 3
+    },
+    {
+      "type": "dataset",
+      "dataset": "render-trace-create-placed",
+      "recordCount": 126,
+      "index": "evidence/render-trace-create-placed/index.json",
+      "indexSha256": "f2e2312af9699ed70e8f851753c41af6411e2e6f4d61476bb76f06c03d03ea7c",
+      "byteCount": 19942,
+      "sha256": "1b2b2958da55cd2fd9f27ab7ae58dbb894e6cb78ef29e1e23388dbae021c8803",
+      "partCount": 3
+    }
+  ]
+}

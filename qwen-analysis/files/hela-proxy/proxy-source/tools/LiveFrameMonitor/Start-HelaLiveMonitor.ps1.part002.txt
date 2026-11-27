@@ -1,0 +1,193 @@
+        throw "$Role fingerprint mismatch for '$Path': expected $ExpectedHash, got $actualHash"
+    }
+}
+
+function Assert-RunManifestMatchesInstallation {
+    param([Parameter(Mandatory = $true)]$Manifest)
+
+    foreach ($role in @("d3d12", "dxgi")) {
+        $property = $Manifest.runtime.PSObject.Properties[$role]
+        if ($null -eq $property) {
+            throw "Run manifest is missing runtime.$role"
+        }
+        Assert-ExpectedHash -Path (Join-Path $GameDir "$role.dll") `
+            -ExpectedHash ([string]$property.Value) -Role "$role.dll"
+    }
+
+    $overridesDir = Join-Path $GameDir "D3D12On11Patch\overrides"
+    if (-not (Test-Path -LiteralPath $overridesDir -PathType Container)) {
+        throw "Shader override directory not found: $overridesDir"
+    }
+    $expectedNames = @(
+        $Manifest.overrides.PSObject.Properties |
+            ForEach-Object { $_.Name } |
+            Sort-Object
+    )
+    $actualFiles = @(Get-ChildItem -LiteralPath $overridesDir -Filter "*.cso" -File)
+    $actualNames = @($actualFiles | ForEach-Object { $_.Name } | Sort-Object)
+    if (Compare-Object -ReferenceObject $expectedNames -DifferenceObject $actualNames) {
+        throw "Installed shader override set differs from run manifest '$RunManifestPath'"
+    }
+    foreach ($name in $expectedNames) {
+        $property = $Manifest.overrides.PSObject.Properties[$name]
+        if ($null -eq $property) {
+            throw "Invalid override entry in run manifest: $name"
+        }
+        Assert-ExpectedHash -Path (Join-Path $overridesDir $name) `
+            -ExpectedHash ([string]$property.Value) -Role "shader override $name"
+    }
+    foreach ($name in @($Manifest.requiredOverrides)) {
+        if (-not $Manifest.overrides.PSObject.Properties[$name]) {
+            throw "Required shader override is not pinned in the run manifest: $name"
+        }
+    }
+}
+
+function Assert-RunLogMatchesManifest {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Run log not found for fingerprint validation: $Path"
+    }
+    $log = Get-Content -LiteralPath $Path -Raw
+    foreach ($role in @("d3d12", "dxgi_proxy")) {
+        $expectedHash = [string]$Manifest.runtime.($role -replace "_proxy$", "")
+        $pattern = "(?m)^.*MODULE_FINGERPRINT role=$role .*sha256=$([regex]::Escape($expectedHash))(?:\s|$)"
+        if ($expectedHash -notmatch '^[0-9a-fA-F]{64}$' -or $log -notmatch $pattern) {
+            throw "Run log does not attest the expected $role module fingerprint ($expectedHash)"
+        }
+    }
+    $profileProperty = $Manifest.PSObject.Properties["launchProfile"]
+    if ($null -ne $profileProperty) {
+        $attestation = $profileProperty.Value.attestation
+        if ($attestation.maskedNvidiaAdapter -eq $true) {
+            if ($log -notmatch '(?m)^.*DIAGNOSTIC_MASK_NVIDIA: .*exposed-vendor=0xffff(?:\s|$)' -or
+                $log -notmatch '(?m)^.*D3D12CreateDevice adapter source=proxy-unwrap(?:\s|$)') {
+                throw "Run log does not attest the required masked NVIDIA proxy adapter."
+            }
+        }
+        if ($null -ne $attestation.tiledResourcesTier) {
+            $tier = [string]$attestation.tiledResourcesTier
+            $pattern = "(?m)^.*CheckFeatureSupport end feature=D3D12_OPTIONS(?:\(0\))?.*tiled-tier=$tier(?:\s|$)"
+            if ($log -notmatch $pattern) {
+                throw "Run log does not attest the required tiled-resource tier $tier."
+            }
+        }
+        if ($null -ne $attestation.callerTrace) {
+            $traceValue = if ($attestation.callerTrace) { "1" } else { "0" }
+            if ($log -notmatch "(?m)^.*Config caller-trace=$traceValue(?:\s|$)") {
+                throw "Run log does not attest the required caller-trace setting $traceValue."
+            }
+        }
+    }
+    foreach ($name in @($Manifest.requiredOverrides)) {
+        $expectedHash = [string]$Manifest.overrides.PSObject.Properties[$name].Value
+        $escapedName = [regex]::Escape($name)
+        $pattern = "(?m)^.*SHADER READY .*source=SM5-override path=[^\r\n]*$escapedName bytes=\d+ sha256=$([regex]::Escape($expectedHash))(?:\s|$)"
+        if ($log -notmatch $pattern) {
+            throw "Run log does not attest the expected shader override '$name' ($expectedHash)"
+        }
+    }
+}
+
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$MonitorPy = Join-Path $ScriptDir "live_frame_monitor.py"
+
+if (-not (Test-Path -LiteralPath $MonitorPy)) {
+    throw "Monitor script not found: $MonitorPy"
+}
+
+$GameDir = Split-Path -Parent $GameExePath
+if ([string]::IsNullOrWhiteSpace($LogPath)) {
+    $LogPath = Join-Path $GameDir "d3d12on11.log"
+}
+
+$MonitorArgs = @($MonitorPy, $LogPath)
+if ($Once) {
+    $MonitorArgs += "--once"
+}
+if ($StopAfterPresent100) {
+    $MonitorArgs += "--stop-after-present100"
+}
+elseif ($StopAfterPresent -ne 0) {
+    $MonitorArgs += @("--stop-after-present", $StopAfterPresent.ToString())
+}
+if (-not [string]::IsNullOrWhiteSpace($RunManifestPath)) {
+    $MonitorArgs += @("--run-manifest", $RunManifestPath)
+}
+if ($MonitorMaxWaitSeconds -gt 0) {
+    $MonitorArgs += @("--max-wait", $MonitorMaxWaitSeconds.ToString())
+}
+if (-not [string]::IsNullOrWhiteSpace($JsonOutPath)) {
+    $MonitorArgs += @("--json", $JsonOutPath)
+}
+if (-not [string]::IsNullOrWhiteSpace($SourceBmpPath)) {
+    $MonitorArgs += @("--source-bmp", $SourceBmpPath)
+}
+if (-not [string]::IsNullOrWhiteSpace($BackbufferBmpPath)) {
+    $MonitorArgs += @("--backbuffer-bmp", $BackbufferBmpPath)
+}
+
+$MonitorCmdLine = Join-Win32CommandLine -ArgsList $MonitorArgs
+
+if ($PrintCommandLineOnly) {
+    Write-Output $MonitorCmdLine
+    exit 0
+}
+
+# Verified process-scoped diagnostic environment variables
+$ManagedEnvVars = @(
+    "D3D12ON11_SHADER_MODEL",
+    "D3D12ON11_DIAGNOSTIC_CAPABILITIES",
+    "D3D12ON11_TRACE_CALLERS",
+    "D3D12ON11_DIAGNOSTIC_RENDER_TRACE",
+    "D3D12ON11_TILED_RESOURCES_TIER",
+    "D3D12ON11_BACKBUFFER_READBACK",
+    "D3D12ON11_FULL_READBACK",
+    "D3D12ON11_FULL_READBACK_PRESENT",
+    "D3D12ON11_CRASH_DIAGNOSTICS"
+)
+
+$SavedEnv = @{}
+foreach ($name in $ManagedEnvVars) {
+    $SavedEnv[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+}
+
+$MonitorProc = $null
+$MonitorStartedAt = $null
+$GameProc = $null
+$GameStartedAt = $null
+$gameExitedBeforeCleanup = $false
+$gameExitCodeBeforeCleanup = $null
+$monitorExitedBeforeCleanup = $false
+$gameShutdownRequested = $false
+$gameForcedTermination = $false
+
+try {
+    if (-not $LaunchGame) {
+        Write-Host "[Launcher] Running LiveFrameMonitor in monitor-only mode on: $LogPath" -ForegroundColor Cyan
+        & python @MonitorArgs
+        exit $LASTEXITCODE
+    }
+
+        if ([string]::IsNullOrWhiteSpace($RunManifestPath)) {
+            throw "-RunManifestPath is required when -LaunchGame is specified."
+        }
+        $RunManifest = Get-RunManifest -Path $RunManifestPath
+        Assert-RunManifestMatchesInstallation -Manifest $RunManifest
+        Assert-LaunchProfileMatchesManifest -Manifest $RunManifest
+        Write-Host "[Launcher] Run manifest verified: $($RunManifest.testVersion)" -ForegroundColor Green
+
+        if (-not (Test-Path -LiteralPath $GameExePath)) {
+            throw "Game executable not found at: $GameExePath"
+    }
+
+    # Set process-scoped diagnostic environment variables for the child game process
+    [Environment]::SetEnvironmentVariable("D3D12ON11_SHADER_MODEL", "6_7", "Process")
+    [Environment]::SetEnvironmentVariable("D3D12ON11_DIAGNOSTIC_CAPABILITIES", "1", "Process")
+    [Environment]::SetEnvironmentVariable("D3D12ON11_TRACE_CALLERS", "1", "Process")
+    [Environment]::SetEnvironmentVariable("D3D12ON11_DIAGNOSTIC_RENDER_TRACE", "1", "Process")
+    [Environment]::SetEnvironmentVariable("D3D12ON11_TILED_RESOURCES_TIER", "0", "Process")

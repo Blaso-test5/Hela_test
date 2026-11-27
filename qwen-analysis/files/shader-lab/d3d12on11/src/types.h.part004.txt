@@ -1,0 +1,28 @@
+    void STDMETHODCALLTYPE CreateDepthStencilView(ID3D12Resource* r, const D3D12_DEPTH_STENCIL_VIEW_DESC* d, D3D12_CPU_DESCRIPTOR_HANDLE h) override;
+    void STDMETHODCALLTYPE CreateSampler(const D3D12_SAMPLER_DESC* d, D3D12_CPU_DESCRIPTOR_HANDLE h) override;
+    void STDMETHODCALLTYPE CopyDescriptors(UINT dn, const D3D12_CPU_DESCRIPTOR_HANDLE* dof, const UINT* dsz, UINT sn,
+                                           const D3D12_CPU_DESCRIPTOR_HANDLE* sof, const UINT* ssz, D3D12_DESCRIPTOR_HEAP_TYPE t) override;
+    void STDMETHODCALLTYPE CopyDescriptorsSimple(UINT n, const D3D12_CPU_DESCRIPTOR_HANDLE d, const D3D12_CPU_DESCRIPTOR_HANDLE s, D3D12_DESCRIPTOR_HEAP_TYPE t) override;
+    D3D12_RESOURCE_ALLOCATION_INFO STDMETHODCALLTYPE GetResourceAllocationInfo(UINT mask, UINT n, const D3D12_RESOURCE_DESC* d) override;
+    D3D12_HEAP_PROPERTIES STDMETHODCALLTYPE GetCustomHeapProperties(UINT node, D3D12_HEAP_TYPE t) override;
+    HRESULT STDMETHODCALLTYPE CreateCommittedResource(const D3D12_HEAP_PROPERTIES* hp, D3D12_HEAP_FLAGS f, const D3D12_RESOURCE_DESC* d,
+                                                      D3D12_RESOURCE_STATES s, const D3D12_CLEAR_VALUE* cv, REFIID riid, void** p) override;
+    HRESULT STDMETHODCALLTYPE CreateReservedResource(const D3D12_RESOURCE_DESC* d, D3D12_RESOURCE_STATES s,
+                                                     const D3D12_CLEAR_VALUE* cv, REFIID riid, void** p) override;
+    void STDMETHODCALLTYPE GetResourceTiling(ID3D12Resource* resource, UINT* numTiles,
+        D3D12_PACKED_MIP_INFO* packedMips, D3D12_TILE_SHAPE* tileShape,
+        UINT* numSubresourceTilings, UINT firstSubresourceTiling,
+        D3D12_SUBRESOURCE_TILING* subresourceTilings) override;
+    HRESULT STDMETHODCALLTYPE CreateHeap(const D3D12_HEAP_DESC* d, REFIID riid, void** p) override;
+    HRESULT STDMETHODCALLTYPE CreatePlacedResource(ID3D12Heap* h, UINT64 off, const D3D12_RESOURCE_DESC* d, D3D12_RESOURCE_STATES s,
+                                                   const D3D12_CLEAR_VALUE* cv, REFIID riid, void** p) override;
+    HRESULT STDMETHODCALLTYPE MakeResident(UINT, ID3D12Pageable* const*) override { return S_OK; }
+    HRESULT STDMETHODCALLTYPE Evict(UINT, ID3D12Pageable* const*) override { return S_OK; }
+    HRESULT STDMETHODCALLTYPE CreateFence(UINT64 init, D3D12_FENCE_FLAGS f, REFIID riid, void** p) override;
+    HRESULT STDMETHODCALLTYPE GetDeviceRemovedReason() override { return d11 ? d11->GetDeviceRemovedReason() : S_OK; }
+    void STDMETHODCALLTYPE GetCopyableFootprints(const D3D12_RESOURCE_DESC* d, UINT first, UINT count, UINT64 base,
+                                                 D3D12_PLACED_SUBRESOURCE_FOOTPRINT* lay, UINT* rows, UINT64* rowSize, UINT64* total) override;
+    HRESULT STDMETHODCALLTYPE CreateQueryHeap(const D3D12_QUERY_HEAP_DESC* d, REFIID riid, void** p) override;
+    HRESULT STDMETHODCALLTYPE SetStablePowerState(BOOL) override { return S_OK; }
+    LUID STDMETHODCALLTYPE GetAdapterLuid() override;
+};

@@ -1,0 +1,105 @@
+    case DXGI_FORMAT_R16G16_TYPELESS: case DXGI_FORMAT_R16G16_FLOAT: case DXGI_FORMAT_R16G16_UNORM:
+    case DXGI_FORMAT_R16G16_UINT: case DXGI_FORMAT_R16G16_SNORM: case DXGI_FORMAT_R16G16_SINT:
+    case DXGI_FORMAT_R32_TYPELESS: case DXGI_FORMAT_D32_FLOAT: case DXGI_FORMAT_R32_FLOAT:
+    case DXGI_FORMAT_R32_UINT: case DXGI_FORMAT_R32_SINT:
+    case DXGI_FORMAT_R24G8_TYPELESS: case DXGI_FORMAT_D24_UNORM_S8_UINT:
+    case DXGI_FORMAT_R24_UNORM_X8_TYPELESS: case DXGI_FORMAT_X24_TYPELESS_G8_UINT:
+    case DXGI_FORMAT_R9G9B9E5_SHAREDEXP:
+    case DXGI_FORMAT_B8G8R8A8_UNORM: case DXGI_FORMAT_B8G8R8X8_UNORM: case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+    case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB: case DXGI_FORMAT_B8G8R8X8_TYPELESS: case DXGI_FORMAT_B8G8R8X8_UNORM_SRGB:
+    case DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM: return {32, 1, 1};
+    case DXGI_FORMAT_R8G8_TYPELESS: case DXGI_FORMAT_R8G8_UNORM: case DXGI_FORMAT_R8G8_UINT:
+    case DXGI_FORMAT_R8G8_SNORM: case DXGI_FORMAT_R8G8_SINT:
+    case DXGI_FORMAT_R16_TYPELESS: case DXGI_FORMAT_R16_FLOAT: case DXGI_FORMAT_D16_UNORM: case DXGI_FORMAT_R16_UNORM:
+    case DXGI_FORMAT_R16_UINT: case DXGI_FORMAT_R16_SNORM: case DXGI_FORMAT_R16_SINT:
+    case DXGI_FORMAT_B5G6R5_UNORM: case DXGI_FORMAT_B5G5R5A1_UNORM: case DXGI_FORMAT_B4G4R4A4_UNORM: return {16, 1, 1};
+    case DXGI_FORMAT_R8_TYPELESS: case DXGI_FORMAT_R8_UNORM: case DXGI_FORMAT_R8_UINT:
+    case DXGI_FORMAT_R8_SNORM: case DXGI_FORMAT_R8_SINT: case DXGI_FORMAT_A8_UNORM: return {8, 1, 1};
+    case DXGI_FORMAT_BC1_TYPELESS: case DXGI_FORMAT_BC1_UNORM: case DXGI_FORMAT_BC1_UNORM_SRGB:
+    case DXGI_FORMAT_BC4_TYPELESS: case DXGI_FORMAT_BC4_UNORM: case DXGI_FORMAT_BC4_SNORM: return {64, 4, 4};
+    case DXGI_FORMAT_BC2_TYPELESS: case DXGI_FORMAT_BC2_UNORM: case DXGI_FORMAT_BC2_UNORM_SRGB:
+    case DXGI_FORMAT_BC3_TYPELESS: case DXGI_FORMAT_BC3_UNORM: case DXGI_FORMAT_BC3_UNORM_SRGB:
+    case DXGI_FORMAT_BC5_TYPELESS: case DXGI_FORMAT_BC5_UNORM: case DXGI_FORMAT_BC5_SNORM:
+    case DXGI_FORMAT_BC6H_TYPELESS: case DXGI_FORMAT_BC6H_UF16: case DXGI_FORMAT_BC6H_SF16:
+    case DXGI_FORMAT_BC7_TYPELESS: case DXGI_FORMAT_BC7_UNORM: case DXGI_FORMAT_BC7_UNORM_SRGB: return {128, 4, 4};
+    default: return {0, 1, 1};
+    }
+}
+
+// ------------------------------------------------------------------ registro indirizzi virtuali GPU
+static std::mutex g_vaMu;
+static std::map<UINT64, std::pair<UINT64, Resource*>> g_va;   // base -> (size, risorsa)
+static UINT64 g_nextVa = 0x100000000ull;
+
+UINT64 AllocVA(UINT64 size, Resource* r) {
+    std::lock_guard<std::mutex> l(g_vaMu);
+    UINT64 base = g_nextVa;
+    g_nextVa += AlignUp(size ? size : 1, 0x10000) + 0x10000;
+    g_va[base] = {size, r};
+    return base;
+}
+void FreeVA(UINT64 va) { std::lock_guard<std::mutex> l(g_vaMu); g_va.erase(va); }
+Resource* ResolveVA(UINT64 va, UINT64* offset) {
+    std::lock_guard<std::mutex> l(g_vaMu);
+    auto it = g_va.upper_bound(va);
+    if (it == g_va.begin()) return nullptr;
+    --it;
+    if (va >= it->first + std::max<UINT64>(it->second.first, 1)) return nullptr;
+    if (offset) *offset = va - it->first;
+    return it->second.second;
+}
+
+// ------------------------------------------------------------------ registro descriptor heap (handle GPU)
+static std::mutex g_hpMu;
+static std::map<UINT64, DescriptorHeap*> g_heaps;
+static std::map<SIZE_T, DescriptorHeap*> g_cpuHeaps;
+static UINT64 g_nextGpu = 0x1000;
+
+DescriptorHeap::DescriptorHeap(Device* d, const D3D12_DESCRIPTOR_HEAP_DESC& x)
+    : Stub_ID3D12DescriptorHeap(d), hd(x), items(x.NumDescriptors) {
+    std::lock_guard<std::mutex> l(g_hpMu);
+    g_cpuHeaps[(SIZE_T)items.data()] = this;
+    if (x.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE) {
+        gpuBase = g_nextGpu;
+        g_nextGpu += AlignUp((UINT64)(x.NumDescriptors + 1) * kDescStride, 0x1000);
+        g_heaps[gpuBase] = this;
+    }
+}
+DescriptorHeap::~DescriptorHeap() {
+    std::lock_guard<std::mutex> l(g_hpMu);
+    if (gpuBase) g_heaps.erase(gpuBase);
+    g_cpuHeaps.erase((SIZE_T)items.data());
+}
+DescriptorHeap* FindHeapByGpu(UINT64 p, UINT* index) {
+    if (!p) return nullptr;
+    std::lock_guard<std::mutex> l(g_hpMu);
+    auto it = g_heaps.upper_bound(p);
+    if (it == g_heaps.begin()) return nullptr;
+    --it;
+    UINT64 idx = (p - it->first) / kDescStride;
+    if (idx >= it->second->items.size()) return nullptr;
+    if (index) *index = (UINT)idx;
+    return it->second;
+}
+
+DescriptorHeap* FindHeapByCpu(SIZE_T p, UINT* index) {
+    std::lock_guard<std::mutex> l(g_hpMu);
+    auto it = g_cpuHeaps.upper_bound(p);
+    if (it == g_cpuHeaps.begin()) return nullptr;
+    --it;
+    const SIZE_T base = it->first;
+    const SIZE_T bytes = it->second->items.size() * sizeof(Descriptor);
+    if (p < base || p - base >= bytes || (p - base) % sizeof(Descriptor) != 0) return nullptr;
+    if (index) *index = static_cast<UINT>((p - base) / sizeof(Descriptor));
+    return it->second;
+}
+
+void ClearBackbufferDescriptors(Device* device) {
+    std::lock_guard<std::mutex> lock(g_hpMu);
+    for (auto& entry : g_cpuHeaps) {
+        DescriptorHeap* heap = entry.second;
+        if (heap->dev != device) continue;
+        for (auto& descriptor : heap->items)
+            if (descriptor.res && descriptor.res->backbuffer) descriptor = {};
+    }
+}

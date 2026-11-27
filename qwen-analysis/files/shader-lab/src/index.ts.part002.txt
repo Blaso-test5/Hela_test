@@ -1,0 +1,120 @@
+// ---------------------------------------------------------------- validate_pair
+server.registerTool("validate_pair", {
+  title: "Valida una coppia VS/PS",
+  description: "Confronta le firme output del vertex shader e input del pixel shader da due file .cso tramite fxc /dumpbin. Verifica semantiche, maschere e tipi.",
+  inputSchema: {
+    vsCso: z.string().min(1).describe("Percorso del bytecode .cso del vertex shader"),
+    psCso: z.string().min(1).describe("Percorso del bytecode .cso del pixel shader"),
+  },
+}, async ({ vsCso, psCso }) => {
+  const [vsDump, psDump] = await Promise.all([
+    run(findFxc(), ["/dumpbin", vsCso]),
+    run(findFxc(), ["/dumpbin", psCso]),
+  ]);
+  if (vsDump.missing || psDump.missing)
+    return fail(`${vsDump.missing ? vsDump.stderr : psDump.stderr}\nImposta FXC_PATH o installa il Windows SDK.`);
+  if (vsDump.code !== 0 || psDump.code !== 0)
+    return fail(`fxc /dumpbin fallito:\n${vsDump.code !== 0 ? `${vsCso}:\n${vsDump.stderr || vsDump.stdout}\n` : ""}${psDump.code !== 0 ? `${psCso}:\n${psDump.stderr || psDump.stdout}` : ""}`);
+
+  const vsOutput = parseOutputSignature(`${vsDump.stdout}\n${vsDump.stderr}`);
+  const psInput = parseInputSignature(`${psDump.stdout}\n${psDump.stderr}`);
+  if (!vsOutput.length || !psInput.length)
+    return fail(`Firma ${!vsOutput.length ? "output VS" : "input PS"} non trovata nell'output FXC. Verificare che i file contengano shader compilati validi.`);
+  const incomplete = [
+    ...vsOutput.filter((element) => element.sysValue.toUpperCase() === "NONE" && (!element.mask || !element.format)).map((element) => `VS ${element.name}${element.index}`),
+    ...psInput.filter((element) => element.sysValue.toUpperCase() === "NONE" && (!element.mask || !element.format)).map((element) => `PS ${element.name}${element.index}`),
+  ];
+  if (incomplete.length)
+    return fail(`FXC non ha fornito maschera o tipo per: ${incomplete.join(", ")}.`);
+
+  const comparison = compareShaderSignatures(vsOutput, psInput);
+  const verdict = comparison.compatible ? "PASS" : "FAIL";
+  const details = comparison.mismatches.length
+    ? comparison.mismatches.map((mismatch) => `  - ${mismatch}`).join("\n")
+    : "  Tutte le semantiche PS richieste sono presenti e compatibili negli output VS.";
+  return ok(`${verdict} — VS ${path.basename(vsCso)} -> PS ${path.basename(psCso)}\nInterfacce verificate: ${comparison.checked}\n${details}`);
+});
+
+// ---------------------------------------------------------------- dxil_to_sm5_hlsl
+server.registerTool("dxil_to_sm5_hlsl", {
+  title: "DXIL (binario) -> HLSL SM5 (candidato)",
+  description: "Per shader senza sorgente: DXIL -> SPIR-V (dxil-spirv) -> HLSL 5.0 (spirv-cross) + post-processing (registri duplicati, register space, base instance, semantiche dei vertex input e, se fornita, firma output del VS abbinato per un PS). Il risultato è codice decompilato: va validato con fxc e rivisto. Esegue prima l'analisi e si ferma se trova feature SM6 senza equivalente (a meno di force=true).",
+  inputSchema: {
+    inputPath: z.string().describe("File .dxil / .cso con payload DXIL"),
+    outPath: z.string(),
+    disasmPath: z.string().optional().describe("Disassemblato DXC: abilita analisi preliminare e semantiche dei vertex input"),
+    vsOutputDisasmPath: z.string().optional().describe("Disassemblato DXC del VS abbinato: per rinominare le semantiche input generate durante la conversione di un PS"),
+    bindingMapPath: z.string().optional().describe("JSON {\"t:1:0\": 5, ...} prodotto dal wrapper per i register space"),
+    bufferMode: z.enum(["raw", "typed"]).default("raw").describe("raw = ByteAddressBuffer (--ssbo-srv/--ssbo-uav); typed = Buffer<uint4> in stile Vulkan"),
+    force: z.boolean().default(false),
+    validateProfile: z.string().optional(), entry: z.string().optional().describe("Entry point HLSL, se diverso da quello generato automaticamente dal traduttore"),
+  },
+}, async ({ inputPath, outPath, disasmPath, vsOutputDisasmPath, bindingMapPath, bufferMode, force, validateProfile, entry }) => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dxil2sm5-"));
+  try {
+    const converted = await convertDxilToHlsl({
+      inputPath, disasmPath, vsOutputDisasmPath, bindingMapPath, bufferMode, force,
+    });
+    const { post } = converted;
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+    fs.writeFileSync(outPath, converted.hlsl, "utf8");
+    let msg = `HLSL SM5 (candidato) scritto: ${outPath}\nPost-processing:\n${post.changes.map((change) => "  - " + change).join("\n") || "  (nessuna modifica)"}`;
+    if (post.registerMap.length) msg += "\nMappa binding:\n" + post.registerMap.map((item) => `  ${item.from} -> ${item.to}`).join("\n");
+    if (post.entryPoint) msg += `\nEntry point HLSL: ${post.entryPoint}`;
+    if (post.warnings.length) msg += "\nAvvisi:\n" + post.warnings.map((warning) => "  - " + warning).join("\n");
+    if (converted.notes.length) msg += "\n" + converted.notes.join("\n");
+    let validationFailed = false;
+    if (validateProfile) {
+      if (!PROFILE.test(validateProfile)) return fail("validateProfile non valido.");
+      const validationEntry = entry ?? post.entryPoint ?? "main";
+      const result = await run(findFxc(), ["/nologo", "/T", validateProfile, "/E", validationEntry, "/Fo", path.join(tmp, "o.cso"), outPath]);
+      if (result.missing) {
+        validationFailed = true;
+        msg += `\n✖ fxc non disponibile: ${result.stderr}`;
+      } else if (result.code === 0) {
+        msg += `\n✔ Validazione FXC riuscita (${validateProfile}, entry ${validationEntry}). Equivalenza e runtime non verificati.`;
+        const diagnostics = (result.stderr || result.stdout).trim();
+        if (diagnostics) msg += `\nDiagnostica FXC:\n${diagnostics}`;
+      } else {
+        validationFailed = true;
+        msg += `\n✖ Validazione FXC fallita:\n${result.stderr || result.stdout}`;
+      }
+    } else msg += "\nNON validato come SM5 finché non passa fxc (usa validateProfile o compile_sm5).";
+    return validationFailed ? fail(msg) : ok(msg);
+  } catch (error) {
+    return fail(String(error));
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------- analyze_dxil
+server.registerTool("analyze_dxil", {
+  title: "Analizza shader DXIL (binario / disassemblato DXC)",
+  description: "Analisi statica di uno shader SM6 compilato: stadio, shader model, binding (cb/t/s/u, register space), operazioni dx.op, feature senza equivalente SM5 (wave, 64-bit, barycentrics, DXR, mesh...) e limiti D3D11. Accetta il .dxil e/o il disassemblato (.dxil.txt da dxc -dumpbin). Non converte e non prova la ricompilazione.",
+  inputSchema: {
+    dxilPath: z.string().optional().describe("File .dxil (container DXBC con DXIL)"),
+    disasmPath: z.string().optional().describe("Disassemblato DXC (.txt)"),
+    dir: z.string().optional().describe("Cartella: analizza tutte le coppie *.dxil / *_dxil.txt o *.dxil.txt"),
+  },
+}, async ({ dxilPath, disasmPath, dir }) => {
+  try {
+    if (dir) {
+      const files = fs.readdirSync(dir).filter((f) => f.endsWith(".dxil")).sort();
+      if (!files.length) return fail("Nessun .dxil in " + dir);
+      const out: string[] = [];
+      for (const f of files) {
+        const base = f.replace(/\.dxil$/, "");
+        const cand = [base + "_dxil.txt", base + ".dxil.txt"].map((c) => path.join(dir, c)).find((c) => fs.existsSync(c));
+        out.push(formatReport(analyzeFiles(path.join(dir, f), cand), f));
+      }
+      return ok(out.join("\n\n"));
+    }
+    if (!dxilPath && !disasmPath) return fail("Specificare dxilPath, disasmPath o dir.");
+    return ok(formatReport(analyzeFiles(dxilPath, disasmPath), path.basename(dxilPath ?? disasmPath ?? "")));
+  } catch (e) { return fail(String(e)); }
+});
+
+// ---------------------------------------------------------------- check_toolchain
+server.registerTool("check_toolchain", {
+  title: "Verifica strumenti esterni",

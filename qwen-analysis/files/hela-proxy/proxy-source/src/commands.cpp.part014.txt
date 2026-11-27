@@ -1,0 +1,140 @@
+                        static_cast<UINT64>(yBlocks + row) * footprint.RowPitch +
+                        static_cast<UINT64>(xBlocks) * info.bytesPerBlock;
+                    const uint8_t* sourceData = static_cast<const uint8_t*>(mapped.pData) +
+                        static_cast<size_t>(z + slice) * mapped.DepthPitch +
+                        static_cast<size_t>(yBlocks + row) * mapped.RowPitch +
+                        static_cast<size_t>(xBlocks) * info.bytesPerBlock;
+                    D3D11_BOX bufferBox{};
+                    bufferBox.left = static_cast<UINT>(destinationOffset);
+                    bufferBox.right = static_cast<UINT>(destinationOffset + copyRowBytes);
+                    bufferBox.top = 0;
+                    bufferBox.bottom = 1;
+                    bufferBox.front = 0;
+                    bufferBox.back = 1;
+                    state.c->UpdateSubresource(dstResource->buf.Get(), 0, &bufferBox, sourceData, 0, 0);
+                    if (!dstResource->shadow.empty())
+                        memcpy(dstResource->shadow.data() + destinationOffset, sourceData,
+                            static_cast<size_t>(copyRowBytes));
+                }
+            }
+            state.c->Unmap(stagingTexture.Get(), stagingSubresource);
+        });
+        return;
+    }
+
+    Log("CopyTextureRegion supports texture subresources and buffer placed footprints only");
+}
+
+void STDMETHODCALLTYPE CommandList::CopyResource(ID3D12Resource* destination, ID3D12Resource* source) {
+    Resource* dst = AsResource(destination);
+    Resource* src = AsResource(source);
+    if (!dst || !src || dst->desc.Dimension != src->desc.Dimension ||
+        dst->desc.Width != src->desc.Width || dst->desc.Height != src->desc.Height ||
+        dst->desc.DepthOrArraySize != src->desc.DepthOrArraySize ||
+        dst->desc.MipLevels != src->desc.MipLevels || dst->desc.Format != src->desc.Format ||
+        dst->desc.SampleDesc.Count != src->desc.SampleDesc.Count ||
+        dst->desc.SampleDesc.Quality != src->desc.SampleDesc.Quality) {
+        Log("Rejected incompatible CopyResource request");
+        return;
+    }
+    if (dst->backbuffer && src->tex)
+        RegisterBackbufferCopySource(src->tex.Get());
+    Ptr<IUnknown> keepDst(static_cast<ID3D12Resource*>(dst));
+    Ptr<IUnknown> keepSrc(static_cast<ID3D12Resource*>(src));
+    Add([keepDst, keepSrc](ExecState& state) {
+        auto* dstResource = dynamic_cast<Resource*>(keepDst.Get());
+        auto* srcResource = dynamic_cast<Resource*>(keepSrc.Get());
+        if (dstResource && srcResource) {
+            LogBackbufferCopy("CopyResource", dstResource, srcResource);
+            if (dstResource->backbuffer && Cfg().diagnosticRenderTrace)
+                ++state.copyToBackbuffer;
+            state.c->CopyResource(dstResource->Raw(), srcResource->Raw());
+            if (dstResource->backbuffer && srcResource->tex && state.dev) {
+                std::lock_guard<std::mutex> lock(state.dev->backbufferCopyLock);
+                state.dev->lastBackbufferCopySource = srcResource->tex;
+                state.dev->lastBackbufferCopySourceDesc = srcResource->desc;
+                ++state.dev->lastBackbufferCopySequence;
+                Log("[COPY_TO_BB] CopyResource source=%p source_texture=%p "
+                    "dimension=%u width=%llu height=%u format=%u sequence=%llu",
+                    srcResource, srcResource->tex.Get(), srcResource->desc.Dimension,
+                    static_cast<unsigned long long>(srcResource->desc.Width),
+                    srcResource->desc.Height, srcResource->desc.Format,
+                    static_cast<unsigned long long>(state.dev->lastBackbufferCopySequence));
+            } else if (dstResource->backbuffer && state.dev) {
+                std::lock_guard<std::mutex> lock(state.dev->backbufferCopyLock);
+                state.dev->lastBackbufferCopySource.Reset();
+                state.dev->lastBackbufferCopySourceDesc = srcResource->desc;
+                ++state.dev->lastBackbufferCopySequence;
+                Log("[COPY_TO_BB] CopyResource source is not a texture resource=%p "
+                    "dimension=%u width=%llu height=%u format=%u sequence=%llu",
+                    srcResource, srcResource->desc.Dimension,
+                    static_cast<unsigned long long>(srcResource->desc.Width),
+                    srcResource->desc.Height, srcResource->desc.Format,
+                    static_cast<unsigned long long>(state.dev->lastBackbufferCopySequence));
+            }
+        }
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::CopyTiles(ID3D12Resource* tiledResource,
+    const D3D12_TILED_RESOURCE_COORDINATE* coordinate, const D3D12_TILE_REGION_SIZE* region,
+    ID3D12Resource* buffer, UINT64 offset, D3D12_TILE_COPY_FLAGS flags) {
+    Resource* texture = AsResource(tiledResource);
+    Resource* tileBuffer = AsResource(buffer);
+    const UINT supportedFlags = D3D12_TILE_COPY_FLAG_NO_HAZARD |
+        D3D12_TILE_COPY_FLAG_LINEAR_BUFFER_TO_SWIZZLED_TILED_RESOURCE |
+        D3D12_TILE_COPY_FLAG_SWIZZLED_TILED_RESOURCE_TO_LINEAR_BUFFER;
+    if (!texture || !texture->tiled || !tileBuffer || !tileBuffer->IsBuffer() ||
+        !coordinate || !region || offset % D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT ||
+        (static_cast<UINT>(flags) & ~supportedFlags) != 0) {
+        Log("Rejected invalid CopyTiles request");
+        return;
+    }
+    if ((flags & D3D12_TILE_COPY_FLAG_LINEAR_BUFFER_TO_SWIZZLED_TILED_RESOURCE) &&
+        (flags & D3D12_TILE_COPY_FLAG_SWIZZLED_TILED_RESOURCE_TO_LINEAR_BUFFER)) {
+        Log("Rejected CopyTiles request with conflicting copy directions");
+        return;
+    }
+    D3D11_TILED_RESOURCE_COORDINATE nativeCoordinate{
+        coordinate->X, coordinate->Y, coordinate->Z, coordinate->Subresource
+    };
+    D3D11_TILE_REGION_SIZE nativeRegion{
+        region->NumTiles, region->UseBox, region->Width, region->Height, region->Depth
+    };
+    Ptr<IUnknown> keepTexture(static_cast<ID3D12Resource*>(texture));
+    Ptr<IUnknown> keepBuffer(static_cast<ID3D12Resource*>(tileBuffer));
+    Add([keepTexture, keepBuffer, nativeCoordinate, nativeRegion, offset, flags](ExecState& state) {
+        auto* srcTexture = dynamic_cast<Resource*>(keepTexture.Get());
+        auto* srcBuffer = dynamic_cast<Resource*>(keepBuffer.Get());
+        if (!state.dev->ctx2 || !srcTexture || !srcBuffer || !srcBuffer->buf) {
+            Log("CopyTiles skipped: D3D11 context2 or backing resource unavailable");
+            return;
+        }
+        state.dev->ctx2->CopyTiles(srcTexture->Raw(), &nativeCoordinate, &nativeRegion,
+            srcBuffer->buf.Get(), offset, static_cast<UINT>(flags));
+        Log("CopyTiles submitted offset=%llu flags=0x%x",
+            static_cast<unsigned long long>(offset), static_cast<UINT>(flags));
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::ResolveSubresource(ID3D12Resource* destination, UINT destinationSubresource,
+    ID3D12Resource* source, UINT sourceSubresource, DXGI_FORMAT format) {
+    Resource* dst = AsResource(destination);
+    Resource* src = AsResource(source);
+    if (!dst || !src || destinationSubresource >= dst->NumSubresources() ||
+        sourceSubresource >= src->NumSubresources()) {
+        Log("Rejected invalid ResolveSubresource request");
+        return;
+    }
+    Ptr<IUnknown> keepDst(static_cast<ID3D12Resource*>(dst));
+    Ptr<IUnknown> keepSrc(static_cast<ID3D12Resource*>(src));
+    Add([keepDst, keepSrc, destinationSubresource, sourceSubresource, format](ExecState& state) {
+        auto* dstResource = dynamic_cast<Resource*>(keepDst.Get());
+        auto* srcResource = dynamic_cast<Resource*>(keepSrc.Get());
+        if (dstResource && srcResource)
+            state.c->ResolveSubresource(dstResource->Raw(), destinationSubresource,
+                                        srcResource->Raw(), sourceSubresource, format);
+    });
+}
+
+void STDMETHODCALLTYPE CommandList::IASetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY topology) {

@@ -1,0 +1,134 @@
+            Log("CheckFeatureSupport end feature=%s format=%u result=0x%08lx reason=unknown-format",
+                featureName, info->Format, E_INVALIDARG);
+            return E_INVALIDARG;
+        }
+        D3D11_FEATURE_DATA_FORMAT_SUPPORT support1{info->Format, 0};
+        const HRESULT support1Result = d11->CheckFormatSupport(
+            info->Format, &support1.OutFormatSupport);
+        if (FAILED(support1Result)) {
+            info->Support1 = D3D12_FORMAT_SUPPORT1_NONE;
+            info->Support2 = D3D12_FORMAT_SUPPORT2_NONE;
+            Log("CheckFeatureSupport end feature=%s format=%u result=0x%08lx support1-query=0x%08lx",
+                featureName, info->Format, support1Result, support1Result);
+            return support1Result;
+        }
+
+        const UINT d3d11OnlySupport1 =
+            D3D11_FORMAT_SUPPORT_MIP_AUTOGEN | D3D11_FORMAT_SUPPORT_CPU_LOCKABLE;
+        info->Support1 = static_cast<D3D12_FORMAT_SUPPORT1>(
+            support1.OutFormatSupport & ~d3d11OnlySupport1);
+
+        D3D11_FEATURE_DATA_FORMAT_SUPPORT2 support2{info->Format, 0};
+        const HRESULT support2Result = d11->CheckFeatureSupport(
+            D3D11_FEATURE_FORMAT_SUPPORT2, &support2, sizeof(support2));
+        const UINT d3d11OnlySupport2 = D3D11_FORMAT_SUPPORT2_SHAREABLE;
+        info->Support2 = SUCCEEDED(support2Result)
+            ? static_cast<D3D12_FORMAT_SUPPORT2>(support2.OutFormatSupport2 & ~d3d11OnlySupport2)
+            : D3D12_FORMAT_SUPPORT2_NONE;
+        Log("CheckFeatureSupport end feature=%s format=%u result=0x%08lx support1=0x%08x support2=0x%08x support2-query=0x%08lx",
+            featureName, info->Format, S_OK, static_cast<UINT>(info->Support1),
+            static_cast<UINT>(info->Support2), support2Result);
+        return S_OK;
+    }
+    case D3D12_FEATURE_FEATURE_LEVELS: {
+        if (size < sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)) {
+            Log("CheckFeatureSupport end feature=%s result=0x%08lx reason=short-buffer required=%zu",
+                featureName, E_INVALIDARG, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS));
+            return E_INVALIDARG;
+        }
+        auto* info = static_cast<D3D12_FEATURE_DATA_FEATURE_LEVELS*>(data);
+        if (!info->pFeatureLevelsRequested || info->NumFeatureLevels == 0) {
+            Log("CheckFeatureSupport end feature=%s result=0x%08lx reason=invalid-request count=%u list=%s",
+                featureName, E_INVALIDARG, info->NumFeatureLevels,
+                info->pFeatureLevelsRequested ? "present" : "null");
+            return E_INVALIDARG;
+        }
+        std::string requestedLevels;
+        for (UINT i = 0; i < info->NumFeatureLevels; ++i) {
+            if (!requestedLevels.empty()) requestedLevels += ",";
+            char level[16] = {};
+            snprintf(level, sizeof(level), "0x%04x",
+                static_cast<UINT>(info->pFeatureLevelsRequested[i]));
+            requestedLevels += level;
+        }
+        info->MaxSupportedFeatureLevel = fl >= D3D_FEATURE_LEVEL_11_0
+            ? D3D_FEATURE_LEVEL_12_0 : D3D_FEATURE_LEVEL_11_0;
+        for (UINT i = 0; i < info->NumFeatureLevels; ++i) {
+            if (info->pFeatureLevelsRequested[i] <= info->MaxSupportedFeatureLevel) {
+                info->MaxSupportedFeatureLevel = info->pFeatureLevelsRequested[i];
+                break;
+            }
+        }
+        Log("CheckFeatureSupport end feature=%s result=0x%08lx requested=[%s] returned=0x%04x",
+            featureName, S_OK, requestedLevels.c_str(),
+            static_cast<UINT>(info->MaxSupportedFeatureLevel));
+        return S_OK;
+    }
+    case D3D12_FEATURE_SHADER_MODEL: {
+        if (size < sizeof(D3D12_FEATURE_DATA_SHADER_MODEL)) {
+            Log("CheckFeatureSupport end feature=%s result=0x%08lx reason=short-buffer required=%zu",
+                featureName, E_INVALIDARG, sizeof(D3D12_FEATURE_DATA_SHADER_MODEL));
+            return E_INVALIDARG;
+        }
+        auto* info = static_cast<D3D12_FEATURE_DATA_SHADER_MODEL*>(data);
+        const D3D_SHADER_MODEL requested = info->HighestShaderModel;
+        const D3D_SHADER_MODEL configured = static_cast<D3D_SHADER_MODEL>(Cfg().shaderModel);
+        info->HighestShaderModel = info->HighestShaderModel < configured
+            ? info->HighestShaderModel : configured;
+        Log("CheckFeatureSupport end feature=%s result=0x%08lx requested=0x%x returned=0x%x",
+            featureName, S_OK, static_cast<UINT>(requested),
+            static_cast<UINT>(info->HighestShaderModel));
+        return S_OK;
+    }
+    case D3D12_FEATURE_D3D12_OPTIONS: {
+        if (size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS)) {
+            Log("CheckFeatureSupport end feature=%s result=0x%08lx reason=short-buffer required=%zu",
+                featureName, E_INVALIDARG, sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS));
+            return E_INVALIDARG;
+        }
+        auto* info = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS*>(data);
+        *info = {};
+        info->ResourceBindingTier = Cfg().diagnosticCapabilities
+            ? D3D12_RESOURCE_BINDING_TIER_3 : D3D12_RESOURCE_BINDING_TIER_1;
+        info->TiledResourcesTier = EffectiveTiledResourcesTier(
+            tiledTier, static_cast<bool>(d11_2), static_cast<bool>(ctx2));
+        info->ConservativeRasterizationTier = D3D12_CONSERVATIVE_RASTERIZATION_TIER_NOT_SUPPORTED;
+        info->CrossNodeSharingTier = D3D12_CROSS_NODE_SHARING_TIER_NOT_SUPPORTED;
+        info->ResourceHeapTier = D3D12_RESOURCE_HEAP_TIER_1;
+        D3D11_FEATURE_DATA_GPU_VIRTUAL_ADDRESS_SUPPORT gpuVa{};
+        const HRESULT gpuVaResult = d11->CheckFeatureSupport(
+            D3D11_FEATURE_GPU_VIRTUAL_ADDRESS_SUPPORT, &gpuVa, sizeof(gpuVa));
+        if (SUCCEEDED(gpuVaResult))
+            info->MaxGPUVirtualAddressBitsPerResource = gpuVa.MaxGPUVirtualAddressBitsPerResource;
+        Log("CheckFeatureSupport end feature=%s result=0x%08lx binding-tier=%u tiled-tier=%u conservative-raster=%u heap-tier=%u double-precision=%u logic-op=%u min-precision=0x%x typed-uav-load=%u ROV=%u stencil-ref=%u swizzle64k=%u cross-node=%u cross-adapter-row-major=%u rasterizer-array-index=%u max-gpu-va-bits=%u gpu-va-query=0x%08lx",
+            featureName, S_OK, info->ResourceBindingTier, info->TiledResourcesTier,
+            info->ConservativeRasterizationTier, info->ResourceHeapTier,
+            info->DoublePrecisionFloatShaderOps, info->OutputMergerLogicOp,
+            info->MinPrecisionSupport, info->TypedUAVLoadAdditionalFormats, info->ROVsSupported,
+            info->PSSpecifiedStencilRefSupported, info->StandardSwizzle64KBSupported,
+            info->CrossNodeSharingTier, info->CrossAdapterRowMajorTextureSupported,
+            info->VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation,
+            info->MaxGPUVirtualAddressBitsPerResource, gpuVaResult);
+        return S_OK;
+    }
+    case D3D12_FEATURE_ARCHITECTURE: {
+        if (size < sizeof(D3D12_FEATURE_DATA_ARCHITECTURE)) {
+            Log("CheckFeatureSupport end feature=%s result=0x%08lx reason=short-buffer required=%zu",
+                featureName, E_INVALIDARG, sizeof(D3D12_FEATURE_DATA_ARCHITECTURE));
+            return E_INVALIDARG;
+        }
+        auto* info = static_cast<D3D12_FEATURE_DATA_ARCHITECTURE*>(data);
+        if (info->NodeIndex != 0) {
+            Log("CheckFeatureSupport end feature=%s result=0x%08lx reason=unsupported-node node=%u",
+                featureName, E_INVALIDARG, info->NodeIndex);
+            return E_INVALIDARG;
+        }
+        info->TileBasedRenderer = FALSE;
+        info->UMA = FALSE;
+        info->CacheCoherentUMA = FALSE;
+        Log("CheckFeatureSupport end feature=%s result=0x%08lx node=0 tiled-renderer=%u UMA=%u coherent-UMA=%u",
+            featureName, S_OK, info->TileBasedRenderer, info->UMA, info->CacheCoherentUMA);
+        return S_OK;
+    }
+    case D3D12_FEATURE_D3D12_OPTIONS1: {
+        if (size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS1)) {

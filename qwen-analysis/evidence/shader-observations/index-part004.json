@@ -1,0 +1,244 @@
+{
+  "items": [
+    {
+      "path": "evidence/shader-observations/part0091.ndjson",
+      "recordStart": 1261,
+      "recordEnd": 1274,
+      "recordCount": 14,
+      "byteCount": 7944,
+      "sha256": "9ec6f1556f5d110aa6f6eb120f5cdf1859108d17b2d5203635b1dc5d1d13cfcb"
+    },
+    {
+      "path": "evidence/shader-observations/part0092.ndjson",
+      "recordStart": 1275,
+      "recordEnd": 1288,
+      "recordCount": 14,
+      "byteCount": 7940,
+      "sha256": "998f91ff328eb08eda4a68401ddd5df39f59f11073d5d475a57e7885cdbe953d"
+    },
+    {
+      "path": "evidence/shader-observations/part0093.ndjson",
+      "recordStart": 1289,
+      "recordEnd": 1302,
+      "recordCount": 14,
+      "byteCount": 7985,
+      "sha256": "e1af26b392d974c00ae0f4cb3f66f3ce205818cb685e9a45e80423cf88023709"
+    },
+    {
+      "path": "evidence/shader-observations/part0094.ndjson",
+      "recordStart": 1303,
+      "recordEnd": 1316,
+      "recordCount": 14,
+      "byteCount": 7942,
+      "sha256": "92ffc242c3d359ae2c04ced6008bb8ee56e38fb9412437b4a396f1cec5d068b7"
+    },
+    {
+      "path": "evidence/shader-observations/part0095.ndjson",
+      "recordStart": 1317,
+      "recordEnd": 1330,
+      "recordCount": 14,
+      "byteCount": 7942,
+      "sha256": "35d7deeae0aa09b773252a04876b8faec451dd1cafaf4b97db7091520d149a4a"
+    },
+    {
+      "path": "evidence/shader-observations/part0096.ndjson",
+      "recordStart": 1331,
+      "recordEnd": 1344,
+      "recordCount": 14,
+      "byteCount": 7943,
+      "sha256": "e1460a7649ff07ea2716908df212d1a74bd506e9e3a8e21a89c07ce839ef5e65"
+    },
+    {
+      "path": "evidence/shader-observations/part0097.ndjson",
+      "recordStart": 1345,
+      "recordEnd": 1358,
+      "recordCount": 14,
+      "byteCount": 7942,
+      "sha256": "f88fb5eb917978c3bb1767a4c3c864f1f29eeebd15230a4141e12eba676336d4"
+    },
+    {
+      "path": "evidence/shader-observations/part0098.ndjson",
+      "recordStart": 1359,
+      "recordEnd": 1372,
+      "recordCount": 14,
+      "byteCount": 7944,
+      "sha256": "e73a33149a845a45cfa5f360c4aefb11b73e58c3cf0c41ef56841ae61aebca4d"
+    },
+    {
+      "path": "evidence/shader-observations/part0099.ndjson",
+      "recordStart": 1373,
+      "recordEnd": 1386,
+      "recordCount": 14,
+      "byteCount": 7946,
+      "sha256": "e9d4899f56e1dbbe13563db3f85d2cc7079c5156dc71d6cb35d58d6d97a1c84e"
+    },
+    {
+      "path": "evidence/shader-observations/part0100.ndjson",
+      "recordStart": 1387,
+      "recordEnd": 1400,
+      "recordCount": 14,
+      "byteCount": 7942,
+      "sha256": "ae77168f21f8b8b7ef41f57ee7ad009cfe4a9a311db0ddce0e4141c972be236f"
+    },
+    {
+      "path": "evidence/shader-observations/part0101.ndjson",
+      "recordStart": 1401,
+      "recordEnd": 1414,
+      "recordCount": 14,
+      "byteCount": 7943,
+      "sha256": "1d781060c893b57ba1ab40707b1858f4c66f0f6ea7859685bba23d8831bb33f2"
+    },
+    {
+      "path": "evidence/shader-observations/part0102.ndjson",
+      "recordStart": 1415,
+      "recordEnd": 1428,
+      "recordCount": 14,
+      "byteCount": 7983,
+      "sha256": "a2fc3c71266118a9a1ebade695b3cbfe7a9b74fa6cdb5ea69fc4bdcddf6ae967"
+    },
+    {
+      "path": "evidence/shader-observations/part0103.ndjson",
+      "recordStart": 1429,
+      "recordEnd": 1442,
+      "recordCount": 14,
+      "byteCount": 7989,
+      "sha256": "6b1036ccae906b6c5f77e0524a484f7f1732a5010d9c6eccf76c35165010d2c1"
+    },
+    {
+      "path": "evidence/shader-observations/part0104.ndjson",
+      "recordStart": 1443,
+      "recordEnd": 1456,
+      "recordCount": 14,
+      "byteCount": 7941,
+      "sha256": "70d4f106b65e080452c7f5dca5f9d08547f1661f547a34cac62154cc9a1baedb"
+    },
+    {
+      "path": "evidence/shader-observations/part0105.ndjson",
+      "recordStart": 1457,
+      "recordEnd": 1470,
+      "recordCount": 14,
+      "byteCount": 7946,
+      "sha256": "9d1e41b587e1b29cef8a6bd954d4434fb9b0e69fc59f1ae60858fa421102d9ae"
+    },
+    {
+      "path": "evidence/shader-observations/part0106.ndjson",
+      "recordStart": 1471,
+      "recordEnd": 1484,
+      "recordCount": 14,
+      "byteCount": 7941,
+      "sha256": "04297dcafe0336312764f46281f19271315e46cf04fc13bb94478f59d4a23442"
+    },
+    {
+      "path": "evidence/shader-observations/part0107.ndjson",
+      "recordStart": 1485,
+      "recordEnd": 1498,
+      "recordCount": 14,
+      "byteCount": 7944,
+      "sha256": "bec491d8e84213708848e63fa305dc9cd80cf9530b14308bcca572c9d6ad95d7"
+    },
+    {
+      "path": "evidence/shader-observations/part0108.ndjson",
+      "recordStart": 1499,
+      "recordEnd": 1512,
+      "recordCount": 14,
+      "byteCount": 7941,
+      "sha256": "a23f1a454170dcbcae78b1c5a76a9d555275606765cee798fb0be86d1db2c716"
+    },
+    {
+      "path": "evidence/shader-observations/part0109.ndjson",
+      "recordStart": 1513,
+      "recordEnd": 1526,
+      "recordCount": 14,
+      "byteCount": 7941,
+      "sha256": "ec22d6b3884fc9c6208fc2ad4af4932905e026a495643e7924e63ee77eaca3a4"
+    },
+    {
+      "path": "evidence/shader-observations/part0110.ndjson",
+      "recordStart": 1527,
+      "recordEnd": 1540,
+      "recordCount": 14,
+      "byteCount": 7945,
+      "sha256": "cfb32ace0641e3110876ac428bd9bed189190f345147564d2248c6274ae7a24c"
+    },
+    {
+      "path": "evidence/shader-observations/part0111.ndjson",
+      "recordStart": 1541,
+      "recordEnd": 1554,
+      "recordCount": 14,
+      "byteCount": 7944,
+      "sha256": "9bcedf0c393c28a2b95b3772fb06057d8a9c8a6f0123b189935b0b9500eea6f2"
+    },
+    {
+      "path": "evidence/shader-observations/part0112.ndjson",
+      "recordStart": 1555,
+      "recordEnd": 1568,
+      "recordCount": 14,
+      "byteCount": 7946,
+      "sha256": "3f93580e47db770166f50c4edc812e5828d64d3546e8a60247a8beb2a0e9c9d4"
+    },
+    {
+      "path": "evidence/shader-observations/part0113.ndjson",
+      "recordStart": 1569,
+      "recordEnd": 1582,
+      "recordCount": 14,
+      "byteCount": 7946,
+      "sha256": "93911e9d2730fa9baad683ca7cc85c7eac32c9e7195f02edb102e744cbc4a0d5"
+    },
+    {
+      "path": "evidence/shader-observations/part0114.ndjson",
+      "recordStart": 1583,
+      "recordEnd": 1596,
+      "recordCount": 14,
+      "byteCount": 7944,
+      "sha256": "729a4de4404fceb2fee364f316cfadec225a687b8173269075674c9a25e778e7"
+    },
+    {
+      "path": "evidence/shader-observations/part0115.ndjson",
+      "recordStart": 1597,
+      "recordEnd": 1610,
+      "recordCount": 14,
+      "byteCount": 7947,
+      "sha256": "537d7fe05d60b9b88182939889d2531fddf821561aa44b95b1c5a141d7572f6f"
+    },
+    {
+      "path": "evidence/shader-observations/part0116.ndjson",
+      "recordStart": 1611,
+      "recordEnd": 1624,
+      "recordCount": 14,
+      "byteCount": 7943,
+      "sha256": "abb9f8bff1d2f3c56cc3e9b81f33a2bbcfc5136f6c93b34590aa33c133fc2e31"
+    },
+    {
+      "path": "evidence/shader-observations/part0117.ndjson",
+      "recordStart": 1625,
+      "recordEnd": 1638,
+      "recordCount": 14,
+      "byteCount": 7940,
+      "sha256": "9e686576bf0c3188cdacd33889b1108fb955851a15a583e01601ffdd0bc1080c"
+    },
+    {
+      "path": "evidence/shader-observations/part0118.ndjson",
+      "recordStart": 1639,
+      "recordEnd": 1652,
+      "recordCount": 14,
+      "byteCount": 7940,
+      "sha256": "d645c52132146f60e94df35a40d47aa46e78c6bb5e970dd6667d22f82a03462b"
+    },
+    {
+      "path": "evidence/shader-observations/part0119.ndjson",
+      "recordStart": 1653,
+      "recordEnd": 1666,
+      "recordCount": 14,
+      "byteCount": 7946,
+      "sha256": "3dd0b51727d5a690b600f6de389fe912b6f1f3acfb5ff90f1dc59a99e65b7d4b"
+    },
+    {
+      "path": "evidence/shader-observations/part0120.ndjson",
+      "recordStart": 1667,
+      "recordEnd": 1680,
+      "recordCount": 14,
+      "byteCount": 7946,
+      "sha256": "07e45dcce88395d5104eb275f9834825ee4e9bead26ced7f1bb283431c1ccff2"
+    }
+  ]
+}

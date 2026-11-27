@@ -1,0 +1,36 @@
+void Fence::CompleteTo(UINT64 value) {
+    std::vector<HANDLE> ready;
+    {
+        std::lock_guard<std::mutex> lock(m);
+        if (value > val) val = value;
+        auto it = waiters.begin();
+        while (it != waiters.end()) {
+            if (it->v <= val) {
+                ready.push_back(it->ev);
+                it = waiters.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+    for (HANDLE eventHandle : ready) SetEvent(eventHandle);
+}
+
+UINT64 STDMETHODCALLTYPE Fence::GetCompletedValue() {
+    std::lock_guard<std::mutex> lock(m);
+    return val;
+}
+
+HRESULT STDMETHODCALLTYPE Fence::SetEventOnCompletion(UINT64 value, HANDLE eventHandle) {
+    TraceApi("Fence::SetEventOnCompletion");
+    if (!eventHandle) return E_INVALIDARG;
+    {
+        std::lock_guard<std::mutex> lock(m);
+        if (val >= value) {
+            SetEvent(eventHandle);
+            return S_OK;
+        }
+        waiters.push_back({value, eventHandle});
+    }
+    return S_OK;
+}

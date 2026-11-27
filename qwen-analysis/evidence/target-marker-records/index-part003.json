@@ -1,0 +1,244 @@
+{
+  "items": [
+    {
+      "path": "evidence/target-marker-records/part0061.ndjson",
+      "recordStart": 1777,
+      "recordEnd": 1803,
+      "recordCount": 27,
+      "byteCount": 7992,
+      "sha256": "6638918b2de2593dfaf571aa134a5ce7f4867e771ecbacd0fd2f1304d3004796"
+    },
+    {
+      "path": "evidence/target-marker-records/part0062.ndjson",
+      "recordStart": 1804,
+      "recordEnd": 1830,
+      "recordCount": 27,
+      "byteCount": 7992,
+      "sha256": "ae48106023459ff68e6c837e74b7de15e3021b78a0ad52411f44b9cc56c80b2a"
+    },
+    {
+      "path": "evidence/target-marker-records/part0063.ndjson",
+      "recordStart": 1831,
+      "recordEnd": 1857,
+      "recordCount": 27,
+      "byteCount": 7992,
+      "sha256": "4552cfc1edd2edac2119744ecfd3e363cba13cfda3b3ff938eac1746889eefcf"
+    },
+    {
+      "path": "evidence/target-marker-records/part0064.ndjson",
+      "recordStart": 1858,
+      "recordEnd": 1884,
+      "recordCount": 27,
+      "byteCount": 7992,
+      "sha256": "7bb83a9ea038cc23622bd11120544d0b161bbb869b770ed6215f6dca3ca3c9e9"
+    },
+    {
+      "path": "evidence/target-marker-records/part0065.ndjson",
+      "recordStart": 1885,
+      "recordEnd": 1911,
+      "recordCount": 27,
+      "byteCount": 7992,
+      "sha256": "d7cad51854087743dd55e58564a712efd595f425c9a6b017d497e2d05e9d51db"
+    },
+    {
+      "path": "evidence/target-marker-records/part0066.ndjson",
+      "recordStart": 1912,
+      "recordEnd": 1937,
+      "recordCount": 26,
+      "byteCount": 7707,
+      "sha256": "71401d4fb72f81f61aacfda0f9b0ca1a4ced0be474cc5761500da5022452d445"
+    },
+    {
+      "path": "evidence/target-marker-records/part0067.ndjson",
+      "recordStart": 1938,
+      "recordEnd": 1963,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "2dd5c3defd667f04b2efe9239d3000086e72bd4136ddc8e64e6a103c56d2e07d"
+    },
+    {
+      "path": "evidence/target-marker-records/part0068.ndjson",
+      "recordStart": 1964,
+      "recordEnd": 1989,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "19fa66de10b92bffa58f7b1a6954eb4baee06d59520382cf99e86048dcf17f51"
+    },
+    {
+      "path": "evidence/target-marker-records/part0069.ndjson",
+      "recordStart": 1990,
+      "recordEnd": 2015,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "ccf83615f4c5d978b041f8a9ad04b96b6a199e118fe7288cdd53f23ad0425086"
+    },
+    {
+      "path": "evidence/target-marker-records/part0070.ndjson",
+      "recordStart": 2016,
+      "recordEnd": 2041,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "8a59683ebe3cdbffe24a78179fcdbe2d5b505069fa97b7457432e5f7372fc439"
+    },
+    {
+      "path": "evidence/target-marker-records/part0071.ndjson",
+      "recordStart": 2042,
+      "recordEnd": 2067,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "66f102475109f687446c6a2a1a7c2982801952ab457688a9f37b042cdec98e6b"
+    },
+    {
+      "path": "evidence/target-marker-records/part0072.ndjson",
+      "recordStart": 2068,
+      "recordEnd": 2093,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "f6b1d59b5527aa3153378aae956d3125c2ce75b8127bb9a4526c1c7f68b73553"
+    },
+    {
+      "path": "evidence/target-marker-records/part0073.ndjson",
+      "recordStart": 2094,
+      "recordEnd": 2119,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "86b2d4fa6ef93e43ab8c268a1d834bf084882d8c7d8df5a0866a8af9688488ab"
+    },
+    {
+      "path": "evidence/target-marker-records/part0074.ndjson",
+      "recordStart": 2120,
+      "recordEnd": 2145,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "5771c6efa8c8ac234d0b8a363fca6b3960c41e68a8df2d6fc13ce09ec3d1ca52"
+    },
+    {
+      "path": "evidence/target-marker-records/part0075.ndjson",
+      "recordStart": 2146,
+      "recordEnd": 2171,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "ca5992d8ae1b20c689a09987783d2d0b8f551d1c172551645cff0620b9e5b5ff"
+    },
+    {
+      "path": "evidence/target-marker-records/part0076.ndjson",
+      "recordStart": 2172,
+      "recordEnd": 2197,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "fd9b0f01706d849013f6637658207d8b68ef8b5f7e152f72a915aebccdacb9f6"
+    },
+    {
+      "path": "evidence/target-marker-records/part0077.ndjson",
+      "recordStart": 2198,
+      "recordEnd": 2223,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "9252e4c20cce815f3f1306ecc1a28846887d8ed8091983511714b4459cc00bc1"
+    },
+    {
+      "path": "evidence/target-marker-records/part0078.ndjson",
+      "recordStart": 2224,
+      "recordEnd": 2249,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "31586f87f2015c70e4be18898a4db6a06aacb66a0077a91d9dbc7b14dcbddda0"
+    },
+    {
+      "path": "evidence/target-marker-records/part0079.ndjson",
+      "recordStart": 2250,
+      "recordEnd": 2275,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "c5cbc362be2910406bd649ec7fa6184276cab02b063070ca046d90fbf27a9c60"
+    },
+    {
+      "path": "evidence/target-marker-records/part0080.ndjson",
+      "recordStart": 2276,
+      "recordEnd": 2301,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "3ee783c07a15b4622f35e1c720f0c8cc8c9963edef83a2316dc741862a0cb165"
+    },
+    {
+      "path": "evidence/target-marker-records/part0081.ndjson",
+      "recordStart": 2302,
+      "recordEnd": 2327,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "10a2ceba5cb429d0430388eb1786abf030f3fa83a66d843db24ace16d53e8c26"
+    },
+    {
+      "path": "evidence/target-marker-records/part0082.ndjson",
+      "recordStart": 2328,
+      "recordEnd": 2353,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "0e634c189c7f780232e8b5da3471844e13217e71533adad954375d10bddc048c"
+    },
+    {
+      "path": "evidence/target-marker-records/part0083.ndjson",
+      "recordStart": 2354,
+      "recordEnd": 2379,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "0992b87346f0455b1c6b46dce009989163881c3cf3b9065523145af13d1e42da"
+    },
+    {
+      "path": "evidence/target-marker-records/part0084.ndjson",
+      "recordStart": 2380,
+      "recordEnd": 2405,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "8ff987d4d9a4b6058bf4f2a75890fd4c9fc4f3d23aead3ec89aea67045d9eef0"
+    },
+    {
+      "path": "evidence/target-marker-records/part0085.ndjson",
+      "recordStart": 2406,
+      "recordEnd": 2431,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "f8b880483ad7dcf401ab30cbc9b6a6c9282032f6451247033d5792f9fcf1a069"
+    },
+    {
+      "path": "evidence/target-marker-records/part0086.ndjson",
+      "recordStart": 2432,
+      "recordEnd": 2457,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "b5a98367328de2e36a399fe0b804bd689cd357573401cf53c5f345c2bf905dc1"
+    },
+    {
+      "path": "evidence/target-marker-records/part0087.ndjson",
+      "recordStart": 2458,
+      "recordEnd": 2483,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "025c0ee32b15c842b4b0691b0c7b93ae69f4d53c814c70c4845b5c741666b363"
+    },
+    {
+      "path": "evidence/target-marker-records/part0088.ndjson",
+      "recordStart": 2484,
+      "recordEnd": 2509,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "0b3b8fed614a82fccc4c6964f1f61e18c18b4b23b6c0549e03a29526b4a73120"
+    },
+    {
+      "path": "evidence/target-marker-records/part0089.ndjson",
+      "recordStart": 2510,
+      "recordEnd": 2535,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "94b63f57ba9ef90ee4d2744ce872f005463423ed8380652f39dfcb55dacda9b2"
+    },
+    {
+      "path": "evidence/target-marker-records/part0090.ndjson",
+      "recordStart": 2536,
+      "recordEnd": 2561,
+      "recordCount": 26,
+      "byteCount": 7748,
+      "sha256": "b16d2f703ecd163c592e0727cc4fbe75b5976d81652dfa5094bc61b9517cffd2"
+    }
+  ]
+}

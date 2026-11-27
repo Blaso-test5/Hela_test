@@ -1,0 +1,22 @@
+Exception: 0xC0000005 (access violation)
+Access: READ
+Fault address: NULL
+Fault module: d3d11.dll+0x96777
+Process/thread IDs and absolute addresses omitted.
+Stack module offsets:
+[00] d3d11.dll+0x96777
+[01] d3d11.dll+0x17331
+[02] d3d11.dll+0x18C53
+[03] d3d11.dll+0x16CAE
+[04] d3d11.dll+0x4F94D
+[05] d3d11.dll+0x4F84C
+[06] d3d11.dll+0x4F7C4
+[07] Hela-Win64-Shipping.exe+0x77F2492
+[08] Hela-Win64-Shipping.exe+0x77E07CF
+[09] Hela-Win64-Shipping.exe+0x77D68DB
+[10] Hela-Win64-Shipping.exe+0x78339C5
+[11] Hela-Win64-Shipping.exe+0x785D71B
+[12] Hela-Win64-Shipping.exe+0x1707B1E
+[13] Hela-Win64-Shipping.exe+0x77B7A83
+[14] Hela-Win64-Shipping.exe+0x14C3117
+[15] Hela-Win64-Shipping.exe+0x14C2EE9

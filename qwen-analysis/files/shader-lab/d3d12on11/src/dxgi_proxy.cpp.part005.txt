@@ -1,0 +1,184 @@
+        IDXGIAdapter4* native = nullptr;
+        const HRESULT result = real->EnumAdapterByGpuPreference(index, preference,
+            __uuidof(IDXGIAdapter4), reinterpret_cast<void**>(&native));
+        return FAILED(result) ? result : WrapAdapter(native, riid, out);
+    }
+
+    HRESULT STDMETHODCALLTYPE CreateSwapChain(IUnknown* device, DXGI_SWAP_CHAIN_DESC* desc,
+        IDXGISwapChain** out) override {
+        D3D12On11TraceApi("Factory::CreateSwapChain");
+        if (!out) return E_POINTER;
+        *out = nullptr;
+        Ptr<ID3D11Device> nativeDevice;
+        HRESULT result = D3D12On11GetD3D11Device(device, nativeDevice.Put());
+        if (FAILED(result)) return result;
+        IDXGISwapChain* native = nullptr;
+        result = real->CreateSwapChain(nativeDevice.Get(), desc, &native);
+        if (FAILED(result)) return result;
+        result = WrapSwapChain(native, device, __uuidof(IDXGISwapChain),
+            reinterpret_cast<void**>(out));
+        if (SUCCEEDED(result)) D3D12On11TraceSwapChainCreated();
+        return result;
+    }
+
+    HRESULT STDMETHODCALLTYPE CreateSwapChainForHwnd(IUnknown* device, HWND window,
+        const DXGI_SWAP_CHAIN_DESC1* desc, const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* fullscreen,
+        IDXGIOutput* restrictOutput, IDXGISwapChain1** out) override {
+        D3D12On11TraceApi("Factory::CreateSwapChainForHwnd");
+        if (!out) return E_POINTER;
+        *out = nullptr;
+        Ptr<ID3D11Device> nativeDevice;
+        HRESULT result = D3D12On11GetD3D11Device(device, nativeDevice.Put());
+        if (FAILED(result)) return result;
+        IDXGISwapChain1* native = nullptr;
+        result = real->CreateSwapChainForHwnd(nativeDevice.Get(), window, desc, fullscreen,
+            restrictOutput, &native);
+        if (FAILED(result)) return result;
+        result = WrapSwapChain(native, device, __uuidof(IDXGISwapChain1),
+            reinterpret_cast<void**>(out));
+        if (SUCCEEDED(result)) D3D12On11TraceSwapChainCreated();
+        return result;
+    }
+
+    HRESULT STDMETHODCALLTYPE CreateSwapChainForCoreWindow(IUnknown* device, IUnknown* window,
+        const DXGI_SWAP_CHAIN_DESC1* desc, IDXGIOutput* restrictOutput,
+        IDXGISwapChain1** out) override {
+        D3D12On11TraceApi("Factory::CreateSwapChainForCoreWindow");
+        if (!out) return E_POINTER;
+        *out = nullptr;
+        Ptr<ID3D11Device> nativeDevice;
+        HRESULT result = D3D12On11GetD3D11Device(device, nativeDevice.Put());
+        if (FAILED(result)) return result;
+        IDXGISwapChain1* native = nullptr;
+        result = real->CreateSwapChainForCoreWindow(nativeDevice.Get(), window, desc,
+            restrictOutput, &native);
+        if (FAILED(result)) return result;
+        result = WrapSwapChain(native, device, __uuidof(IDXGISwapChain1),
+            reinterpret_cast<void**>(out));
+        if (SUCCEEDED(result)) D3D12On11TraceSwapChainCreated();
+        return result;
+    }
+
+    HRESULT STDMETHODCALLTYPE CreateSwapChainForComposition(IUnknown* device,
+        const DXGI_SWAP_CHAIN_DESC1* desc, IDXGIOutput* restrictOutput,
+        IDXGISwapChain1** out) override {
+        D3D12On11TraceApi("Factory::CreateSwapChainForComposition");
+        if (!out) return E_POINTER;
+        *out = nullptr;
+        Ptr<ID3D11Device> nativeDevice;
+        HRESULT result = D3D12On11GetD3D11Device(device, nativeDevice.Put());
+        if (FAILED(result)) return result;
+        IDXGISwapChain1* native = nullptr;
+        result = real->CreateSwapChainForComposition(nativeDevice.Get(), desc, restrictOutput,
+            &native);
+        if (FAILED(result)) return result;
+        result = WrapSwapChain(native, device, __uuidof(IDXGISwapChain1),
+            reinterpret_cast<void**>(out));
+        if (SUCCEEDED(result)) D3D12On11TraceSwapChainCreated();
+        return result;
+    }
+
+    HRESULT WrapSwapChain(IUnknown* native, IUnknown* device, REFIID riid, void** out) {
+        Ptr<IDXGISwapChain4> chain;
+        HRESULT result = native->QueryInterface(__uuidof(IDXGISwapChain4),
+            reinterpret_cast<void**>(chain.Put()));
+        native->Release();
+        if (FAILED(result)) return result;
+        auto* wrapper = new (std::nothrow) SwapChain(chain.Get(), device, this);
+        if (!wrapper) return E_OUTOFMEMORY;
+        result = wrapper->QueryInterface(riid, out);
+        wrapper->Release();
+        return result;
+    }
+
+    friend class SwapChain;
+};
+
+SwapChain::SwapChain(IDXGISwapChain4* native, IUnknown* deviceSource, Factory* factory)
+    : source(deviceSource), parent(factory) {
+    real = native;
+    if (real) real->AddRef();
+    if (source) source->AddRef();
+    if (parent) parent->AddRef();
+}
+
+SwapChain::~SwapChain() {
+    if (real) real->Release();
+    if (source) source->Release();
+    if (parent) parent->Release();
+}
+
+HRESULT STDMETHODCALLTYPE SwapChain::QueryInterface(REFIID riid, void** out) {
+    if (!out) return E_POINTER;
+    *out = nullptr;
+    if (riid == __uuidof(IUnknown) || riid == __uuidof(IDXGIObject) ||
+        riid == __uuidof(IDXGIDeviceSubObject) || riid == __uuidof(IDXGISwapChain) ||
+        riid == __uuidof(IDXGISwapChain1) || riid == __uuidof(IDXGISwapChain2) ||
+        riid == __uuidof(IDXGISwapChain3) || riid == __uuidof(IDXGISwapChain4)) {
+        *out = static_cast<IDXGISwapChain4*>(this);
+        AddRef();
+        return S_OK;
+    }
+    return E_NOINTERFACE;
+}
+
+HRESULT STDMETHODCALLTYPE SwapChain::GetParent(REFIID riid, void** out) {
+    if (!out) return E_POINTER;
+    return parent ? parent->QueryInterface(riid, out) : DXGI_ERROR_NOT_FOUND;
+}
+
+HRESULT STDMETHODCALLTYPE SwapChain::GetDevice(REFIID riid, void** out) {
+    if (!out) return E_POINTER;
+    return D3D12On11GetWrappedDevice(source, riid, out);
+}
+
+HRESULT STDMETHODCALLTYPE SwapChain::GetBuffer(UINT index, REFIID riid, void** out) {
+    LogDxgi("[SWAPCHAIN] GetBuffer called index=%u riid=%08lx-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+        index, riid.Data1, static_cast<unsigned int>(riid.Data2),
+        static_cast<unsigned int>(riid.Data3),
+        static_cast<unsigned int>(riid.Data4[0]), static_cast<unsigned int>(riid.Data4[1]),
+        static_cast<unsigned int>(riid.Data4[2]), static_cast<unsigned int>(riid.Data4[3]),
+        static_cast<unsigned int>(riid.Data4[4]), static_cast<unsigned int>(riid.Data4[5]),
+        static_cast<unsigned int>(riid.Data4[6]), static_cast<unsigned int>(riid.Data4[7]));
+    if (!out) {
+        LogDxgi("[SWAPCHAIN] GetBuffer rejected null output pointer");
+        return E_POINTER;
+    }
+    *out = nullptr;
+    Ptr<ID3D11Texture2D> texture;
+    HRESULT result = real->GetBuffer(index, __uuidof(ID3D11Texture2D),
+        reinterpret_cast<void**>(texture.Put()));
+    if (FAILED(result)) {
+        LogDxgi("[SWAPCHAIN] GetBuffer failed hr=0x%08lx", result);
+        return result;
+    }
+    LogDxgi("[SWAPCHAIN] GetBuffer acquired texture=%p", texture.Get());
+    result = D3D12On11WrapBackbuffer(source, texture.Get(), riid, out);
+    LogDxgi("[SWAPCHAIN] GetBuffer wrapping completed hr=0x%08lx resource=%p",
+        result, *out);
+    return result;
+}
+
+HRESULT STDMETHODCALLTYPE SwapChain::Present(UINT interval, UINT flags) {
+    D3D12On11TraceApi("IDXGISwapChain::Present");
+    InjectRedBackbuffer(real, source);
+    CaptureBackbufferReadback(real, source);
+    const HRESULT result = real->Present(interval, flags);
+    D3D12On11TracePresent("IDXGISwapChain::Present", result);
+    return result;
+}
+
+HRESULT STDMETHODCALLTYPE SwapChain::Present1(UINT interval, UINT flags,
+    const DXGI_PRESENT_PARAMETERS* parameters) {
+    D3D12On11TraceApi("IDXGISwapChain1::Present1");
+    InjectRedBackbuffer(real, source);
+    CaptureBackbufferReadback(real, source);
+    const HRESULT result = real->Present1(interval, flags, parameters);
+    D3D12On11TracePresent("IDXGISwapChain1::Present1", result);
+    return result;
+}
+
+void SwapChain::ReleaseBackbuffers() {
+    D3D12On11ReleaseBackbufferViews(source);
+}
+

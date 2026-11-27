@@ -1,0 +1,97 @@
+[
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "tools/hela-package/run-evidence.mjs",
+    "totalLineCount": 237,
+    "sourceByteCount": 10416,
+    "sha256": "23195442ef0de260d1f0c2483c415954f0bd37ff997a8bb24619746270785f65",
+    "publishedSha256": "23195442ef0de260d1f0c2483c415954f0bd37ff997a8bb24619746270785f65",
+    "publishedByteCount": 10416,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "contiguous-line-slices",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/tools/hela-package/run-evidence.mjs.part001.txt",
+        "lineStart": 1,
+        "lineEnd": 176,
+        "byteCount": 7983,
+        "sha256": "9f7858b395c8dee046c56c122fbe17fb031f074d0137c5e1c770547b8e6d99f2"
+      },
+      {
+        "path": "files/shader-lab/tools/hela-package/run-evidence.mjs.part002.txt",
+        "lineStart": 177,
+        "lineEnd": 237,
+        "byteCount": 2433,
+        "sha256": "dd46e0ff85155ba3ff6d99ac8ad7dff3d249e4fbc4fe728bed1a77b6c3dd0a76"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "tools/hela-package/run-evidence.schema.json",
+    "totalLineCount": 181,
+    "sourceByteCount": 5297,
+    "sha256": "b476aa4bf3889214d2ca003ad6a02e95041dec4af5007be8e250ee274db9c81e",
+    "publishedSha256": "b476aa4bf3889214d2ca003ad6a02e95041dec4af5007be8e250ee274db9c81e",
+    "publishedByteCount": 5297,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/tools/hela-package/run-evidence.schema.json",
+        "lineStart": 1,
+        "lineEnd": 181,
+        "byteCount": 5297,
+        "sha256": "b476aa4bf3889214d2ca003ad6a02e95041dec4af5007be8e250ee274db9c81e"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "tools/hela-package/run-evidence.test.mjs",
+    "totalLineCount": 131,
+    "sourceByteCount": 5479,
+    "sha256": "42c73048fcfe0f16e8c43a1170e14b3a0a4dc7e541f24dacf50e837f61899d7a",
+    "publishedSha256": "42c73048fcfe0f16e8c43a1170e14b3a0a4dc7e541f24dacf50e837f61899d7a",
+    "publishedByteCount": 5479,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/tools/hela-package/run-evidence.test.mjs",
+        "lineStart": 1,
+        "lineEnd": 131,
+        "byteCount": 5479,
+        "sha256": "42c73048fcfe0f16e8c43a1170e14b3a0a4dc7e541f24dacf50e837f61899d7a"
+      }
+    ]
+  },
+  {
+    "repository": "Blaso89/Shader-Lab",
+    "commit": "29d8ad893344ae477bf555f12ed41d74e048d625",
+    "path": "tsconfig.json",
+    "totalLineCount": 13,
+    "sourceByteCount": 257,
+    "sha256": "fd1ff424be9d113385bb3dc6b26133a04a8b9a6b9daaa979d64be805afefcf62",
+    "publishedSha256": "fd1ff424be9d113385bb3dc6b26133a04a8b9a6b9daaa979d64be805afefcf62",
+    "publishedByteCount": 257,
+    "byteFaithful": true,
+    "redactions": [],
+    "delivery": "whole-file",
+    "publishedFiles": [
+      {
+        "path": "files/shader-lab/tsconfig.json",
+        "lineStart": 1,
+        "lineEnd": 13,
+        "byteCount": 257,
+        "sha256": "fd1ff424be9d113385bb3dc6b26133a04a8b9a6b9daaa979d64be805afefcf62"
+      }
+    ]
+  }
+]

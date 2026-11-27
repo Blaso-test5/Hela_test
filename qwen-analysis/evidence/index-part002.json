@@ -1,0 +1,79 @@
+{
+  "items": [
+    {
+      "type": "dataset",
+      "dataset": "signal-wait-value-ranges",
+      "recordCount": 5681,
+      "index": "evidence/signal-wait-value-ranges/index.json",
+      "indexSha256": "16e376a89a172674f067b13cb2edd2978344dbd10bedd26a982d6f79d68d62b2",
+      "byteCount": 1616454,
+      "sha256": "2d059ea6f539e743cc706f9bb9f82ccf02ecc0677608581d9ae8784d383a2db5",
+      "partCount": 204
+    },
+    {
+      "type": "dataset",
+      "dataset": "rejection-counters",
+      "recordCount": 9,
+      "index": "evidence/rejection-counters/index.json",
+      "indexSha256": "3fdba31fd252eeefb7bb77792e89a5f058e014c37d671c99876f57af7ed6935a",
+      "byteCount": 744,
+      "sha256": "e64fe9d4b3c2df190b8436a3ba62349cd001d6eb0d3e966806a86019df8faaae",
+      "partCount": 1
+    },
+    {
+      "type": "dataset",
+      "dataset": "resource-creation-matches",
+      "recordCount": 0,
+      "index": "evidence/resource-creation-matches/index.json",
+      "indexSha256": "be6d5cc52b8c3e16e4cd48d75b9068a96b18f5e5ce532d2edc56ddeff1ad6437",
+      "byteCount": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "partCount": 0
+    },
+    {
+      "type": "document",
+      "document": "run-metadata",
+      "path": "evidence/run-metadata/index.json",
+      "byteCount": 26642,
+      "lineCount": 863,
+      "sha256": "081bb12280328b54eb1604a8d85322992247cfc8e44422433dd7c477e5119ab7",
+      "contentSha256": "06cee52624ae1f415ed50eb301b150f45de3b62e4afd540aa8c5d8ac72bcea97"
+    },
+    {
+      "type": "document",
+      "document": "parser-summary",
+      "path": "evidence/parser-summary.json",
+      "byteCount": 2705,
+      "lineCount": 94,
+      "sha256": "683aa8fc944927d8c36e78d8be0d51f21c438571ca37cd6d6a34d9343b73bc20",
+      "contentSha256": "683aa8fc944927d8c36e78d8be0d51f21c438571ca37cd6d6a34d9343b73bc20"
+    },
+    {
+      "type": "document",
+      "document": "source-history-1400-summary",
+      "path": "evidence/source-history-1400-summary.json",
+      "byteCount": 1125,
+      "lineCount": 42,
+      "sha256": "88f24f442b1d043560657515cb500b1af95e723281f0d86ea0283ae25e4f7d6f",
+      "contentSha256": "88f24f442b1d043560657515cb500b1af95e723281f0d86ea0283ae25e4f7d6f"
+    },
+    {
+      "type": "document",
+      "document": "render-trace-summary",
+      "path": "evidence/render-trace-summary.json",
+      "byteCount": 380,
+      "lineCount": 12,
+      "sha256": "1263ee39fdd113d8d2679c88d078e714dfb36387813fa1b1fad93b391e469403",
+      "contentSha256": "1263ee39fdd113d8d2679c88d078e714dfb36387813fa1b1fad93b391e469403"
+    },
+    {
+      "type": "document",
+      "document": "rejection-summary",
+      "path": "evidence/rejection-summary.json",
+      "byteCount": 1302,
+      "lineCount": 63,
+      "sha256": "29afc113e82a3bdbf97b4567fd7987cf6709fd7703c019c91137f9b29341865a",
+      "contentSha256": "29afc113e82a3bdbf97b4567fd7987cf6709fd7703c019c91137f9b29341865a"
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+add("MANIFEST_INVALID", `${label}: entry non valida`);
+return null;
+}
+const n = normalizeRelPath(e.path);
+if (!n.ok) {
+add("UNSAFE_PATH", `${label}: path non sicuro (${n.reason})`, { path: String(e.path) });
+return null;
+}
+if (seenPaths.has(n.value)) add("DUPLICATE_PATH", `${label}: path duplicato`, { path: n.value });
+seenPaths.add(n.value);
+if (e.sha256 !== undefined && (typeof e.sha256 !== "string" || !SHA256_RE.test(e.sha256))) {
+add("MANIFEST_INVALID", `${label}: sha256 deve essere hex lowercase di 64 caratteri`, { path: n.value });
+return null;
+}
+if (e.bytes !== undefined && (!Number.isInteger(e.bytes) || e.bytes < 0)) {
+add("MANIFEST_INVALID", `${label}: bytes deve essere un intero >= 0`, { path: n.value });
+return null;
+}
+return { path: n.value, declaredSha256: e.sha256 ?? null, declaredBytes: e.bytes ?? null };
+}
+const runtimeEntries = [];
+manifest.runtime.forEach((e, i) => {
+const en = normalizeEntry(e, `runtime[${i}]`);
+if (en) runtimeEntries.push(en);
+});
+const overrideEntries = [];
+manifest.overrides.forEach((e, i) => {
+const en = normalizeEntry(e, `overrides[${i}]`);
+if (!en) return;
+if (typeof e.id !== "string" || e.id.length === 0) {
+add("MANIFEST_INVALID", `overrides[${i}]: id mancante`, { path: en.path });
+return;
+}
+if (seenIds.has(e.id)) {
+add("DUPLICATE_ID", `overrides[${i}]: id duplicato`, { id: e.id });
+return;
+}
+seenIds.add(e.id);
+if (!en.path.startsWith(OVERRIDES_PREFIX)) {
+add("INVALID_OVERRIDE_LOCATION", `gli override devono stare sotto ${OVERRIDES_PREFIX}`, { path: en.path });
+return;
+}
+en.id = e.id;
+overrideEntries.push(en);
+});
+// 3) I runtime richiesti dal contratto ProxyManager devono essere dichiarati.
+const runtimeByPath = new Set(runtimeEntries.map((e) => e.path));
+for (const req of REQUIRED_RUNTIME) {
+if (!runtimeByPath.has(req)) {
+add("RUNTIME_NOT_DECLARED", `manifest.runtime non dichiara ${req}`, { path: req });
+}
+}
+// 4) Misura su disco: presenza, hash, dimensione.
+async function measure(entry, kind) {
+let m;
+try {
+m = await measureFile(path.join(absStage, entry.path));
+} catch (err) {
+if (err && err.code === "ENOENT") {
+add(kind === "runtime" ? "MISSING_RUNTIME" : "MISSING_OVERRIDE",
+`file richiesto assente: ${entry.path}`, { path: entry.path });
+} else {
+add("IO_ERROR", `lettura fallita: ${entry.path} (${err && err.message ? err.message : err})`, { path: entry.path });
+}
+return null;
+}
+if (entry.declaredSha256 !== null && entry.declaredSha256 !== m.sha256) {
+add("HASH_MISMATCH", `hash diverso dal manifest: ${entry.path}`,
+{ path: entry.path, expected: entry.declaredSha256, actual: m.sha256 });
+}
+if (entry.declaredBytes !== null && entry.declaredBytes !== m.bytes) {
+add("SIZE_MISMATCH", `dimensione diversa dal manifest: ${entry.path}`,
+{ path: entry.path, expected: entry.declaredBytes, actual: m.bytes });
+}
+return m;
+}
+for (const e of runtimeEntries) {
+const m = await measure(e, "runtime");
+if (m) report.runtime.push({ path: e.path, sha256: m.sha256, bytes: m.bytes });
+}
+report.runtime.sort(byPath);
+const expected = [];
+for (const e of overrideEntries) {
+const m = await measure(e, "override");
+if (m) expected.push({ id: e.id, path: e.path, sha256: m.sha256, bytes: m.bytes });
+}
+expected.sort(byPath);
+expectedInventory = expected;
+// 5) Corrispondenza esatta: nessun file in overrides/ fuori manifest.
+const diskOverrides = [];
+await walkFiles(path.join(absStage, "overrides"), "overrides", diskOverrides);
+const declaredOverrides = new Set(overrideEntries.map((e) => e.path));
+for (const rel of diskOverrides) {
+if (!declaredOverrides.has(rel)) {
+add("INVENTORY_EXTRA", `file in overrides/ non dichiarato nel manifest: ${rel}`, { path: rel });
+}
+}
+if (overrideEntries.length === 0) {
+warn("EMPTY_OVERRIDES", "package senza override: valido solo come baseline runtime-only");
+}
+// Extra in runtime/ non dichiarati: warning non bloccante (es. pdb).
+const diskRuntime = [];
+await walkFiles(path.join(absStage, "runtime"), "runtime", diskRuntime);
+for (const rel of diskRuntime) {
+if (!runtimeByPath.has(rel)) {
+warn("RUNTIME_UNDECLARED", `file in runtime/ non dichiarato nel manifest: ${rel}`, { path: rel });
+}
+}
+return finalize();
+}
+// CLI minimale: nessun processo figlio, nessuna rete.
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+const args = process.argv.slice(2);
+const check = args.includes("--check");
+const dir = args.find((a) => !a.startsWith("--"));
+if (!dir) {
+console.error("uso: node package-gate.mjs <stagingDir> [--check]");
+process.exit(2);
+}
+runPackageGate(dir, { mode: check ? "check" : "build" })
+.then((r) => {
+console.log(JSON.stringify(r, null, 2));
+process.exit(r.ok ? 0 : 1);
+})
+.catch((err) => {
+console.error(`errore: ${err && err.message ? err.message : err}`);
+process.exit(2);
+});
+}
