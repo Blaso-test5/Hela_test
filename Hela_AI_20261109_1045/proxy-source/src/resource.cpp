@@ -1,6 +1,42 @@
 #include "types.h"
 
+#include <limits>
+
 namespace {
+
+bool HasMemoryAccess(const void* address, size_t size, bool write) {
+    if (!address || !size) return false;
+
+    const uintptr_t maxAddress = std::numeric_limits<uintptr_t>::max();
+    uintptr_t current = reinterpret_cast<uintptr_t>(address);
+    if (size > maxAddress - current) return false;
+    const uintptr_t end = current + size;
+
+    while (current < end) {
+        MEMORY_BASIC_INFORMATION memory{};
+        if (!VirtualQuery(reinterpret_cast<const void*>(current), &memory, sizeof(memory)) ||
+            memory.State != MEM_COMMIT || (memory.Protect & PAGE_GUARD)) {
+            return false;
+        }
+
+        const DWORD protection = memory.Protect & 0xff;
+        const bool accessible = write
+            ? protection == PAGE_READWRITE || protection == PAGE_WRITECOPY ||
+                protection == PAGE_EXECUTE_READWRITE || protection == PAGE_EXECUTE_WRITECOPY
+            : protection == PAGE_READONLY || protection == PAGE_READWRITE ||
+                protection == PAGE_WRITECOPY || protection == PAGE_EXECUTE_READ ||
+                protection == PAGE_EXECUTE_READWRITE || protection == PAGE_EXECUTE_WRITECOPY;
+        if (!accessible) return false;
+
+        const uintptr_t regionBase = reinterpret_cast<uintptr_t>(memory.BaseAddress);
+        if (memory.RegionSize > maxAddress - regionBase) return false;
+        const uintptr_t regionEnd = regionBase + memory.RegionSize;
+        if (regionEnd <= current) return false;
+        current = std::min(end, regionEnd);
+    }
+
+    return true;
+}
 
 bool CopyBufferPrefix(ID3D11DeviceContext* context, ID3D11Buffer* destination,
     ID3D11Buffer* source, UINT byteWidth) {
@@ -563,10 +599,35 @@ void Resource::WriteBackStruct(UINT stride) {
 
 HRESULT Resource::RefreshReadback() {
     if (heap != D3D12_HEAP_TYPE_READBACK || !staging || !buf || shadow.empty()) return E_INVALIDARG;
+    std::lock_guard<std::recursive_mutex> contextLock(dev->ctxLock);
     dev->ctx->CopyResource(staging.Get(), buf.Get());
     D3D11_MAPPED_SUBRESOURCE mapped{};
-    const HRESULT result = dev->ctx->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
-    if (FAILED(result)) return result;
+    const HRESULT mapResult = dev->ctx->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+    Log("RESOURCE_MAP resource=%p hr=0x%08lx pData=%p shadowData=%p RowPitch=%u DepthPitch=%u "
+        "shadowSize=%zu caller=Resource::Map",
+        staging.Get(), static_cast<unsigned long>(mapResult), mapped.pData,
+        shadow.data(), mapped.RowPitch, mapped.DepthPitch, shadow.size());
+    if (FAILED(mapResult)) {
+        Log("RESOURCE_MAP_SKIPPED reason=map-failed hr=0x%08lx caller=Resource::Map",
+            static_cast<unsigned long>(mapResult));
+        return mapResult;
+    }
+    if (!mapped.pData) {
+        Log("RESOURCE_MAP_SKIPPED reason=null-pdata hr=0x%08lx caller=Resource::Map",
+            static_cast<unsigned long>(mapResult));
+        dev->ctx->Unmap(staging.Get(), 0);
+        return E_FAIL;
+    }
+    const bool sourceReadable = HasMemoryAccess(mapped.pData, shadow.size(), false);
+    const bool destinationWritable = HasMemoryAccess(shadow.data(), shadow.size(), true);
+    if (!sourceReadable || !destinationWritable) {
+        Log("RESOURCE_MAP_SKIPPED reason=invalid-memory-range pData=%p shadowData=%p "
+            "bytes=%zu sourceReadable=%d destinationWritable=%d caller=Resource::Map",
+            mapped.pData, shadow.data(), shadow.size(), sourceReadable ? 1 : 0,
+            destinationWritable ? 1 : 0);
+        dev->ctx->Unmap(staging.Get(), 0);
+        return E_FAIL;
+    }
     memcpy(shadow.data(), mapped.pData, shadow.size());
     dev->ctx->Unmap(staging.Get(), 0);
     return S_OK;

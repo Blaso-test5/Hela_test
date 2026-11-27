@@ -16,13 +16,13 @@ runs report the same exception:
   establish whether the underlying cause is in the driver, Hela, or an
   upstream call/resource state.
 
-The two sanitized run summaries are
-[`221337441`](./runs/20261117/1050ti-pre-menu-baseline-14-20261117-221337441/manager-run.json)
-and
-[`222207333`](./runs/20261117/1050ti-pre-menu-baseline-14-20261117-222207333/manager-run.json).
-Both report `status=failed` because the expected shader override was not
-attested, and both report `restored=true`. Therefore these runs do not
-validate the intended override profile.
+The two runs were `1050ti-pre-menu-baseline-14-20261117-221337441` and
+`1050ti-pre-menu-baseline-14-20261117-222207333`. Both reported
+`status=failed` because the expected shader override was not attested, and
+both reported `restored=true`. Therefore these runs do not validate the
+intended override profile. Their raw run folders were removed in the
+2026-11-27 retention cleanup; the technical conclusions needed for this
+analysis remain summarized here.
 
 ## Hela stack interpretation
 

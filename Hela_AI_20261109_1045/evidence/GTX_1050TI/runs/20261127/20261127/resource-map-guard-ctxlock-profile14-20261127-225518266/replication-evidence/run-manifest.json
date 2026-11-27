@@ -1,9 +1,9 @@
 {
   "schema": "hela-run-manifest/v1",
   "runtimeAttestation": "module-and-shader-sha256",
-  "testVersion": "profile14-menu-3graphics-dataflow-20261125",
+  "testVersion": "resource-map-guard-ctxlock-profile14-20261127",
   "runtime": {
-    "d3d12": "65a53728371ac7100ca6daf7b3503dd95fb216cfc9319c95a6629c772d36129a",
+    "d3d12": "0bad046d0cf421b3141f234db8422c363b54bf379757502cf265736660c878a5",
     "dxgi": "808be0b95b836b8f8a7901ff8c216c73f6d764e804dcb9c631115dc79cf3815f"
   },
   "overrides": {

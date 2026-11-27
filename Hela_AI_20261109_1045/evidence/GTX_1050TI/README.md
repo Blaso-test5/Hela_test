@@ -6,6 +6,20 @@ lossless readback previews, and selected raw logs are in
 
 This evidence is separate from [`GTX_950M`](../GTX_950M/README.md).
 
+## NUOVO RISULTATO IN EVIDENZA — 2026-11-27
+
+[Run `resource-map-guard-ctxlock-profile14-20261127-225518266`](./runs/20261127/20261127/resource-map-guard-ctxlock-profile14-20261127-225518266/RISULTATO_NUOVO.md)
+è il risultato più avanzato: l'utente ha visto il menu parzialmente e sentito
+l'audio; il gioco è crashato dopo l'avvio della cinematica. Non è una run
+completata e la validazione automatica dei readback è rimasta incompleta.
+Il [bundle completo di riproducibilità sanitizzato](./runs/20261127/20261127/resource-map-guard-ctxlock-profile14-20261127-225518266/replication-evidence/README.md)
+include il log proxy compresso e i manifest di run.
+La run A/B pre-menu conservata è
+[`resource-map-guard-profile14-20261127-224204416`](./runs/20261127/20261127/resource-map-guard-profile14-20261127-224204416/).
+
+Gli artefatti di riproducibilità pubblicabili sono collegati dal report; i
+readback BMP, il minidump e i file shader `.cso` restano locali.
+
 The November 17 pre-menu crash analysis is documented in
 [`crash-analysis-20261117.md`](./crash-analysis-20261117.md). It distinguishes
 the NVIDIA exception instruction from Hela's deeper stack frames and records
@@ -23,13 +37,16 @@ compute PSO, ran a dispatch through the proxy, and returned all expected
 records in a controlled test. This verifies that candidate and test path only;
 it does not establish equivalence for all inputs or that Hela uses the shader.
 The November 17 pre-menu run also failed shader-override attestation. Real
-in-game graphics through the proxy have not yet been verified.
+in-game graphics through the proxy have not yet been verified by correlated
+readback. The November 27 menu/audio observation is the strongest visual
+progress so far, but its source/backbuffer validation did not complete and
+must not be treated as an objectively verified rendered frame.
 
 ### Versioned pre-menu replay (2026-11-19)
 
-[Run `1050ti-pre-menu-v1.1.0-14override-dump-173223055`](./runs/20261119/1050ti-pre-menu-v1.1.0-14override-dump-173223055)
-matched both expected runtime DLL hashes, but it was not an exact replay of
-the November 17 profile:
+The pruned run `1050ti-pre-menu-v1.1.0-14override-dump-173223055` matched both
+expected runtime DLL hashes, but it was not an exact replay of the November 17
+profile:
 shader dumping was enabled and `D3D12ON11_OVERRIDES` pointed to the installed
 override directory instead of the run-local baseline directory. Hela exited
 before creating a swapchain or reaching Present; the #3000 capture was
@@ -42,9 +59,9 @@ package hash mismatch. Installation restoration succeeded.
 The November 17 log records shader dumping disabled and a run-local override
 directory. Profile
 [`1050ti-pre-menu-v1.1.1-14override-no-dump`](./runs/20261119/profiles/1050ti-pre-menu-v1.1.1-14override-no-dump)
-was prepared and attested with 14 overrides. The elevated
-[v1.1.1 run](./runs/20261119/1050ti-pre-menu-v1.1.1-14override-no-dump-174726437)
-used those exact override hashes, the expected runtime DLL hashes, shader
+was prepared and attested with 14 overrides. The elevated, pruned run
+`1050ti-pre-menu-v1.1.1-14override-no-dump-174726437` used those exact
+override hashes, the expected runtime DLL hashes, shader
 dumping disabled, and run-local overrides. It still was not an exact replay:
 the historical run used `Run-HelaCandidateReadback.ps1`, while v1.1.1 used
 `ProxyManager` with `Start-HelaLiveMonitor.ps1`.
@@ -79,40 +96,40 @@ profile hash and resolved child environment; the launcher fails closed unless
 the log shows the masked `proxy-unwrap` adapter, tier 3, and caller tracing
 off. Existing manifests without a launch profile retain their prior behavior.
 
-Run
-[`1050ti-pre-menu-v1.1.2-historical-env-181838503`](./runs/20261119/1050ti-pre-menu-v1.1.2-historical-env-181838503)
-reached Present #1400 with runtime module hashes verified, required override
+The pruned run `1050ti-pre-menu-v1.1.2-historical-env-181838503` reached
+Present #1400 with runtime module hashes verified, required override
 attestation, the expected `proxy-unwrap`/`0xffff` adapter, tier 3, and caller
 tracing off. The user confirmed the pre-menu was visible. The manager initially
 marked the run failed because its tier matcher expected the older
 `D3D12_OPTIONS(0)` spelling; the actual log uses `D3D12_OPTIONS`. The matcher
-now accepts both, and post-run validation of the preserved log passed. The
-original manager result remains unchanged; its failure and the follow-up
-validation are both retained.
+now accepts both. Its post-run validation and raw run artifacts were pruned
+during the 2026-11-27 retention cleanup; the original manager failure remains
+summarized here.
 
 Important boundary: the full-frame source and backbuffer BMPs at Presents #100
 and #1400 are entirely black (0/921600 non-black pixels). The visual
 observation and readbacks therefore disagree; the captured pixels do not
-independently validate rendered color. See
-[`post-run-validation.json`](./runs/20261119/1050ti-pre-menu-v1.1.2-historical-env-181838503/post-run-validation.json).
-ProxyManager restored the installed runtime DLLs and no Hela/Crashpad
+independently validate rendered color. ProxyManager restored the installed
+runtime DLLs and no Hela/Crashpad
 processes remain. The owned Hela and Crashpad egress rules were removed and
 verified absent; this run was online, and no zero-egress claim is made.
 
 The first v1.1.2 attempt
-[`1050ti-pre-menu-v1.1.2-historical-env-181738069`](./runs/20261119/1050ti-pre-menu-v1.1.2-historical-env-181738069)
-stopped before launching Hela because PowerShell's
+`1050ti-pre-menu-v1.1.2-historical-env-181738069` stopped before launching Hela
+because PowerShell's
 `ProcessStartInfo.EnvironmentVariables` exposes `Keys`, not `AllKeys`; the
 launcher was corrected before the successful launch attempt.
 
-### Immediate objective: first real Hela graphics
+### Immediate objective: validate the partial menu and capture its shaders
 
-Reach the first visibly rendered in-game Hela frame through the proxy on the
-GTX 1050 Ti. Verify the expected shader overrides in the same run and correlate
-shader use with draw/dispatch and fresh Present readbacks; a forced-color
-diagnostic does not count as game graphics. Resolve the known override
-attestation failure before treating a run as valid. A rendered frame will
-prove progress on that workload, not complete DX11 compatibility.
+Reproduce the November 27 user-observed partial menu on the GTX 1050 Ti without
+starting the cinematics. Verify the expected shader overrides in the same run
+and correlate shader use with draw/dispatch and fresh Present readbacks; a
+forced-color diagnostic does not count as game graphics. The latest run used
+`D3D12ON11_DUMP_SHADERS=0`, so it yielded no new shader dumps. Once the menu
+reproduction is stable, use a separate run with dumping enabled and stop at
+the menu. A rendered frame will prove progress on that workload, not complete
+DX11 compatibility.
 
 ### Next objective: Hela shader conversion and verification
 

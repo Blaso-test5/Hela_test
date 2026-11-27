@@ -1,0 +1,82 @@
+{
+  "schema": "hela-run-replication-summary/v1",
+  "run_id": "resource-map-guard-ctxlock-profile14-20261127-225518266",
+  "gpu": "GTX 1050 Ti",
+  "user_observation": "Partially visible menu and audio; crash after starting the cinematic.",
+  "proxy_observations": {
+    "last_heartbeat_present_count": 3286,
+    "resource_map_records": 1366,
+    "resource_map_skipped_records": 0,
+    "shader_ready_count": 16,
+    "distinct_shader_placeholders": 256,
+    "shader_placeholder_events": 6861,
+    "shader_dump_enabled": false
+  },
+  "readback": {
+    "target_present": 1500,
+    "source_and_backbuffer_files_exist": true,
+    "file_bytes_each": 2764854,
+    "source_backbuffer_hashes_equal": true,
+    "monitor_validation_complete": false
+  },
+  "process": {
+    "exit_code_hex": "0xC0000005",
+    "launcher_requested_shutdown": false,
+    "launcher_force_terminated": false
+  },
+  "crash": {
+    "exception": "0xC0000005",
+    "access": "READ",
+    "address": "NULL",
+    "module_offset": "d3d11.dll+0x96777",
+    "stack_offsets": [
+      "[00] d3d11.dll+0x96777",
+      "[01] d3d11.dll+0x17331",
+      "[02] d3d11.dll+0x18C53",
+      "[03] d3d11.dll+0x16CAE",
+      "[04] d3d11.dll+0x4F94D",
+      "[05] d3d11.dll+0x4F84C",
+      "[06] d3d11.dll+0x4F7C4",
+      "[07] Hela-Win64-Shipping.exe+0x77F2492",
+      "[08] Hela-Win64-Shipping.exe+0x77E07CF",
+      "[09] Hela-Win64-Shipping.exe+0x77D68DB",
+      "[10] Hela-Win64-Shipping.exe+0x78339C5",
+      "[11] Hela-Win64-Shipping.exe+0x785D71B",
+      "[12] Hela-Win64-Shipping.exe+0x1707B1E",
+      "[13] Hela-Win64-Shipping.exe+0x77B7A83",
+      "[14] Hela-Win64-Shipping.exe+0x14C3117",
+      "[15] Hela-Win64-Shipping.exe+0x14C2EE9"
+    ],
+    "root_cause_confirmed": false
+  },
+  "staged_package": {
+    "id": "resource-map-guard-ctxlock-profile14-20261127",
+    "lifecycle": "staged-only",
+    "override_count": 17,
+    "required_override_count": 13,
+    "d3d12_sha256": "0bad046d0cf421b3141f234db8422c363b54bf379757502cf265736660c878a5",
+    "dxgi_sha256": "808be0b95b836b8f8a7901ff8c216c73f6d764e804dcb9c631115dc79cf3815f"
+  },
+  "published_log": {
+    "file": "d3d12on11.sanitized.log.gz",
+    "source_bytes": 239094356,
+    "source_sha256": "1132fa7db99da4c6b004c6ed4063603cb9e842fd6c901a5692b2b767c214419f",
+    "sanitized_gzip_bytes": 9227482,
+    "sanitized_gzip_sha256": "70f7f7336fb891f75130ec409b58917c8d6146c36a08a6fb0c93780e01b7987e",
+    "line_count": 1576337,
+    "redactions": {
+      "project_root": 6879,
+      "game_bin": 7,
+      "game_root": 7,
+      "windows_system32_upper": 0,
+      "windows_system32": 0,
+      "external_readbacks": 4
+    }
+  },
+  "excluded_local_artifacts": [
+    "BMP game readbacks",
+    "process minidump",
+    "shader .cso files",
+    "game stdout/stderr"
+  ]
+}
